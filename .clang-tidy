@@ -1,0 +1,84 @@
+Checks: >
+    clang-analyzer-*, modernize-*, performance-*, readability-*, bugprone-*,
+    cppcoreguidelines-*, cert-err58-cpp, cert-dcl50-cpp, hicpp-*,
+    -modernize-use-trailing-return-type, -readability-magic-numbers,
+    -modernize-use-nodiscard, -cppcoreguidelines-pro-bounds-pointer-arithmetic,
+    -cppcoreguidelines-macro-usage, -readability-identifier-length,
+    -bugprone-easily-swappable-parameters,
+    -cppcoreguidelines-pro-type-cstyle-cast, -hicpp-avoid-c-arrays,
+    -cppcoreguidelines-avoid-c-arrays, -modernize-avoid-c-arrays,
+    -cppcoreguidelines-pro-bounds-array-to-pointer-decay, -hicpp-no-array-decay
+
+WarningsAsErrors: "*"
+
+HeaderFilterRegex: ".*"
+FormatStyle: file
+
+CheckOptions:
+    # =========================
+    # Modernize
+    # =========================
+    - key: modernize-loop-convert.MinConfidence
+      value: reasonable
+    - key: modernize-use-auto.MinTypeNameLength
+      value: 0
+    - key: modernize-avoid-c-arrays.WarnOnAll
+      value: true
+
+    # =========================
+    # Readability
+    # =========================
+    - key: readability-identifier-naming.GlobalVariableCase
+      value: CamelCase
+    - key: readability-identifier-naming.LocalVariableCase
+      value: camelBack
+    - key: readability-identifier-naming.PublicMemberCase
+      value: CamelCase
+    - key: readability-identifier-naming.ParameterCase
+      value: camelBack
+    - key: readability-identifier-naming.FunctionCase
+      value: camelBack
+    - key: readability-identifier-naming.PublicMethodCase
+      value: CamelCase
+    - key: readability-identifier-naming.PrivateMemberPrefix
+      value: '_'
+    - key: readability-identifier-naming.PrivateMemberCase
+      value: camelBack
+    - key: readability-identifier-naming.PrivateMethodCase
+      value: camelBack
+    - key: readability-identifier-naming.NamespaceCase
+      value: camelBack
+    - key: readability-identifier-naming.EnumConstantCase
+      value: CamelCase
+    - key: readability-identifier-naming.ConstantCase
+      value: CamelCase
+    - key: readability-identifier-naming.ConstantPrefix
+      value: 'k'
+    - key: readability-identifier-naming.StaticConstantCase
+      value: CamelCase
+    - key: readability-identifier-naming.StaticConstantPrefix
+      value: 'k'
+    - key: readability-identifier-naming.ClassCase
+      value: CamelCase
+    - key: readability-identifier-naming.StructCase
+      value: CamelCase
+    - key: readability-identifier-naming.UnionCase
+      value: CamelCase
+    - key: readability-identifier-naming.EnumCase
+      value: CamelCase
+    - key: readability-identifier-naming.TypedefCase
+      value: CamelCase
+    - key: readability-identifier-naming.TypeAliasCase
+      value: CamelCase
+    - key: readability-identifier-naming.TemplateParameterCase
+      value: CamelCase
+    - key: readability-identifier-naming.MacroDefinitionCase
+      value: lower_case
+
+    # =========================
+    # Bugprone / Safety
+    # =========================
+    - key: bugprone-suspicious-missing-comma.WarnOnAll
+      value: true
+    - key: cppcoreguidelines-owning-memory.WarnOnAll
+      value: true
