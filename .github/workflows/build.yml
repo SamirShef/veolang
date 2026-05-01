@@ -25,10 +25,17 @@ jobs:
           version: "21"
           env: true
 
-      - name: Configure CMake
+      - name: Configure CMake on Windows
+        if: runner.os == 'Windows'
         run: >
           cmake -B ${{ github.workspace }}/build -DCMAKE_BUILD_TYPE=${{
           matrix.build_type }} -DLLVM_DIR="C:/LLVM/lib/cmake/llvm"
+
+      - name: Configure CMake on Linux/MacOS
+        if: runner.os != 'Windows'
+        run: >
+          cmake -B ${{ github.workspace }}/build -DCMAKE_BUILD_TYPE=${{
+          matrix.build_type }} -DLLVM_DIR="${{ env.LLVM_PATH }}/lib/cmake/llvm"
 
       - name: Build
         run: >
