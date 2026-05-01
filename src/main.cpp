@@ -1,7 +1,11 @@
-#include <iostream>
+#include <driver/cli_options.h>
+
+using namespace veo;
 
 int
-main () {
-    std::cout << "Hello, Veo!\n";
+main (int argc, char **argv) {
+    if (driver::ParseArguments (argc, argv) != 0) {
+        return 0;
+    }
     return 0;
 }
