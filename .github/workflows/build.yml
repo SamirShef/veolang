@@ -33,14 +33,14 @@ jobs:
           msystem: UCRT64
           update: true
           install: >-
-            mingw-w64-ucrt-x86_64-llvm mingw-w64-ucrt-x86_64-clang
+            mingw-w64-ucrt-x86_64-llvm-21 mingw-w64-ucrt-x86_64-clang-21
             mingw-w64-ucrt-x86_64-cmake mingw-w64-ucrt-x86_64-ninja
 
       - name: Build (Unix)
         if: matrix.os != 'windows-latest'
         run: |
-          cmake -B build -DCMAKE_BUILD_TYPE=${{ matrix.build_type }} -DLLVM_DIR="${{ env.LLVM_PATH }}/lib/cmake/llvm" cmake --build build
-          --config ${{ matrix.build_type }} --parallel
+          cmake -B build -DCMAKE_BUILD_TYPE=${{ matrix.build_type }} -DLLVM_DIR="${{ env.LLVM_PATH }}/lib/cmake/llvm"
+          cmake --build build --config ${{ matrix.build_type }} --parallel
 
       - name: Build (Windows)
         if: matrix.os == 'windows-latest'
