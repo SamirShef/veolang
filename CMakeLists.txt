@@ -53,12 +53,3 @@ file(GLOB_RECURSE SOURCES "src/*.cpp")
 add_executable(${PROJECT_NAME} ${SOURCES})
 
 target_link_libraries(${PROJECT_NAME} PRIVATE ${LLVM_LINK_LIBS} ${LLVM_SYSTEM_LIBS})
-
-# if(NOT LLVM_LIBRARIES)
-#     llvm_map_components_to_libnames(llvm_libs_fallback ${llvm_components})
-#     target_link_libraries(${PROJECT_NAME} PRIVATE ${llvm_libs_fallback})
-#
-#     message(STATUS "Linking with llvm_libs (fallback): ${llvm_libs_fallback}")
-# else()
-#     message(STATUS "Linking with llvm_libs: ${LLVM_LIBRARIES}")
-# endif()
