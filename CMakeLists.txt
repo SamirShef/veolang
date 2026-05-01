@@ -24,6 +24,8 @@ add_definitions(${LLVM_DEFINITIONS})
 link_libraries(${LLVM_LIBRARY_DIRS})
 message(STATUS "Libs ${llvm_libs}")
 
+add_compile_options(-fno-rtti -fno-exceptions)
+
 include_directories(${CMAKE_CURRENT_SOURCE_DIR}/include)
 
 file(GLOB_RECURSE SOURCES "src/*.cpp")
