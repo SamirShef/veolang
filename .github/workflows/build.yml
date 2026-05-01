@@ -25,28 +25,27 @@ jobs:
           version: "21"
           env: true
 
-      - name: Configure CMake on Windows
+      - name: Debug LLVM path
         if: runner.os == 'Windows'
-        run: >
-          cmake -B ${{ github.workspace }}/build -DCMAKE_BUILD_TYPE=${{
-          matrix.build_type }} -DLLVM_DIR="C:/LLVM/lib/cmake/llvm"
+        run: |
+          echo "LLVM_PATH: " ${{ env.LLVM_PATH }}
+          dir "${{ env.LLVM_PATH }}"
+          dir "${{ env.LLVM_PATH }}/lib/cmake/llvm"
 
-      - name: Configure CMake on Linux/MacOS
-        if: runner.os != 'Windows'
+      - name: Configure CMake
         run: >
-          cmake -B ${{ github.workspace }}/build -DCMAKE_BUILD_TYPE=${{
-          matrix.build_type }} -DLLVM_DIR="${{ env.LLVM_PATH }}/lib/cmake/llvm"
+          cmake -B build -DCMAKE_BUILD_TYPE=${{ matrix.build_type }}
+          -DLLVM_DIR="${{ env.LLVM_PATH }}/lib/cmake/llvm"
 
       - name: Build
         run: >
-          cmake --build ${{ github.workspace }}/build --config ${{
-          matrix.build_type }} --parallel
+          cmake --build build --config ${{ matrix.build_type }} --parallel
 
       - name: Upload
         uses: actions/upload-artifact@v4
         with:
           name: veoc-${{ matrix.os }}
           path: |
-            ${{ github.workspace }}/build/veoc
-            ${{ github.workspace }}/build/${{ matrix.build_type }}/veoc.exe
+            build/veoc
+            build/${{ matrix.build_type }}/veoc.exe
           if-no-files-found: error
