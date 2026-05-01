@@ -22,58 +22,13 @@ jobs:
       - name: Install LLVM
         uses: KyleMayes/install-llvm-action@v2
         with:
-          version: "21"
+          version: "18"
           env: true
 
-      # - name: Debug LLVM path
-      #   if: runner.os == 'Windows'
-      #   run: |
-      #     echo "LLVM_PATH: " ${{ env.LLVM_PATH }}
-      #     dir "${{ env.LLVM_PATH }}"
-      #     dir "${{ env.LLVM_PATH }}/lib/cmake/llvm"
-      - name: Full Debug LLVM Structure
-        if: runner.os == 'Windows'
-        shell: pwsh
-        run: |
-          Get-ChildItem -Path "${{ env.LLVM_PATH }}" -Filter "llvm-config.exe" -Recurse | Select-Object FullName
-          Write-Host "Ищем все .cmake файлы в ${{ env.LLVM_PATH }}..."
-          Get-ChildItem -Path "${{ env.LLVM_PATH }}" -Filter "*.cmake" -Recurse | Select-Object FullName
-
-      # - name: Configure CMake
-      #   run: >
-      #     cmake -B build -DCMAKE_BUILD_TYPE=${{ matrix.build_type }}
-      #     -DLLVM_DIR="${{ env.LLVM_PATH }}/lib/cmake/llvm"
-
-      # - name: Configure CMake
-      #   shell: pwsh
-      #   run: |
-      #     $llvmConfigPath = Get-ChildItem -Path "${{ env.LLVM_PATH }}" -Filter "LLVMConfig.cmake" -Recurse | Select-Object -First 1 -ExpandProperty DirectoryName
-      #
-      #     if (-not $llvmConfigPath) {
-      #       Write-Error "LLVMConfig.cmake does not found in ${{ env.LLVM_PATH }}!."
-      #       exit 1
-      #     }
-      #
-      #     Write-Host "LLVM path: $llvmConfigPath"
-      #
-      #     cmake -B build `
-      #       -DCMAKE_BUILD_TYPE=${{ matrix.build_type }} `
-      #       -DLLVM_DIR="$llvmConfigPath"
       - name: Configure CMake
-        shell: pwsh
-        run: |
-          $llvmConfigExe = "${{ env.LLVM_PATH }}/bin/llvm-config.exe"
-          if (Test-Path $llvmConfigExe) {
-              $llvmCmakeDir = & $llvmConfigExe --cmakedir
-              Write-Host "llvm-config сообщил путь: $llvmCmakeDir"
-          } else {
-              Write-Error "llvm-config.exe не найден по пути $llvmConfigExe"
-              exit 1
-          }
-
-          cmake -B build `
-            -DCMAKE_BUILD_TYPE=${{ matrix.build_type }} `
-            -DLLVM_DIR="$llvmCmakeDir"
+        run: >
+          cmake -B build -DCMAKE_BUILD_TYPE=${{ matrix.build_type }}
+          -DLLVM_DIR="${{ env.LLVM_PATH }}/lib/cmake/llvm"
 
       - name: Build
         run: >
