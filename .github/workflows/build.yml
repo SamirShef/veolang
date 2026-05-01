@@ -33,7 +33,7 @@ jobs:
           msystem: UCRT64
           update: true
           install: >-
-            mingw-w64-ucrt-x86_64-llvm-21 mingw-w64-ucrt-x86_64-clang
+            mingw-w64-ucrt-x86_64-llvm-21 mingw-w64-ucrt-x86_64-clang-21
             mingw-w64-ucrt-x86_64-cmake mingw-w64-ucrt-x86_64-ninja
 
       - name: Build (Unix)
@@ -46,8 +46,10 @@ jobs:
         if: matrix.os == 'windows-latest'
         shell: msys2 {0}
         run: |
-          cmake -B build -G Ninja -DCMAKE_BUILD_TYPE=${{ matrix.build_type }} -DLLVM_DIR=/ucrt64/lib/cmake/llvm \
-                -DCMAKE_C_COMPILER=clang -DCMAKE_CXX_COMPILER=clang++
+          echo "LLVMConfig.cmake here: "
+          pacman -Ql mingw-w64-ucrt-x86_64-llvm-21 | grep "LLVMConfig.cmake"
+          cmake -B build -G Ninja -DCMAKE_BUILD_TYPE=${{ matrix.build_type }} -DLLVM_DIR=/ucrt64/lib/llvm21/lib/cmake/llvm \
+                -DCMAKE_C_COMPILER=/ucrt64/lib/llvm21/bin/clang -DCMAKE_CXX_COMPILER=/ucrt64/lib/llvm21/bin/clang++
           cmake --build build --config ${{ matrix.build_type }} --parallel
 
       - name: Upload
