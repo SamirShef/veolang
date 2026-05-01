@@ -48,8 +48,10 @@ jobs:
         run: |
           echo "LLVMConfig.cmake here: "
           pacman -Ql mingw-w64-ucrt-x86_64-llvm-21 | grep "LLVMConfig.cmake"
-          cmake -B build -G Ninja -DCMAKE_BUILD_TYPE=${{ matrix.build_type }} -DLLVM_DIR=/ucrt64/lib/llvm21/lib/cmake/llvm \
-                -DCMAKE_C_COMPILER=/ucrt64/lib/llvm21/bin/clang -DCMAKE_CXX_COMPILER=/ucrt64/lib/llvm21/bin/clang++
+          ls /ucrt64/opt/llvm-21
+          ls /ucrt64/opt/llvm-21/bin
+          cmake -B build -G Ninja -DCMAKE_BUILD_TYPE=${{ matrix.build_type }} -DLLVM_DIR=/ucrt64/opt/llvm-21/lib/cmake/llvm \
+                -DCMAKE_C_COMPILER=/ucrt64/opt/llvm-21/bin/clang -DCMAKE_CXX_COMPILER=/ucrt64/opt/llvm-21/bin/clang++
           cmake --build build --config ${{ matrix.build_type }} --parallel
 
       - name: Upload
