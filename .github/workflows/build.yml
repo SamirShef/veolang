@@ -35,6 +35,7 @@ jobs:
         if: runner.os == 'Windows'
         shell: pwsh
         run: |
+          Get-ChildItem -Path "${{ env.LLVM_PATH }}" -Filter "llvm-config.exe" -Recurse | Select-Object FullName
           Write-Host "Ищем все .cmake файлы в ${{ env.LLVM_PATH }}..."
           Get-ChildItem -Path "${{ env.LLVM_PATH }}" -Filter "*.cmake" -Recurse | Select-Object FullName
 
