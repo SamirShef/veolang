@@ -16,7 +16,7 @@ message(STATUS "LLVM path: ${LLVM_DIR}")
 if("LLVM" IN_LIST LLVM_AVAILABLE_LIBS)
     set(llvm_libs LLVM)
 else()
-    set(llvm_libs LLVM_AVAILABLE_LIBS)
+    set(llvm_libs ${LLVM_AVAILABLE_LIBS})
 endif()
 
 include_directories(SYSTEM ${LLVM_INCLUDE_DIRS})
