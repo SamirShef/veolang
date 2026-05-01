@@ -1,29 +1,55 @@
 cmake_minimum_required(VERSION 3.20)
-project(veoc LANGUAGES CXX C VERSION 0.0.0)
+project(veoc LANGUAGES CXX C)
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
+set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
 find_package(LLVM REQUIRED CONFIG)
-if(NOT LLVM_VERSION_MAJOR EQUAL 21)
-    message(FATAL_ERROR "LLVM version required 21.x.y, but found ${LLVM_PACKAGE_VERSION}")
-endif()
 message(STATUS "LLVM ${LLVM_PACKAGE_VERSION} was found")
 message(STATUS "LLVM path: ${LLVM_DIR}")
 
-include_directories(SYSTEM ${LLVM_INCLUDE_DIRS})
+include_directories(${LLVM_INCLUDE_DIRS})
 add_definitions(${LLVM_DEFINITIONS})
-llvm_map_components_to_libnames(LLVM_LIBS all)
 
-if(MSVC)
-    add_compile_options(/W4 /WX)
-    add_compile_options(/GR- /EHs-c-)
-else()
-    add_compile_options(-Wall -Wextra -Wpedantic -Werror)
-    add_compile_options(-fno-rtti -fno-exceptions)
+if(NOT LLVM_ENABLE_RTTI)
+    if(MSVC)
+        add_compile_options(/GR-)
+    else()
+        add_compile_options(-fno-rtti)
+    endif()
 endif()
+if(NOT LLVM_ENABLE_EH)
+    if(MSVC)
+        add_compile_options(/EHs- /EHc-)
+    else()
+        add_compile_options(-fno-exceptions)
+    endif()
+endif()
+
+add_compile_options(-fno-rtti -fno-exceptions)
+
+if(TARGET LLVM)
+    set(LLVM_LINK_LIBS LLVM)
+    message(STATUS "Using shared LLVM target")
+else()
+    llvm_map_components_to_libnames(LLVM_LINK_LIBS
+        core
+        support
+        native
+        analysis
+        target
+        mc
+        bitreader
+        passes
+    )
+    message(STATUS "Using static LLVM components: ${LLVM_LINK_LIBS}")
+endif()
+
+include_directories(${CMAKE_CURRENT_SOURCE_DIR}/include)
 
 file(GLOB_RECURSE SOURCES "src/*.cpp")
 add_executable(${PROJECT_NAME} ${SOURCES})
-target_link_libraries(${PROJECT_NAME} PRIVATE ${LLVM_LIBS})
+
+target_link_libraries(${PROJECT_NAME} PRIVATE ${LLVM_LINK_LIBS} ${LLVM_SYSTEM_LIBS})
