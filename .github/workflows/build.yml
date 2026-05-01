@@ -46,8 +46,8 @@ jobs:
         if: matrix.os == 'windows-latest'
         shell: msys2 {0}
         run: |
-          export CC=clang
-          export CXX=clang++
+          export CC=clang-21
+          export CXX=clang++-21
           cmake -B build -G Ninja -DCMAKE_BUILD_TYPE=${{ matrix.build_type }}
           cmake --build build --config ${{ matrix.build_type }} --parallel
 
