@@ -6,40 +6,40 @@ on:
     branches: [main]
 
 jobs:
-  strategy:
-    fail-fast: false
-    matrix:
-      os: [ubuntu-latest, windows-latest, macos-latest]
-      build_type: [Release]
+  build:
+    name: Build on ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+        build_type: [Release]
 
-  name: Build on ${{ matrix.os }}
-  runs-on: ${{ matrix.os }}
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
 
-  steps:
-    - name: Checkout repo
-      uses: actions/checkout@v4
+      - name: Install LLVM
+        uses: KyleMayes/install-llvm-action@v2
+        with:
+          version: "21"
+          env: true
 
-    - name: Install LLVM
-      uses: KyleMayes/install-llvm-action@v2
-      with:
-        version: "21"
-        env: true
+      - name: Configure CMake
+        run: >
+          cmake -B ${{ github.workspace }}/build -DCMAKE_BUILD_TYPE=${{
+          matrix.build_type }} -DLLVM_DIR=${{ env.LLVM_PATH }}/lib/cmake/llvm
 
-    - name: Configure CMake
-      run: >
-        cmake -B ${{ github.workspace }}/build -DCMAKE_BUILD_TYPE=${{
-        mathix.build_type }} -DLLVM_DIR=${{ env.LLVM_PATH }}/lib/cmake/llvm
+      - name: Build
+        run: >
+          cmake --build ${{ github.workspace }}/build --config ${{
+          matrix.build_type }} --parallel
 
-    - name: Build
-      run: >
-        cmake --build ${{ github.workspace }}/build --config ${{
-        mathix.build_type }} --parallel
-
-    - name: Upload
-      uses: actions/upload-artifact@v4
-      with:
-        name: veoc-${{ mathix.os }}
-        path: |
-          ${{ github.workspace }}/build/veoc
-          ${{ github.workspace }}/build/${{ mathix.build_type }}/veoc.exe
-        if-no-files-found: error
+      - name: Upload
+        uses: actions/upload-artifact@v4
+        with:
+          name: veoc-${{ matrix.os }}
+          path: |
+            ${{ github.workspace }}/build/veoc
+            ${{ github.workspace }}/build/${{ matrix.build_type }}/veoc.exe
+          if-no-files-found: error
