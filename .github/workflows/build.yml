@@ -32,10 +32,26 @@ jobs:
           dir "${{ env.LLVM_PATH }}"
           dir "${{ env.LLVM_PATH }}/lib/cmake/llvm"
 
+      # - name: Configure CMake
+      #   run: >
+      #     cmake -B build -DCMAKE_BUILD_TYPE=${{ matrix.build_type }}
+      #     -DLLVM_DIR="${{ env.LLVM_PATH }}/lib/cmake/llvm"
+
       - name: Configure CMake
-        run: >
-          cmake -B build -DCMAKE_BUILD_TYPE=${{ matrix.build_type }}
-          -DLLVM_DIR="${{ env.LLVM_PATH }}/lib/cmake/llvm"
+        shell: pwsh
+        run: |
+          $llvmConfigPath = Get-ChildItem -Path "${{ env.LLVM_PATH }}" -Filter "LLVMConfig.cmake" -Recurse | Select-Object -First 1 -ExpandProperty DirectoryName
+
+          if (-not $llvmConfigPath) {
+            Write-Error "LLVMConfig.cmake does not found in ${{ env.LLVM_PATH }}!."
+            exit 1
+          }
+
+          Write-Host "LLVM path: $llvmConfigPath"
+
+          cmake -B build `
+            -DCMAKE_BUILD_TYPE=${{ matrix.build_type }} `
+            -DLLVM_DIR="$llvmConfigPath"
 
       - name: Build
         run: >
