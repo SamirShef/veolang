@@ -18,6 +18,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Removed 'k' prefix for constants in .clang-tidy
 - Disable `cert-err58-cpp` rule in .clang-tidy
 - Added include_directories for include/ in the root of project
+- Linking LLVM in CMakeLists.txt
 
 ## [0.0.1] - 2026.05.01
 

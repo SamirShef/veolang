@@ -30,22 +30,6 @@ endif()
 
 add_compile_options(-fno-rtti -fno-exceptions)
 
-include_directories(${CMAKE_CURRENT_SOURCE_DIR}/include)
-
-file(GLOB_RECURSE SOURCES "src/*.cpp")
-add_executable(${PROJECT_NAME} ${SOURCES})
-
-target_link_libraries(${PROJECT_NAME} PRIVATE ${LLVM_LIBRARIES} ${LLVM_SYSTEM_LIBS})
-
-# if(NOT LLVM_LIBRARIES)
-#     llvm_map_components_to_libnames(llvm_libs_fallback ${llvm_components})
-#     target_link_libraries(${PROJECT_NAME} PRIVATE ${llvm_libs_fallback})
-#
-#     message(STATUS "Linking with llvm_libs (fallback): ${llvm_libs_fallback}")
-# else()
-#     message(STATUS "Linking with llvm_libs: ${LLVM_LIBRARIES}")
-# endif()
-
 if(TARGET LLVM)
     set(LLVM_LINK_LIBS LLVM)
     message(STATUS "Using shared LLVM target")
@@ -63,6 +47,18 @@ else()
     message(STATUS "Using static LLVM components: ${LLVM_LINK_LIBS}")
 endif()
 
-if(LLVM_SYSTEM_LIBS)
-    target_link_libraries(${PROJECT_NAME} PRIVATE ${LLVM_LINK_LIBS} ${LLVM_SYSTEM_LIBS})
-endif()
+include_directories(${CMAKE_CURRENT_SOURCE_DIR}/include)
+
+file(GLOB_RECURSE SOURCES "src/*.cpp")
+add_executable(${PROJECT_NAME} ${SOURCES})
+
+target_link_libraries(${PROJECT_NAME} PRIVATE ${LLVM_LINK_LIBS} ${LLVM_SYSTEM_LIBS})
+
+# if(NOT LLVM_LIBRARIES)
+#     llvm_map_components_to_libnames(llvm_libs_fallback ${llvm_components})
+#     target_link_libraries(${PROJECT_NAME} PRIVATE ${llvm_libs_fallback})
+#
+#     message(STATUS "Linking with llvm_libs (fallback): ${llvm_libs_fallback}")
+# else()
+#     message(STATUS "Linking with llvm_libs: ${LLVM_LIBRARIES}")
+# endif()
