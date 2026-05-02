@@ -10,7 +10,7 @@ find_package(LLVM REQUIRED CONFIG)
 message(STATUS "LLVM ${LLVM_PACKAGE_VERSION} was found")
 message(STATUS "LLVM path: ${LLVM_DIR}")
 
-include_directories(${LLVM_INCLUDE_DIRS})
+include_directories(SYSTEM ${LLVM_INCLUDE_DIRS})
 add_definitions(${LLVM_DEFINITIONS})
 
 if(NOT LLVM_ENABLE_RTTI)
@@ -47,9 +47,11 @@ else()
     message(STATUS "Using static LLVM components: ${LLVM_LINK_LIBS}")
 endif()
 
-include_directories(${CMAKE_CURRENT_SOURCE_DIR}/include)
+include_directories(SYSTEM ${CMAKE_CURRENT_SOURCE_DIR}/include)
 
 file(GLOB_RECURSE SOURCES "src/*.cpp")
 add_executable(${PROJECT_NAME} ${SOURCES})
 
-target_link_libraries(${PROJECT_NAME} PRIVATE ${LLVM_LINK_LIBS} ${LLVM_SYSTEM_LIBS})
+target_link_libraries(${PROJECT_NAME} PRIVATE
+    ${LLVM_LINK_LIBS}
+    ${LLVM_SYSTEM_LIBS})
