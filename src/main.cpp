@@ -24,46 +24,44 @@ main (int argc, char **argv) {
         llvm::errs () << "error\n";
         return 1;
     }
-    unsigned buffer = mgr.AddNewSourceBuffer (
-            std::move (*memBufOrErr),
-            llvm::SMLoc ());
+    unsigned buffer = mgr.AddNewSourceBuffer (std::move (*memBufOrErr), llvm::SMLoc ());
     diagnostic::DiagnosticEngine diag (mgr);
     const char *bufStart = mgr.getMemoryBuffer (buffer)->getBufferStart ();
     diag.Report (
-                diagnostic::DiagCode::EUnexpectedToken,
-                "expected ';'",
-                diagnostic::Severity::Error)
-            .AddSpan (
-                    diagnostic::Span (
-                            llvm::SMLoc::getFromPointer (bufStart + 23),
-                            llvm::SMLoc::getFromPointer (bufStart + 28)),
-                    "unexpected token",
-                    false)
-            .AddSpan (
-                    diagnostic::Span (
-                            llvm::SMLoc::getFromPointer (bufStart + 32),
-                            llvm::SMLoc::getFromPointer (bufStart + 32)),
-                    "unexpected token",
-                    true)
-            .AddNote ("add ';' at the end of line");
+            diagnostic::DiagCode::EUnexpectedToken,
+            "expected ';'",
+            diagnostic::Severity::Error)
+        .AddSpan (
+            diagnostic::Span (
+                llvm::SMLoc::getFromPointer (bufStart + 23),
+                llvm::SMLoc::getFromPointer (bufStart + 28)),
+            "unexpected token",
+            false)
+        .AddSpan (
+            diagnostic::Span (
+                llvm::SMLoc::getFromPointer (bufStart + 32),
+                llvm::SMLoc::getFromPointer (bufStart + 32)),
+            "unexpected token",
+            true)
+        .AddNote ("add ';' at the end of line");
 
     diag.Report (
-                diagnostic::DiagCode::EUnexpectedToken,
-                "expected ';'",
-                diagnostic::Severity::Error)
-            .AddSpan (
-                    diagnostic::Span (
-                            llvm::SMLoc::getFromPointer (bufStart + 23),
-                            llvm::SMLoc::getFromPointer (bufStart + 28)),
-                    "unexpected token",
-                    false)
-            .AddSpan (
-                    diagnostic::Span (
-                            llvm::SMLoc::getFromPointer (bufStart + 32),
-                            llvm::SMLoc::getFromPointer (bufStart + 32)),
-                    "unexpected token",
-                    true)
-            .AddNote ("add ';' at the end of line");
+            diagnostic::DiagCode::EUnexpectedToken,
+            "expected ';'",
+            diagnostic::Severity::Error)
+        .AddSpan (
+            diagnostic::Span (
+                llvm::SMLoc::getFromPointer (bufStart + 23),
+                llvm::SMLoc::getFromPointer (bufStart + 28)),
+            "unexpected token",
+            false)
+        .AddSpan (
+            diagnostic::Span (
+                llvm::SMLoc::getFromPointer (bufStart + 32),
+                llvm::SMLoc::getFromPointer (bufStart + 32)),
+            "unexpected token",
+            true)
+        .AddNote ("add ';' at the end of line");
 
     diag.Render ();
     fs::remove ("test.veo");

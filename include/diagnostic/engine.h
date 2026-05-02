@@ -12,8 +12,7 @@ class DiagnosticEngine {
     bool                           _hasErrs{};
 
 public:
-    explicit DiagnosticEngine (llvm::SourceMgr &mgr) : _mgr (&mgr) {
-    }
+    explicit DiagnosticEngine (llvm::SourceMgr &mgr) : _mgr (&mgr) {}
 
     DiagnosticBuilder &
     Report (DiagCode code, std::string message, Severity severity) {
@@ -33,10 +32,10 @@ public:
     Render () {
         int i = 0;
         for (DiagnosticBuilder &diag : _builders) {
+            renderDiag (diag);
             if (i != 0) {
                 llvm::errs () << '\n';
             }
-            renderDiag (diag);
             ++i;
         }
     }

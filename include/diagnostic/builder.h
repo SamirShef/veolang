@@ -14,12 +14,8 @@ class DiagnosticBuilder {
     std::vector<std::string> _notes;
 
 public:
-    DiagnosticBuilder (
-            DiagCode code, std::string message, Severity severity)
-        : _code (code),
-          _message (std::move (message)),
-          _severity (severity) {
-    }
+    DiagnosticBuilder (DiagCode code, std::string message, Severity severity)
+        : _code (code), _message (std::move (message)), _severity (severity) {}
 
     DiagnosticBuilder &
     AddSpan (Span span, std::string label = "", bool isPrimary = true) {

@@ -14,68 +14,60 @@ inline llvm::cl::OptionCategory Category ("Veo Compiler Options");
 inline llvm::cl::SubCommand NewSub ("new", "Create a new project");
 
 inline llvm::cl::opt<std::string> NewNameOpt (
-        llvm::cl::Positional,
-        llvm::cl::desc ("<name>"),
-        llvm::cl::Required,
-        llvm::cl::sub (NewSub));
+    llvm::cl::Positional,
+    llvm::cl::desc ("<name>"),
+    llvm::cl::Required,
+    llvm::cl::sub (NewSub));
 
+inline llvm::cl::SubCommand InitSub ("init", "Initialize a project in current directory");
+inline llvm::cl::SubCommand BuildSub ("build", "Build the current project");
+inline llvm::cl::SubCommand RunSub ("run", "Build the current project and run it");
 inline llvm::cl::SubCommand
-        InitSub ("init", "Initialize a project in current directory");
+    TestSub ("test", "Executing functions which marked as [test]");
 inline llvm::cl::SubCommand
-        BuildSub ("build", "Build the current project");
-inline llvm::cl::SubCommand
-        RunSub ("run", "Build the current project and run it");
-inline llvm::cl::SubCommand
-        TestSub ("test", "Executing functions which marked as [test]");
-inline llvm::cl::SubCommand CheckSub (
-        "check", "Checking code without dumping build artefacts");
+    CheckSub ("check", "Checking code without dumping build artefacts");
 inline llvm::cl::SubCommand CleanSub ("clean", "Clean build directory");
-inline llvm::cl::SubCommand
-        FetchSub ("fetch", "Update the module registry");
+inline llvm::cl::SubCommand FetchSub ("fetch", "Update the module registry");
 
 enum class OptLevel : uint8_t { O0, O1, O2, O3 };
 
 inline llvm::cl::opt<OptLevel> OptimizationLevelOpt (
-        llvm::cl::desc ("Optimization level:"),
-        llvm::cl::values (
-                clEnumValN (OptLevel::O0, "O0", "No optimization"),
-                clEnumValN (OptLevel::O1, "O1", "Basic optimization"),
-                clEnumValN (OptLevel::O2, "O2", "Default optimization"),
-                clEnumValN (
-                        OptLevel::O3, "O3", "Aggressive optimization")),
-        llvm::cl::init (OptLevel::O0),
-        llvm::cl::cat (Category));
+    llvm::cl::desc ("Optimization level:"),
+    llvm::cl::values (
+        clEnumValN (OptLevel::O0, "O0", "No optimization"),
+        clEnumValN (OptLevel::O1, "O1", "Basic optimization"),
+        clEnumValN (OptLevel::O2, "O2", "Default optimization"),
+        clEnumValN (OptLevel::O3, "O3", "Aggressive optimization")),
+    llvm::cl::init (OptLevel::O0),
+    llvm::cl::cat (Category));
 
 inline llvm::cl::opt<std::string> TargetTripleOpt (
-        "target",
-        llvm::cl::desc ("Specify target triple"),
-        llvm::cl::value_desc ("triple"),
-        llvm::cl::init (""),
-        llvm::cl::Prefix,
-        llvm::cl::cat (Category));
+    "target",
+    llvm::cl::desc ("Specify target triple"),
+    llvm::cl::value_desc ("triple"),
+    llvm::cl::init (""),
+    llvm::cl::Prefix,
+    llvm::cl::cat (Category));
 
 inline llvm::cl::opt<bool> ForceRebuildOpt (
-        "force-rebuild",
-        llvm::cl::desc ("Rebuild project without checking of cache"),
-        llvm::cl::cat (Category));
+    "force-rebuild",
+    llvm::cl::desc ("Rebuild project without checking of cache"),
+    llvm::cl::cat (Category));
 
 inline llvm::cl::opt<bool> EmitIROpt (
-        "emit-ir",
-        llvm::cl::desc ("Emits LLVM IR to .ll file "),
-        llvm::cl::cat (Category));
+    "emit-ir", llvm::cl::desc ("Emits LLVM IR to .ll file "), llvm::cl::cat (Category));
 
 inline llvm::cl::opt<bool> DumpModOpt (
-        "dump-mod",
-        llvm::cl::desc (
-                "Dumps symbol table even module to .veomodtxt file"),
-        llvm::cl::cat (Category));
+    "dump-mod",
+    llvm::cl::desc ("Dumps symbol table even module to .veomodtxt file"),
+    llvm::cl::cat (Category));
 
 inline llvm::cl::opt<std::string> ExplainOpt (
-        "explain",
-        llvm::cl::desc ("Explain diagnostic code"),
-        llvm::cl::value_desc ("code"),
-        llvm::cl::init (""),
-        llvm::cl::cat (Category));
+    "explain",
+    llvm::cl::desc ("Explain diagnostic code"),
+    llvm::cl::value_desc ("code"),
+    llvm::cl::init (""),
+    llvm::cl::cat (Category));
 
 // NOLINTEND(cppcoreguidelines-avoid-non-const-global-variables)
 

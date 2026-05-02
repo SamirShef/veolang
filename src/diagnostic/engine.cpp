@@ -18,129 +18,141 @@ GetDigitCount (int line) {
 
 std::string
 SeverityToString (Severity severity) {
-#define case(expr, res)                                                   \
+#define func_case(expr, res)                                                             \
     case Severity::expr: return res;
 
     switch (severity) {
-        case (Error, "error");
-        case (Warning, "warning");
-        case (Note, "note");
-        case (Help, "help");
+        func_case (Error, "error");
+        func_case (Warning, "warning");
+        func_case (Note, "note");
+        func_case (Help, "help");
     }
 
-#undef case
+#undef func_case
 
     return "error";
 }
 
 char
 SeverityToPrefix (Severity severity) {
-    return (char) toupper(SeverityToString(severity)[0]);
+    return (char) toupper (SeverityToString (severity)[0]);
 }
 
 llvm::raw_fd_ostream::Colors
-SeverityToColor(Severity severity) {
-#define case(expr, col)                                                   \
-        case Severity::expr: return llvm::raw_fd_ostream::col;
+SeverityToColor (Severity severity) {
+#define func_case(expr, col)                                                             \
+    case Severity::expr: return llvm::raw_fd_ostream::col;
 
     switch (severity) {
-        case (Error, RED);
-        case (Warning, YELLOW);
-        case (Note, WHITE);
-        case (Help, CYAN);
+        func_case (Error, RED);
+        func_case (Warning, YELLOW);
+        func_case (Note, WHITE);
+        func_case (Help, CYAN);
     }
 
-#undef case
+#undef func_case
 
     return llvm::raw_fd_ostream::WHITE;
 }
 
 int
-DiagCodeToIntegerCode(DiagCode code) {
+DiagCodeToIntegerCode (DiagCode code) {
     if (code <= errCodeLast) {
-        return static_cast<int>(code);
+        return static_cast<int> (code);
     }
     if (code <= warnCodeLast) {
-        return static_cast<int>(static_cast<uint8_t>(code) - static_cast<uint8_t>(warnCodeStart));
+        return static_cast<int> (
+            static_cast<uint8_t> (code) - static_cast<uint8_t> (warnCodeStart));
     }
     return 0;
 }
 
 void
 DiagnosticEngine::renderDiag (DiagnosticBuilder &diag) {
-    std::ranges::sort(diag.GetSpans(), [&](const Annotation &a, const Annotation &b) {
-        return _mgr->getLineAndColumn(a.Span.Start).first < _mgr->getLineAndColumn(b.Span.Start).first;
+    std::ranges::sort (diag.GetSpans (), [&] (const Annotation &a, const Annotation &b) {
+        return _mgr->getLineAndColumn (a.Span.Start).first
+               < _mgr->getLineAndColumn (b.Span.Start).first;
     });
-    printDiagnosticHeader(diag);
-    printDiagnosticBody(diag);
+    printDiagnosticHeader (diag);
+    printDiagnosticBody (diag);
 }
 
 void
-DiagnosticEngine::printDiagnosticHeader(DiagnosticBuilder &diag) {
-    llvm::errs().changeColor (SeverityToColor (diag.GetSeverity ()), true);
+DiagnosticEngine::printDiagnosticHeader (DiagnosticBuilder &diag) {
+    llvm::errs ().changeColor (SeverityToColor (diag.GetSeverity ()), true);
 
-    llvm::errs() << SeverityToString (diag.GetSeverity ()) << llvm::raw_fd_ostream::WHITE << '[';
-    llvm::errs().changeColor (SeverityToColor (diag.GetSeverity()), true);
-    std::string errCode = std::format ("{:04}", DiagCodeToIntegerCode(diag.GetCode()));
-    llvm::errs() << SeverityToPrefix (diag.GetSeverity ()) << errCode << llvm::raw_fd_ostream::WHITE << "]: " << diag.GetMessage () << '\n';
+    llvm::errs () << SeverityToString (diag.GetSeverity ()) << llvm::raw_fd_ostream::WHITE
+                  << '[';
+    llvm::errs ().changeColor (SeverityToColor (diag.GetSeverity ()), true);
+    std::string errCode = std::format ("{:04}", DiagCodeToIntegerCode (diag.GetCode ()));
+    llvm::errs () << SeverityToPrefix (diag.GetSeverity ()) << errCode
+                  << llvm::raw_fd_ostream::WHITE << "]: " << diag.GetMessage () << '\n';
 }
 
-// clang-format off
 void
 DiagnosticEngine::printDiagnosticBody (DiagnosticBuilder &diag) {
-    int maxLineWidth = 1;
+    int         maxLineWidth = 1;
     std::string lastBufferId;
-    for (const auto &span : diag.GetSpans()) {
-        unsigned buffer = _mgr->FindBufferContainingLoc (span.Span.Start);
+    for (const auto &span : diag.GetSpans ()) {
+        unsigned           buffer = _mgr->FindBufferContainingLoc (span.Span.Start);
         const std::string &bufferId
-            = _mgr->getBufferInfo(buffer).Buffer->getBufferIdentifier ().str ();
+            = _mgr->getBufferInfo (buffer).Buffer->getBufferIdentifier ().str ();
         auto lineAndCol = _mgr->getLineAndColumn (span.Span.Start, buffer);
-        int maxLine = static_cast<int>(_mgr->getLineAndColumn(diag.GetSpans().back().Span.Start, buffer).first);
-        maxLineWidth = GetDigitCount(maxLine);
+        int  maxLine    = static_cast<int> (
+            _mgr->getLineAndColumn (diag.GetSpans ().back ().Span.Start, buffer).first);
+        maxLineWidth = GetDigitCount (maxLine);
 
-        if (span == diag.GetSpans().front() || !lastBufferId.empty() && lastBufferId != bufferId) {
-            if (span != diag.GetSpans().front()) {
-                llvm::errs() << '\n';
+        if (span == diag.GetSpans ().front ()
+            || !lastBufferId.empty () && lastBufferId != bufferId) {
+            if (span != diag.GetSpans ().front ()) {
+                llvm::errs () << '\n';
             }
-            llvm::errs().changeColor(llvm::raw_fd_ostream::WHITE);
-            llvm::errs() << std::string(maxLineWidth, ' ') << " --> " << bufferId << ':' << lineAndCol.first << ':' << lineAndCol.second << '\n';
+            llvm::errs ().changeColor (llvm::raw_fd_ostream::WHITE);
+            llvm::errs () << std::string (maxLineWidth, ' ') << " --> " << bufferId << ':'
+                          << lineAndCol.first << ':' << lineAndCol.second << '\n';
             lastBufferId = bufferId;
         }
 
-        if (span == diag.GetSpans().front()) {
-            llvm::errs().changeColor(llvm::raw_fd_ostream::WHITE, true);
-            llvm::errs() << std::string(maxLineWidth, ' ') << "  |\n";
+        if (span == diag.GetSpans ().front ()) {
+            llvm::errs ().changeColor (llvm::raw_fd_ostream::WHITE, true);
+            llvm::errs () << std::string (maxLineWidth, ' ') << "  |\n";
         }
 
-        llvm::errs ().changeColor(llvm::raw_fd_ostream::YELLOW, true) << std::format(" {:{}} ", lineAndCol.first, maxLineWidth);
-        llvm::errs().changeColor(llvm::raw_fd_ostream::WHITE, true) << "| ";
+        llvm::errs ().changeColor (llvm::raw_fd_ostream::YELLOW, true)
+            << std::format (" {:{}} ", lineAndCol.first, maxLineWidth);
+        llvm::errs ().changeColor (llvm::raw_fd_ostream::WHITE, true) << "| ";
 
         const char *lineStart = span.Span.Start.getPointer ();
-        const char *lineEnd = lineStart;
-        for (; *(lineStart - 1) != '\n'; --lineStart) {}
-        for (; *lineEnd != '\n'; ++lineEnd) {}
+        const char *lineEnd   = lineStart;
+        for (; *(lineStart - 1) != '\n'; --lineStart) {
+        }
+        for (; *lineEnd != '\n'; ++lineEnd) {
+        }
         llvm::errs () << std::string (lineStart, lineEnd - lineStart) << '\n';
 
-        llvm::errs() << std::string(maxLineWidth, ' ') << "  | ";
-        llvm::errs() << std::string(span.Span.Start.getPointer() - lineStart, ' ');
-        char underlineSymbol = span.IsPrimary ? '^' :
-        '-';
-        llvm::errs ().changeColor(llvm::raw_fd_ostream::RED, true) << std::string (span.Span.End.getPointer () - span.Span.Start.getPointer () + 1, underlineSymbol);
-        llvm::errs().changeColor(llvm::raw_fd_ostream::WHITE, true);
-        if (!span.Label.empty()) {
-            llvm::errs() << ' ' << span.Label;
+        llvm::errs () << std::string (maxLineWidth, ' ') << "  | ";
+        llvm::errs () << std::string (span.Span.Start.getPointer () - lineStart, ' ');
+        char underlineSymbol = span.IsPrimary ? '^' : '-';
+        llvm::errs ().changeColor (llvm::raw_fd_ostream::RED, true) << std::string (
+            span.Span.End.getPointer () - span.Span.Start.getPointer () + 1,
+            underlineSymbol);
+        llvm::errs ().changeColor (llvm::raw_fd_ostream::WHITE, true);
+        if (!span.Label.empty ()) {
+            llvm::errs () << ' ' << span.Label;
         }
-        llvm::errs() << '\n';
+        llvm::errs () << '\n';
 
-        if (span == diag.GetSpans().back()) {
-            llvm::errs () << std::string(maxLineWidth, ' ') << "  |\n" << llvm::raw_fd_ostream::RESET;
+        if (span == diag.GetSpans ().back ()) {
+            llvm::errs () << std::string (maxLineWidth, ' ') << "  |\n"
+                          << llvm::raw_fd_ostream::RESET;
         }
     }
 
-    for (const std::string &note : diag.GetNotes()) {
-        llvm::errs().changeColor(llvm::raw_fd_ostream::CYAN, true) << std::string(maxLineWidth, ' ') << "  = note: ";
-        llvm::errs() << llvm::raw_fd_ostream::RESET << note << '\n';
+    for (const std::string &note : diag.GetNotes ()) {
+        llvm::errs ().changeColor (llvm::raw_fd_ostream::CYAN, true)
+            << std::string (maxLineWidth, ' ') << "  = note: ";
+        llvm::errs () << llvm::raw_fd_ostream::RESET << note << '\n';
     }
 }
-        // clang-format on
+
 }

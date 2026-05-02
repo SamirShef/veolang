@@ -3,10 +3,10 @@ BasedOnStyle: GNU
 IndentWidth: 4
 TabWidth: 4
 UseTab: Never
-ColumnLimit: 75
-AllowShortFunctionsOnASingleLine: None
+ColumnLimit: 90
+AllowShortFunctionsOnASingleLine: true
 AllowShortIfStatementsOnASingleLine: false
-AllowShortLoopsOnASingleLine: true
+AllowShortLoopsOnASingleLine: false
 NamespaceIndentation: None
 PointerAlignment: Right
 SpaceAfterCStyleCast: true
@@ -31,9 +31,9 @@ AlwaysBreakAfterReturnType: All
 BreakBeforeCloseBracketBracedList: true
 BreakStringLiterals: true
 BreakBeforeBraces: Attach
-AllowShortBlocksOnASingleLine: false
+AllowShortBlocksOnASingleLine: true
 BinPackArguments: false
 BinPackParameters: false
 AllowAllArgumentsOnNextLine: false
-ContinuationIndentWidth: 8
+ContinuationIndentWidth: 4
 AlignArrayOfStructures: Left
