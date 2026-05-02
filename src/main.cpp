@@ -3,7 +3,6 @@
 #include <diagnostic/span.h>
 #include <driver/cli_options.h>
 #include <fstream>
-#include <iostream>
 #include <llvm/Support/raw_ostream.h>
 
 using namespace veo;
@@ -36,8 +35,35 @@ main (int argc, char **argv) {
                 diagnostic::Severity::Error)
             .AddSpan (
                     diagnostic::Span (
+                            llvm::SMLoc::getFromPointer (bufStart + 23),
+                            llvm::SMLoc::getFromPointer (bufStart + 28)),
+                    "unexpected token",
+                    false)
+            .AddSpan (
+                    diagnostic::Span (
                             llvm::SMLoc::getFromPointer (bufStart + 32),
-                            llvm::SMLoc::getFromPointer (bufStart + 33)));
+                            llvm::SMLoc::getFromPointer (bufStart + 32)),
+                    "unexpected token",
+                    true)
+            .AddNote ("add ';' at the end of line");
+
+    diag.Report (
+                diagnostic::DiagCode::EUnexpectedToken,
+                "expected ';'",
+                diagnostic::Severity::Error)
+            .AddSpan (
+                    diagnostic::Span (
+                            llvm::SMLoc::getFromPointer (bufStart + 23),
+                            llvm::SMLoc::getFromPointer (bufStart + 28)),
+                    "unexpected token",
+                    false)
+            .AddSpan (
+                    diagnostic::Span (
+                            llvm::SMLoc::getFromPointer (bufStart + 32),
+                            llvm::SMLoc::getFromPointer (bufStart + 32)),
+                    "unexpected token",
+                    true)
+            .AddNote ("add ';' at the end of line");
 
     diag.Render ();
     fs::remove ("test.veo");

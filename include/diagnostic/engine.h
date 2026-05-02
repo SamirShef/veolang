@@ -2,6 +2,7 @@
 #include <diagnostic/builder.h>
 #include <diagnostic/codes.h>
 #include <llvm/Support/SourceMgr.h>
+#include <llvm/Support/raw_ostream.h>
 
 namespace veo::diagnostic {
 
@@ -30,17 +31,25 @@ public:
 
     void
     Render () {
+        int i = 0;
         for (DiagnosticBuilder &diag : _builders) {
+            if (i != 0) {
+                llvm::errs () << '\n';
+            }
             renderDiag (diag);
+            ++i;
         }
     }
 
 private:
     void
+    renderDiag (DiagnosticBuilder &diag);
+
+    void
     printDiagnosticHeader (DiagnosticBuilder &diag);
 
     void
-    renderDiag (DiagnosticBuilder &diag);
+    printDiagnosticBody (DiagnosticBuilder &diag);
 };
 
 }

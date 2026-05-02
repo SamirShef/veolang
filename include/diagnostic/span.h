@@ -9,6 +9,11 @@ struct Span {
 
     Span (llvm::SMLoc start, llvm::SMLoc end) : Start (start), End (end) {
     }
+
+    bool
+    operator== (const Span &other) const {
+        return Start == other.Start && End == other.End;
+    }
 };
 
 }

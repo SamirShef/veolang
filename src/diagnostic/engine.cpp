@@ -1,3 +1,5 @@
+#include <algorithm>
+#include <cmath>
 #include <diagnostic/builder.h>
 #include <diagnostic/codes.h>
 #include <diagnostic/engine.h>
@@ -5,6 +7,14 @@
 #include <llvm/Support/raw_ostream.h>
 
 namespace veo::diagnostic {
+
+int
+GetDigitCount (int line) {
+    if (line == 0) {
+        return 1;
+    }
+    return static_cast<int> (std::log10 (line)) + 1;
+}
 
 std::string
 SeverityToString (Severity severity) {
@@ -57,28 +67,80 @@ DiagCodeToIntegerCode(DiagCode code) {
 }
 
 void
-DiagnosticEngine::printDiagnosticHeader(DiagnosticBuilder &diag) {
-    unsigned buffer = _mgr->FindBufferContainingLoc (
-            diag.GetSpans ()[0].Span.Start);
-    const auto        &bufferInfo = _mgr->getBufferInfo (buffer);
-    const std::string &bufferId
-            = bufferInfo.Buffer->getBufferIdentifier ().str ();
+DiagnosticEngine::renderDiag (DiagnosticBuilder &diag) {
+    std::ranges::sort(diag.GetSpans(), [&](const Annotation &a, const Annotation &b) {
+        return _mgr->getLineAndColumn(a.Span.Start).first < _mgr->getLineAndColumn(b.Span.Start).first;
+    });
+    printDiagnosticHeader(diag);
+    printDiagnosticBody(diag);
+}
 
+void
+DiagnosticEngine::printDiagnosticHeader(DiagnosticBuilder &diag) {
     llvm::errs().changeColor (SeverityToColor (diag.GetSeverity ()), true);
 
     llvm::errs() << SeverityToString (diag.GetSeverity ()) << llvm::raw_fd_ostream::WHITE << '[';
     llvm::errs().changeColor (SeverityToColor (diag.GetSeverity()), true);
     std::string errCode = std::format ("{:04}", DiagCodeToIntegerCode(diag.GetCode()));
     llvm::errs() << SeverityToPrefix (diag.GetSeverity ()) << errCode << llvm::raw_fd_ostream::WHITE << "]: " << diag.GetMessage () << '\n';
-
-
-    auto lineAndCol = _mgr->getLineAndColumn (diag.GetSpans()[0].Span.Start, buffer);
-    llvm::errs() << "  --> " << bufferId << ':' << lineAndCol.first << ':' << lineAndCol.second << '\n';
 }
 
+// clang-format off
 void
-DiagnosticEngine::renderDiag (DiagnosticBuilder &diag) {
-    printDiagnosticHeader(diag);
-}
+DiagnosticEngine::printDiagnosticBody (DiagnosticBuilder &diag) {
+    int maxLineWidth = 1;
+    std::string lastBufferId;
+    for (const auto &span : diag.GetSpans()) {
+        unsigned buffer = _mgr->FindBufferContainingLoc (span.Span.Start);
+        const std::string &bufferId
+            = _mgr->getBufferInfo(buffer).Buffer->getBufferIdentifier ().str ();
+        auto lineAndCol = _mgr->getLineAndColumn (span.Span.Start, buffer);
+        int maxLine = static_cast<int>(_mgr->getLineAndColumn(diag.GetSpans().back().Span.Start, buffer).first);
+        maxLineWidth = GetDigitCount(maxLine);
 
+        if (span == diag.GetSpans().front() || !lastBufferId.empty() && lastBufferId != bufferId) {
+            if (span != diag.GetSpans().front()) {
+                llvm::errs() << '\n';
+            }
+            llvm::errs().changeColor(llvm::raw_fd_ostream::WHITE);
+            llvm::errs() << std::string(maxLineWidth, ' ') << " --> " << bufferId << ':' << lineAndCol.first << ':' << lineAndCol.second << '\n';
+            lastBufferId = bufferId;
+        }
+
+        if (span == diag.GetSpans().front()) {
+            llvm::errs().changeColor(llvm::raw_fd_ostream::WHITE, true);
+            llvm::errs() << std::string(maxLineWidth, ' ') << "  |\n";
+        }
+
+        llvm::errs ().changeColor(llvm::raw_fd_ostream::YELLOW, true) << std::format(" {:{}} ", lineAndCol.first, maxLineWidth);
+        llvm::errs().changeColor(llvm::raw_fd_ostream::WHITE, true) << "| ";
+
+        const char *lineStart = span.Span.Start.getPointer ();
+        const char *lineEnd = lineStart;
+        for (; *(lineStart - 1) != '\n'; --lineStart) {}
+        for (; *lineEnd != '\n'; ++lineEnd) {}
+        llvm::errs () << std::string (lineStart, lineEnd - lineStart) << '\n';
+
+        llvm::errs() << std::string(maxLineWidth, ' ') << "  | ";
+        llvm::errs() << std::string(span.Span.Start.getPointer() - lineStart, ' ');
+        char underlineSymbol = span.IsPrimary ? '^' :
+        '-';
+        llvm::errs ().changeColor(llvm::raw_fd_ostream::RED, true) << std::string (span.Span.End.getPointer () - span.Span.Start.getPointer () + 1, underlineSymbol);
+        llvm::errs().changeColor(llvm::raw_fd_ostream::WHITE, true);
+        if (!span.Label.empty()) {
+            llvm::errs() << ' ' << span.Label;
+        }
+        llvm::errs() << '\n';
+
+        if (span == diag.GetSpans().back()) {
+            llvm::errs () << std::string(maxLineWidth, ' ') << "  |\n" << llvm::raw_fd_ostream::RESET;
+        }
+    }
+
+    for (const std::string &note : diag.GetNotes()) {
+        llvm::errs().changeColor(llvm::raw_fd_ostream::CYAN, true) << std::string(maxLineWidth, ' ') << "  = note: ";
+        llvm::errs() << llvm::raw_fd_ostream::RESET << note << '\n';
+    }
+}
+        // clang-format on
 }

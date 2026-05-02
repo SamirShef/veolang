@@ -48,7 +48,7 @@ public:
         return _severity;
     }
 
-    const std::vector<Annotation> &
+    std::vector<Annotation> &
     GetSpans () {
         return _spans;
     }
