@@ -7,5 +7,6 @@ main (int argc, char **argv) {
     if (driver::ParseArguments (argc, argv) != 0) {
         return 0;
     }
+    driver::ExecuteArguments ();
     return 0;
 }
