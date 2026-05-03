@@ -24,7 +24,7 @@ jobs:
         uses: KyleMayes/install-llvm-action@v2
         with:
           version: "21"
-          env: true
+          env: ${{ matrix.os == 'ubuntu-latest' }}
 
       - name: Setup MSYS2 (Windows)
         if: matrix.os == 'windows-latest'
