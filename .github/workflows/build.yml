@@ -23,8 +23,8 @@ jobs:
         if: matrix.os != 'windows-latest'
         uses: KyleMayes/install-llvm-action@v2
         with:
-          version: "21"
-          env: ${{ matrix.os == 'ubuntu-latest' }}
+          version: "19"
+          env: true
 
       - name: Setup MSYS2 (Windows)
         if: matrix.os == 'windows-latest'
@@ -33,26 +33,22 @@ jobs:
           msystem: UCRT64
           update: true
           install: >-
-            mingw-w64-ucrt-x86_64-llvm-21 mingw-w64-ucrt-x86_64-clang-21
+            mingw-w64-ucrt-x86_64-llvm-19 mingw-w64-ucrt-x86_64-clang-19
             mingw-w64-ucrt-x86_64-cmake mingw-w64-ucrt-x86_64-ninja
 
       - name: Build (Unix)
         if: matrix.os != 'windows-latest'
         run: |
-          LINKER_FLAGS=""
-          if [ "${{ matrix.os }}" == "ubuntu-latest" ]; then
-            LINKER_FLAGS="-DCMAKE_EXE_LINKER_FLAGS=-fuse-ld=lld -DCMAKE_SHARED_LINKER_FLAGS=-fuse-ld=lld"
-          fi
           cmake -B build -DCMAKE_BUILD_TYPE=${{ matrix.build_type }} -DLLVM_DIR="${{ env.LLVM_PATH }}/lib/cmake/llvm" \
-          $LINKER_FLAGS
+                -DCMAKE_EXE_LINKER_FLAGS="-fuse-ld=lld" -DCMAKE_SHARED_LINKER_FLAGS="-fuse-ld=lld"
           cmake --build build --config ${{ matrix.build_type }} --parallel
 
       - name: Build (Windows)
         if: matrix.os == 'windows-latest'
         shell: msys2 {0}
         run: |
-          cmake -B build -G Ninja -DCMAKE_BUILD_TYPE=${{ matrix.build_type }} -DLLVM_DIR=/ucrt64/opt/llvm-21/lib/cmake/llvm \
-                -DCMAKE_C_COMPILER=/ucrt64/opt/llvm-21/bin/clang.exe -DCMAKE_CXX_COMPILER=/ucrt64/opt/llvm-21/bin/clang++.exe
+          cmake -B build -G Ninja -DCMAKE_BUILD_TYPE=${{ matrix.build_type }} -DLLVM_DIR=/ucrt64/opt/llvm-19/lib/cmake/llvm \
+                -DCMAKE_C_COMPILER=/ucrt64/opt/llvm-19/bin/clang.exe -DCMAKE_CXX_COMPILER=/ucrt64/opt/llvm-19/bin/clang++.exe
           cmake --build build --config ${{ matrix.build_type }} --parallel
 
       - name: Upload
