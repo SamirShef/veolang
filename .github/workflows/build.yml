@@ -12,7 +12,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, windows-latest, macos-latest]
+        os: [ubuntu-latest, windows-latest]
         build_type: [Release]
 
     steps:
@@ -23,7 +23,7 @@ jobs:
         if: matrix.os != 'windows-latest'
         uses: KyleMayes/install-llvm-action@v2
         with:
-          version: "19"
+          version: "21"
           env: true
 
       - name: Setup MSYS2 (Windows)
@@ -33,7 +33,7 @@ jobs:
           msystem: UCRT64
           update: true
           install: >-
-            mingw-w64-x86_64-llvm19 mingw-w64-x86_64-clang19
+            mingw-w64-ucrt-x86_64-llvm-21 mingw-w64-ucrt-x86_64-clang-21
             mingw-w64-ucrt-x86_64-cmake mingw-w64-ucrt-x86_64-ninja
 
       - name: Build (Unix)
@@ -47,8 +47,8 @@ jobs:
         if: matrix.os == 'windows-latest'
         shell: msys2 {0}
         run: |
-          cmake -B build -G Ninja -DCMAKE_BUILD_TYPE=${{ matrix.build_type }} -DLLVM_DIR=/ucrt64/opt/llvm-19/lib/cmake/llvm \
-                -DCMAKE_C_COMPILER=/ucrt64/opt/llvm-19/bin/clang.exe -DCMAKE_CXX_COMPILER=/ucrt64/opt/llvm-19/bin/clang++.exe
+          cmake -B build -G Ninja -DCMAKE_BUILD_TYPE=${{ matrix.build_type }} -DLLVM_DIR=/ucrt64/opt/llvm-21/lib/cmake/llvm \
+                -DCMAKE_C_COMPILER=/ucrt64/opt/llvm-21/bin/clang.exe -DCMAKE_CXX_COMPILER=/ucrt64/opt/llvm-21/bin/clang++.exe
           cmake --build build --config ${{ matrix.build_type }} --parallel
 
       - name: Upload
@@ -68,7 +68,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, windows-latest, macos-latest]
+        os: [ubuntu-latest, windows-latest]
         build_type: [Release]
 
     steps:
