@@ -39,8 +39,12 @@ jobs:
       - name: Build (Unix)
         if: matrix.os != 'windows-latest'
         run: |
+          LINKER_FLAGS=""
+          if [ "${{ matrix.os }}" == "ubuntu-latest" ]; then
+            LINKER_FLAGS="-DCMAKE_EXE_LINKER_FLAGS=-fuse-ld=lld -DCMAKE_SHARED_LINKER_FLAGS=-fuse-ld=lld"
+          fi
           cmake -B build -DCMAKE_BUILD_TYPE=${{ matrix.build_type }} -DLLVM_DIR="${{ env.LLVM_PATH }}/lib/cmake/llvm" \
-                -DCMAKE_EXE_LINKER_FLAGS="-fuse-ld=lld" -DCMAKE_SHARED_LINKER_FLAGS="-fuse-ld=lld"
+          $LINKER_FLAGS
           cmake --build build --config ${{ matrix.build_type }} --parallel
 
       - name: Build (Windows)
