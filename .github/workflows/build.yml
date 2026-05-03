@@ -33,7 +33,7 @@ jobs:
           msystem: UCRT64
           update: true
           install: >-
-            mingw-w64-ucrt-x86_64-llvm19 mingw-w64-ucrt-x86_64-clang19
+            mingw-w64-x86_64-llvm19 mingw-w64-x86_64-clang19
             mingw-w64-ucrt-x86_64-cmake mingw-w64-ucrt-x86_64-ninja
 
       - name: Build (Unix)
