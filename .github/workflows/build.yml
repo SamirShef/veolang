@@ -39,11 +39,9 @@ jobs:
       - name: Build (Unix)
         if: matrix.os != 'windows-latest'
         run: |
-          ls -R ${{ env.LLVM_PATH }}/lib
           cmake -B build -DCMAKE_BUILD_TYPE=${{ matrix.build_type }} -DLLVM_DIR="${{ env.LLVM_PATH }}/lib/cmake/llvm" \
                 -DCMAKE_EXE_LINKER_FLAGS="-fuse-ld=lld" -DCMAKE_SHARED_LINKER_FLAGS="-fuse-ld=lld"
           cmake --build build --config ${{ matrix.build_type }} --parallel
-          ctest --output-on-failure
 
       - name: Build (Windows)
         if: matrix.os == 'windows-latest'
@@ -52,7 +50,6 @@ jobs:
           cmake -B build -G Ninja -DCMAKE_BUILD_TYPE=${{ matrix.build_type }} -DLLVM_DIR=/ucrt64/opt/llvm-21/lib/cmake/llvm \
                 -DCMAKE_C_COMPILER=/ucrt64/opt/llvm-21/bin/clang.exe -DCMAKE_CXX_COMPILER=/ucrt64/opt/llvm-21/bin/clang++.exe
           cmake --build build --config ${{ matrix.build_type }} --parallel
-          ctest --output-on-failure
 
       - name: Upload
         uses: actions/upload-artifact@v4
@@ -63,3 +60,19 @@ jobs:
             build/veoc.exe
             build/${{ matrix.build_type }}/veoc.exe
           if-no-files-found: error
+
+  test:
+    needs: [build]
+    name: Test on ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+        build_type: [Release]
+
+    steps:
+      - name: Test
+        run: |
+          cd build/
+          ctest --output-on-failure
