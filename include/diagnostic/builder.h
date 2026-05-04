@@ -24,6 +24,15 @@ public:
     }
 
     DiagnosticBuilder &
+    AddSpan (
+        llvm::SMLoc start,
+        llvm::SMLoc end,
+        std::string label     = "",
+        bool        isPrimary = true) {
+        return AddSpan (Span (start, end), std::move (label), isPrimary);
+    }
+
+    DiagnosticBuilder &
     AddNote (std::string text) {
         _notes.emplace_back (std::move (text));
         return *this;

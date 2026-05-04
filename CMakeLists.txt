@@ -50,8 +50,18 @@ endif()
 include_directories(SYSTEM ${CMAKE_CURRENT_SOURCE_DIR}/include)
 
 file(GLOB_RECURSE SOURCES "src/*.cpp")
-add_executable(${PROJECT_NAME} ${SOURCES})
+list(FILTER SOURCES EXCLUDE REGEX ".*/main\\.cpp$|main\\.cpp$")
+add_executable(${PROJECT_NAME} ${CMAKE_CURRENT_SOURCE_DIR}/src/main.cpp ${SOURCES})
 
 target_link_libraries(${PROJECT_NAME} PRIVATE
+    ${LLVM_LINK_LIBS}
+    ${LLVM_SYSTEM_LIBS})
+
+enable_testing()
+
+add_executable(test_lexer ${CMAKE_CURRENT_SOURCE_DIR}/tests/unit/lexer/main.cpp ${SOURCES})
+add_test(NAME TestLexer COMMAND test_lexer ${CMAKE_CURRENT_SOURCE_DIR}/tests/unit/lexer)
+target_compile_options(test_lexer PRIVATE -g)
+target_link_libraries(test_lexer PRIVATE
     ${LLVM_LINK_LIBS}
     ${LLVM_SYSTEM_LIBS})

@@ -9,6 +9,11 @@ enum class DiagCode : uint8_t {
     EUnexpectedToken,
     EExpectedStmt,
     EExpectedExpr,
+    EUnclosedStrLit,
+    EUnclosedCharLit,
+    EIncorrectCharLitLen,
+    EIntSuffixForFloat,
+    EInvalidNumSuffix,
 
     WUnusedVar,
 };
