@@ -9,12 +9,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-- Base lexing (without reporting errors)
+- Base lexing with throwing errors
 - Unit tests of lexer
 
 ### Changed
 
 - Added testing project in build action
+- Deleted macOS from build action
 
 ## [0.3.0] - 2026.05.02
 

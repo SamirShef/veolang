@@ -1,8 +1,11 @@
+#include <diagnostic/codes.h>
 #include <lexer/keywords.h>
 #include <lexer/lexer.h>
 #include <llvm/Support/SMLoc.h>
 
 namespace veo {
+
+using namespace diagnostic;
 
 #define loc(ptr) llvm::SMLoc::getFromPointer (ptr)
 
@@ -91,7 +94,12 @@ Lexer::tokenizeStrLit (const char *tokStart) {
         val += *_curPtr++;
     }
     if (peek () == '\0') {
-        // TODO: report error
+        _diag
+            .Report (
+                DiagCode::EUnclosedStrLit,
+                "missing terminating '\"' character",
+                Severity::Error)
+            .AddSpan (loc (tokStart), loc (_curPtr));
     }
     ++_curPtr;
     return { TokenKind::StrLit, val, loc (tokStart), loc (_curPtr) };
@@ -106,11 +114,30 @@ Lexer::tokenizeCharLit (const char *tokStart) {
         val += *_curPtr++;
         ++len;
     }
+    bool unclosed = false;
     if (peek () == '\0') {
-        // TODO: report error
+        unclosed = true;
+        _diag
+            .Report (
+                DiagCode::EUnclosedCharLit,
+                "missing terminating '\'' character",
+                Severity::Error)
+            .AddSpan (loc (tokStart), loc (_curPtr));
     }
-    if (len != 1) {
-        // TODO: report error
+    if (len > 1 && !unclosed) {
+        _diag
+            .Report (
+                DiagCode::EIncorrectCharLitLen,
+                "character literal too long",
+                Severity::Error)
+            .AddSpan (loc (tokStart), loc (_curPtr));
+    } else if (len == 0) {
+        _diag
+            .Report (
+                DiagCode::EIncorrectCharLitLen,
+                "empty character literal",
+                Severity::Error)
+            .AddSpan (loc (tokStart), loc (_curPtr));
     }
     ++_curPtr;
     return { TokenKind::CharLit, val, loc (tokStart), loc (_curPtr) };
@@ -235,14 +262,24 @@ Lexer::parseNumSuffix (bool isFloat) {
 
     if (first == 'u') {
         if (isFloat) {
-            // TODO: report error
+            _diag
+                .Report (
+                    DiagCode::EIntSuffixForFloat,
+                    "integer suffix cannot be applied to a float",
+                    Severity::Error)
+                .AddSpan (loc (start), loc (_curPtr));
             return kind_macro (Float);
         }
         ++_curPtr;
         int_group (U);
     } else if (first == 'i') {
         if (isFloat) {
-            // TODO: report error
+            _diag
+                .Report (
+                    DiagCode::EIntSuffixForFloat,
+                    "integer suffix cannot be applied to a float",
+                    Severity::Error)
+                .AddSpan (loc (start), loc (_curPtr));
             return kind_macro (Float);
         }
         ++_curPtr;
@@ -256,7 +293,6 @@ Lexer::parseNumSuffix (bool isFloat) {
 #undef kind_macro
 
     _curPtr = start;
-    // TODO: report error
     return isFloat ? TokenKind::FloatLit : TokenKind::IntLit;
 }
 

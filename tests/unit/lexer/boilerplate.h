@@ -7,16 +7,17 @@
 #include <llvm/Support/raw_os_ostream.h>
 
 #define init(root, file)                                                                 \
-    llvm::SourceMgr mgr;                                                                 \
-    fs::path        filePath    = root / fs::path (file);                                \
-    auto            bufferOrErr = llvm::MemoryBuffer::getFile (filePath.string ());      \
+    llvm::SourceMgr              mgr;                                                    \
+    diagnostic::DiagnosticEngine diag (mgr);                                             \
+    fs::path                     filePath = root / fs::path (file);                      \
+    auto bufferOrErr = llvm::MemoryBuffer::getFile (filePath.string ());                 \
     if (std::error_code ec = bufferOrErr.getError ()) {                                  \
         std::cerr << filePath.string () << ": " << ec.message () << '\n';                \
         exit (1);                                                                        \
     }                                                                                    \
     unsigned bufferId                                                                    \
         = mgr.AddNewSourceBuffer (std::move (*bufferOrErr), llvm::SMLoc ());             \
-    Lexer lexer (mgr, bufferId);
+    Lexer lexer (diag, mgr, bufferId);
 
 #define assert_fatal(cond, message)                                                      \
     if (!(cond)) {                                                                       \

@@ -1,16 +1,19 @@
 #pragma once
+#include <diagnostic/engine.h>
 #include <lexer/token.h>
 #include <llvm/Support/SourceMgr.h>
 
 namespace veo {
 
 class Lexer {
-    const char *_bufStart;
-    const char *_bufEnd;
-    const char *_curPtr;
+    const char                   *_bufStart;
+    const char                   *_bufEnd;
+    const char                   *_curPtr;
+    diagnostic::DiagnosticEngine &_diag;
 
 public:
-    Lexer (llvm::SourceMgr &mgr, unsigned buffer) {
+    Lexer (diagnostic::DiagnosticEngine &diag, llvm::SourceMgr &mgr, unsigned buffer)
+        : _diag (diag) {
         const auto &memBuffer = mgr.getMemoryBuffer (buffer);
         _curPtr = _bufStart = memBuffer->getBufferStart ();
         _bufEnd             = memBuffer->getBufferEnd ();

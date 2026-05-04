@@ -1,5 +1,6 @@
 #include <diagnostic/engine.h>
 #include <driver/cli_options.h>
+#include <lexer/lexer.h>
 #include <llvm/Support/raw_ostream.h>
 
 using namespace veo;
@@ -10,6 +11,11 @@ main (int argc, char **argv) {
         return 0;
     }
     driver::ExecuteArguments ();
+
+    llvm::SourceMgr              mgr;
+    diagnostic::DiagnosticEngine diag (mgr);
+
+    diag.Render ();
 
     return 0;
 }
