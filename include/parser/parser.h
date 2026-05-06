@@ -2,6 +2,7 @@
 #include <ast/ast.h>
 #include <cstddef>
 #include <diagnostic/engine.h>
+#include <lexer/lexer.h>
 #include <lexer/token.h>
 #include <llvm/Support/Allocator.h>
 
@@ -20,10 +21,15 @@ class Parser {
     Token                         _curTok;
     Token                         _nextTok;
     diagnostic::DiagnosticEngine &_diag; // NOLINT
+    Lexer                         _lex;  // NOLINT
     llvm::BumpPtrAllocator        _allocator;
 
 public:
-    explicit Parser (diagnostic::DiagnosticEngine &diag) : _diag (diag) {}
+    explicit Parser (diagnostic::DiagnosticEngine &diag, Lexer &lex)
+        : _diag (diag), _lex (lex) {
+        advance ();
+        advance ();
+    }
 
     ParseResult
     Parse () {
@@ -78,8 +84,22 @@ private:
     bool
     match (TokenKind kind);
 
+    static bool
+    check (const Token &tok, TokenKind kind);
+
+    bool
+    check (TokenKind kind) const {
+        return check (_curTok, kind);
+    }
+
     Token
     advance ();
+
+    static bool
+    isKeyword (TokenKind kind);
+
+    void
+    expectSemi ();
 
     bool
     isAtEnd () const;

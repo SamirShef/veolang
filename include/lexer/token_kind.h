@@ -4,9 +4,7 @@
 namespace veo {
 
 enum class TokenKind : uint8_t {
-    Id,    // identifier
-    Let,   // keyword `let`
-    Const, // keyword `const`
+    Id, // identifier
 
     Bool,  // type `bool`
     Char,  // type `char`
@@ -25,6 +23,8 @@ enum class TokenKind : uint8_t {
     F32,   // type `f32`
     F64,   // type `f64`
 
+    Let,      // keyword `let`
+    Const,    // keyword `const`
     Func,     // keyword `func`
     Ret,      // keyword `return`
     If,       // keyword `if`
