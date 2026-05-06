@@ -9,7 +9,7 @@
 namespace veo::diagnostic {
 
 int
-GetDigitCount (int line) {
+DigitCount (int line) {
     if (line == 0) {
         return 1;
     }
@@ -69,7 +69,7 @@ DiagCodeToIntegerCode (DiagCode code) {
 
 void
 DiagnosticEngine::renderDiag (DiagnosticBuilder &diag) {
-    std::ranges::sort (diag.GetSpans (), [&] (const Annotation &a, const Annotation &b) {
+    std::ranges::sort (diag.Spans (), [&] (const Annotation &a, const Annotation &b) {
         return _mgr->getLineAndColumn (a.Span.Start).first
                < _mgr->getLineAndColumn (b.Span.Start).first;
     });
@@ -77,34 +77,34 @@ DiagnosticEngine::renderDiag (DiagnosticBuilder &diag) {
     printDiagnosticBody (diag);
 }
 
-void
+void // NOLINTNEXTLINE(readability-convert-member-functions-to-static)
 DiagnosticEngine::printDiagnosticHeader (DiagnosticBuilder &diag) {
-    llvm::errs ().changeColor (SeverityToColor (diag.GetSeverity ()), true);
+    llvm::errs ().changeColor (SeverityToColor (diag.Severity ()), true);
 
-    llvm::errs () << SeverityToString (diag.GetSeverity ()) << llvm::raw_fd_ostream::WHITE
+    llvm::errs () << SeverityToString (diag.Severity ()) << llvm::raw_fd_ostream::WHITE
                   << '[';
-    llvm::errs ().changeColor (SeverityToColor (diag.GetSeverity ()), true);
-    std::string errCode = std::format ("{:04}", DiagCodeToIntegerCode (diag.GetCode ()));
-    llvm::errs () << SeverityToPrefix (diag.GetSeverity ()) << errCode
-                  << llvm::raw_fd_ostream::WHITE << "]: " << diag.GetMessage () << '\n';
+    llvm::errs ().changeColor (SeverityToColor (diag.Severity ()), true);
+    std::string errCode = std::format ("{:04}", DiagCodeToIntegerCode (diag.Code ()));
+    llvm::errs () << SeverityToPrefix (diag.Severity ()) << errCode
+                  << llvm::raw_fd_ostream::WHITE << "]: " << diag.Message () << '\n';
 }
 
 void
 DiagnosticEngine::printDiagnosticBody (DiagnosticBuilder &diag) {
     int         maxLineWidth = 1;
     std::string lastBufferId;
-    for (const auto &span : diag.GetSpans ()) {
+    for (const auto &span : diag.Spans ()) {
         unsigned           buffer = _mgr->FindBufferContainingLoc (span.Span.Start);
         const std::string &bufferId
             = _mgr->getBufferInfo (buffer).Buffer->getBufferIdentifier ().str ();
         auto lineAndCol = _mgr->getLineAndColumn (span.Span.Start, buffer);
         int  maxLine    = static_cast<int> (
-            _mgr->getLineAndColumn (diag.GetSpans ().back ().Span.Start, buffer).first);
-        maxLineWidth = GetDigitCount (maxLine);
+            _mgr->getLineAndColumn (diag.Spans ().back ().Span.Start, buffer).first);
+        maxLineWidth = DigitCount (maxLine);
 
-        if (span == diag.GetSpans ().front ()
+        if (span == diag.Spans ().front ()
             || !lastBufferId.empty () && lastBufferId != bufferId) {
-            if (span != diag.GetSpans ().front ()) {
+            if (span != diag.Spans ().front ()) {
                 llvm::errs () << '\n';
             }
             llvm::errs ().changeColor (llvm::raw_fd_ostream::WHITE);
@@ -113,7 +113,7 @@ DiagnosticEngine::printDiagnosticBody (DiagnosticBuilder &diag) {
             lastBufferId = bufferId;
         }
 
-        if (span == diag.GetSpans ().front ()) {
+        if (span == diag.Spans ().front ()) {
             llvm::errs ().changeColor (llvm::raw_fd_ostream::WHITE, true);
             llvm::errs () << std::string (maxLineWidth, ' ') << "  |\n";
         }
@@ -124,10 +124,8 @@ DiagnosticEngine::printDiagnosticBody (DiagnosticBuilder &diag) {
 
         const char *lineStart = span.Span.Start.getPointer ();
         const char *lineEnd   = lineStart;
-        for (; *(lineStart - 1) != '\n'; --lineStart) {
-        }
-        for (; *lineEnd != '\n'; ++lineEnd) {
-        }
+        for (; *(lineStart - 1) != '\n'; --lineStart) {}
+        for (; *lineEnd != '\n'; ++lineEnd) {}
         llvm::errs () << std::string (lineStart, lineEnd - lineStart) << '\n';
 
         llvm::errs () << std::string (maxLineWidth, ' ') << "  | ";
@@ -142,13 +140,13 @@ DiagnosticEngine::printDiagnosticBody (DiagnosticBuilder &diag) {
         }
         llvm::errs () << '\n';
 
-        if (span == diag.GetSpans ().back ()) {
+        if (span == diag.Spans ().back ()) {
             llvm::errs () << std::string (maxLineWidth, ' ') << "  |\n"
                           << llvm::raw_fd_ostream::RESET;
         }
     }
 
-    for (const std::string &note : diag.GetNotes ()) {
+    for (const std::string &note : diag.Notes ()) {
         llvm::errs ().changeColor (llvm::raw_fd_ostream::CYAN, true)
             << std::string (maxLineWidth, ' ') << "  = note: ";
         llvm::errs () << llvm::raw_fd_ostream::RESET << note << '\n';
