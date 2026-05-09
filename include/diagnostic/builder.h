@@ -39,27 +39,27 @@ public:
     }
 
     DiagCode
-    GetCode () const {
+    Code () const {
         return _code;
     }
 
     const std::string &
-    GetMessage () {
+    Message () {
         return _message;
     }
 
     Severity
-    GetSeverity () const {
+    Severity () const {
         return _severity;
     }
 
     std::vector<Annotation> &
-    GetSpans () {
+    Spans () {
         return _spans;
     }
 
     const std::vector<std::string> &
-    GetNotes () {
+    Notes () {
         return _notes;
     }
 };

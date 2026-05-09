@@ -13,6 +13,7 @@ struct Token {
 
     Token (TokenKind kind, std::string val, llvm::SMLoc start, llvm::SMLoc end)
         : Kind (kind), Val (std::move (val)), Start (start), End (end) {}
+    Token () : Kind (TokenKind::Unknown) {}
 };
 
 }

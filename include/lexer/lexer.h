@@ -9,7 +9,7 @@ class Lexer {
     const char                   *_bufStart;
     const char                   *_bufEnd;
     const char                   *_curPtr;
-    diagnostic::DiagnosticEngine &_diag;
+    diagnostic::DiagnosticEngine &_diag; // NOLINT
 
 public:
     Lexer (diagnostic::DiagnosticEngine &diag, llvm::SourceMgr &mgr, unsigned buffer)

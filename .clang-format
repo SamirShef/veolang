@@ -4,6 +4,7 @@ IndentWidth: 4
 TabWidth: 4
 UseTab: Never
 ColumnLimit: 90
+AllowShortCaseLabelsOnASingleLine: true
 AllowShortFunctionsOnASingleLine: true
 AllowShortIfStatementsOnASingleLine: false
 AllowShortLoopsOnASingleLine: false
@@ -24,14 +25,12 @@ AccessModifierOffset: -4
 ConstructorInitializerAllOnOneLineOrOnePerLine: true
 AllowAllParametersOfDeclarationOnNextLine: true
 AllowShortEnumsOnASingleLine: true
-AllowShortCaseLabelsOnASingleLine: true
 BreakAfterOpenBracketFunction: true
 AlignEscapedNewlines: Right
 AlwaysBreakAfterReturnType: All
 BreakBeforeCloseBracketBracedList: true
 BreakStringLiterals: true
 BreakBeforeBraces: Attach
-AllowShortBlocksOnASingleLine: true
 BinPackArguments: false
 BinPackParameters: false
 AllowAllArgumentsOnNextLine: false

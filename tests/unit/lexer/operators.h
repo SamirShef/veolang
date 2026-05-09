@@ -1,12 +1,15 @@
 #pragma once
-#include "boilerplate.h"
+#include "../boilerplate.h"
 
 using namespace veo;
 namespace fs = std::filesystem;
 
+// NOLINTBEGIN(readability-function-cognitive-complexity)
+// NOLINTBEGIN(readability-simplify-boolean-expr)
 inline void
 TestOperators (const fs::path &root) {
     init (root, "operators.veo");
+    Lexer              lexer (diag, mgr, bufferId);
     std::vector<Token> tokens;
     while (true) {
         const Token tok = lexer.NextToken ();
@@ -56,3 +59,5 @@ TestOperators (const fs::path &root) {
     assert_tok (tokens[35], Dollar, "$");
     assert_tok (tokens[36], Carret, "^");
 }
+// NOLINTEND(readability-simplify-boolean-expr)
+// NOLINTEND(readability-function-cognitive-complexity)

@@ -46,7 +46,9 @@ Lexer::tokenizeId (const char *tokStart) {
     std::string val (tokStart, _curPtr - tokStart);
 
 #define tok(kind)                                                                        \
-    { kind, val, loc (tokStart), loc (_curPtr) }
+    {                                                                                    \
+        kind, val, loc (tokStart), loc (_curPtr)                                         \
+    }
 
     if (const auto &it = keywords.find (val); it != keywords.end ()) {
         return tok (it->second);
@@ -230,7 +232,7 @@ Lexer::skipComments () {
 TokenKind // NOLINTNEXTLINE(readability-function-cognitive-complexity)
 Lexer::parseNumSuffix (bool isFloat) {
     if (isspace (peek ()) != 0) {
-        return isFloat ? TokenKind::FloatLit : TokenKind::IntLit;
+        return isFloat ? TokenKind::F64Lit : TokenKind::IntLit;
     }
 
     const char *start = _curPtr;
@@ -268,7 +270,7 @@ Lexer::parseNumSuffix (bool isFloat) {
                     "integer suffix cannot be applied to a float",
                     Severity::Error)
                 .AddSpan (loc (start), loc (_curPtr));
-            return kind_macro (Float);
+            return kind_macro (F64);
         }
         ++_curPtr;
         int_group (U);
@@ -280,7 +282,7 @@ Lexer::parseNumSuffix (bool isFloat) {
                     "integer suffix cannot be applied to a float",
                     Severity::Error)
                 .AddSpan (loc (start), loc (_curPtr));
-            return kind_macro (Float);
+            return kind_macro (F64);
         }
         ++_curPtr;
         int_group (I);
@@ -293,7 +295,7 @@ Lexer::parseNumSuffix (bool isFloat) {
 #undef kind_macro
 
     _curPtr = start;
-    return isFloat ? TokenKind::FloatLit : TokenKind::IntLit;
+    return isFloat ? TokenKind::F64Lit : TokenKind::IntLit;
 }
 
 char
