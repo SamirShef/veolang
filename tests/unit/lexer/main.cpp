@@ -6,10 +6,10 @@
 
 int
 main (int argc, char **argv) {
-    call_test (TestComments);
-    call_test (TestLiterals);
-    call_test (TestIds);
-    call_test (TestOperators);
-    call_test (TestAll);
+    call_test (TestComments, argv[1]);
+    call_test (TestLiterals, argv[1]);
+    call_test (TestIds, argv[1]);
+    call_test (TestOperators, argv[1]);
+    call_test (TestAll, argv[1]);
     return 0;
 }

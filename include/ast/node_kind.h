@@ -5,11 +5,16 @@ namespace veo::ast {
 
 enum class NodeKind : uint8_t {
     StmtStart,
-
+    VarDef,
+    FuncDef,
+    ExprStmt,
     StmtEnd,
 
     ExprStart,
-
+    LitExpr,
+    BinExpr,
+    UnExpr,
+    VarExpr,
     ExprEnd
 };
 

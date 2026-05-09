@@ -1,12 +1,16 @@
 #pragma once
 #include <ast/ast.h>
+#include <ast/stmts/func_def.h>
+#include <basic/name.h>
+#include <basic/types/type.h>
 #include <cstddef>
 #include <diagnostic/engine.h>
 #include <lexer/lexer.h>
 #include <lexer/token.h>
 #include <llvm/Support/Allocator.h>
+#include <parser/precedence.h>
 
-namespace veo::parser {
+namespace veo {
 
 using namespace veo::ast;
 
@@ -72,11 +76,23 @@ private:
     Stmt *
     parseVarDef ();
 
+    Stmt *
+    parseFuncDef ();
+
+    std::vector<Argument>
+    parseArguments ();
+
+    Argument
+    parseArgument ();
+
     Expr *
-    parseExpr (bool allowStruct = true);
+    parseExpr (int minPrec = (int) Precedence::Unary, bool allowStruct = true);
 
     Expr *
     parsePrimaryExpr (bool allowStruct = true);
+
+    basic::Type *
+    consumeType ();
 
     void
     synchronize ();
@@ -98,8 +114,14 @@ private:
     static bool
     isKeyword (TokenKind kind);
 
-    void
+    bool
     expectSemi ();
+
+    bool
+    expectTok (TokenKind kind, const std::string &val);
+
+    bool
+    expectName (basic::NameObj &res);
 
     bool
     isAtEnd () const;

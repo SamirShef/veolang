@@ -60,7 +60,6 @@ enum class TokenKind : uint8_t {
     F32Lit,   // f32 literal
     F64Lit,   // f64 literal
     IntLit,   // integer literal (unresolved width)
-    FloatLit, // floating literal (unresolved width)
     StrLit,   // string literal
 
     Semi,      // `;`
