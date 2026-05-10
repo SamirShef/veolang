@@ -29,7 +29,7 @@ BuildDriver::Build () {
     std::ifstream file (manif.EntryPointPath);
     if (!file.is_open ()) {
         llvm::errs () << llvm::raw_fd_ostream::RED << "Error: Could not open the file "
-                      << manif.EntryPointPath << '\n'
+                      << manif.EntryPointPath.string () << '\n'
                       << llvm::raw_fd_ostream::RESET;
         exit (1);
     }
