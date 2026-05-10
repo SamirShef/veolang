@@ -29,6 +29,8 @@ public:
     UnaryExpr (UnOp op, Expr *rhs, llvm::SMLoc start, llvm::SMLoc end)
         : _op (op), _rhs (rhs), Expr (NodeKind::BinExpr, start, end) {}
 
+    ast_classof (UnExpr);
+
     UnOp
     Op () const {
         return _op;

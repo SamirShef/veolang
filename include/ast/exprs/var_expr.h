@@ -1,17 +1,19 @@
 #pragma once
 #include <ast/expr.h>
-#include <string>
+#include <basic/name.h>
 
 namespace veo::ast {
 
 class VarExpr : public Expr {
-    std::string _name;
+    basic::NameObj _name;
 
 public:
-    VarExpr (std::string name, llvm::SMLoc start, llvm::SMLoc end)
+    VarExpr (basic::NameObj name, llvm::SMLoc start, llvm::SMLoc end)
         : _name (std::move (name)), Expr (NodeKind::VarExpr, start, end) {}
 
-    const std::string &
+    ast_classof (VarExpr);
+
+    basic::NameObj
     Name () const {
         return _name;
     }

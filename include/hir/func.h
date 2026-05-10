@@ -1,11 +1,11 @@
 #pragma once
-#include <ast/stmt.h>
+#include "hir/node.h"
+
 #include <basic/name.h>
 #include <basic/types/type.h>
-#include <utility>
-#include <vector>
+#include <hir/basic_block.h>
 
-namespace veo::ast {
+namespace veo::hir {
 
 struct Argument {
     basic::NameObj Name;
@@ -25,28 +25,25 @@ struct Argument {
     }
 };
 
-class FuncDef : public Stmt {
-    basic::NameObj        _name;
-    basic::Type          *_retType;
-    std::vector<Argument> _args;
-    std::vector<Stmt *>   _body;
+class Function : public Node {
+    basic::NameObj            _name;
+    basic::Type              *_retType;
+    std::vector<Argument>     _args;
+    std::vector<BasicBlock *> _body;
 
 public:
-    FuncDef (
+    Function (
         basic::NameObj        name,
         basic::Type          *retType,
         std::vector<Argument> args,
-        std::vector<Stmt *>   body,
-        AccessModifier        access,
         llvm::SMLoc           start,
         llvm::SMLoc           end)
         : _name (std::move (name)),
           _retType (retType),
           _args (std::move (args)),
-          _body (std::move (body)),
-          Stmt (access, NodeKind::FuncDef, start, end) {}
+          Node (NodeKind::Func, start, end) {}
 
-    ast_classof (FuncDef);
+    hir_classof (Func);
 
     basic::NameObj
     Name () const {
@@ -58,12 +55,12 @@ public:
         return _retType;
     }
 
-    const std::vector<Argument> &
+    std::vector<Argument> &
     Args () {
         return _args;
     }
 
-    const std::vector<Stmt *> &
+    std::vector<BasicBlock *> &
     Body () {
         return _body;
     }

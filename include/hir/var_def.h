@@ -1,33 +1,31 @@
 #pragma once
-#include <ast/expr.h>
-#include <ast/stmt.h>
 #include <basic/name.h>
 #include <basic/types/type.h>
+#include <hir/node.h>
 
-namespace veo::ast {
+namespace veo::hir {
 
-class VarDef : public Stmt {
+class VarDef : public Node {
     basic::NameObj _name;
     basic::Type   *_type;
-    Expr          *_expr;
+    Node          *_expr;
     bool           _isConst;
 
 public:
     VarDef (
         basic::NameObj name,
         basic::Type   *type,
-        Expr          *expr,
+        Node          *expr,
         bool           isConst,
-        AccessModifier access,
         llvm::SMLoc    start,
         llvm::SMLoc    end)
         : _name (std::move (name)),
           _type (type),
           _expr (expr),
           _isConst (isConst),
-          Stmt (access, NodeKind::VarDef, start, end) {}
+          Node (NodeKind::VarDef, start, end) {}
 
-    ast_classof (VarDef);
+    hir_classof (VarDef);
 
     basic::NameObj
     Name () const {
@@ -39,7 +37,7 @@ public:
         return _type;
     }
 
-    Expr *
+    Node *
     Init () const {
         return _expr;
     }

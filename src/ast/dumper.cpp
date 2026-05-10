@@ -13,6 +13,7 @@ AccessToString (AccessModifier access) {
         variant (Priv, "priv");
     }
 #undef variant
+    return ""; // to shut up the fucking warning
 }
 
 inline const char *
@@ -36,6 +37,7 @@ BinOpToString (BinOp op) {
         variant (Invalid, "<invalid>");
     }
 #undef variant
+    return ""; // to shut up the fucking warning
 }
 
 inline const char *
@@ -48,6 +50,7 @@ UnOpToString (UnOp op) {
         variant (Invalid, "<invalid>");
     }
 #undef variant
+    return ""; // to shut up the fucking warning
 }
 
 void
@@ -56,6 +59,9 @@ Dumper::Dump (ParseResult res, unsigned startIndentLevel) {
     for (size_t i = 0; i < res.Count; ++i) {
         Node *node = res.Nodes[i];
         if (node->Kind () > NodeKind::StmtStart && node->Kind () < NodeKind::StmtEnd) {
+            if (i != 0) {
+                _os << '\n';
+            }
             dumpStmt (llvm::cast<Stmt> (node));
         }
     }
@@ -100,6 +106,12 @@ Dumper::dumpFuncDef (FuncDef *fd) {
 }
 
 void
+Dumper::dumpLiteralExpr (LiteralExpr *le) {
+    indent ();
+    _os << "LiteralExpr: " << le->Value () << '\n';
+}
+
+void
 Dumper::dumpBinaryExpr (BinaryExpr *be) {
     indent ();
     _os << "BinaryExpr: " << BinOpToString (be->Op ()) << '\n';
@@ -119,9 +131,9 @@ Dumper::dumpUnaryExpr (UnaryExpr *ue) {
 }
 
 void
-Dumper::dumpLiteralExpr (LiteralExpr *le) {
+Dumper::dumpVarExpr (VarExpr *ve) {
     indent ();
-    _os << "LiteralExpr: " << le->Value () << '\n';
+    _os << "VarExpr: " << ve->Name ().Val << '\n';
 }
 
 }

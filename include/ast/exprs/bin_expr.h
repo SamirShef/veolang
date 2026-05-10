@@ -56,6 +56,8 @@ public:
     BinaryExpr (BinOp op, Expr *lhs, Expr *rhs, llvm::SMLoc start, llvm::SMLoc end)
         : _op (op), _lhs (lhs), _rhs (rhs), Expr (NodeKind::BinExpr, start, end) {}
 
+    ast_classof (BinExpr);
+
     BinOp
     Op () const {
         return _op;

@@ -189,7 +189,7 @@ Parser::parsePrimaryExpr (bool allowStruct) {
         lit (F64Lit);
 
     case TokenKind::Id: {
-        return createNode<VarExpr> (tok.Val, tok.Start, tok.End);
+        return createNode<VarExpr> (basic::NameObj (tok), tok.Start, tok.End);
     }
     default: {
     }

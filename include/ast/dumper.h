@@ -2,6 +2,7 @@
 #include <ast/exprs/bin_expr.h>
 #include <ast/exprs/lit_expr.h>
 #include <ast/exprs/un_expr.h>
+#include <ast/exprs/var_expr.h>
 #include <ast/stmts/var_def.h>
 #include <llvm/Support/raw_ostream.h>
 #include <parser/parser.h>
@@ -47,10 +48,14 @@ private:
         case NodeKind::LitExpr: dumpLiteralExpr (llvm::cast<LiteralExpr> (expr)); break;
         case NodeKind::BinExpr: dumpBinaryExpr (llvm::cast<BinaryExpr> (expr)); break;
         case NodeKind::UnExpr: dumpUnaryExpr (llvm::cast<UnaryExpr> (expr)); break;
+        case NodeKind::VarExpr: dumpVarExpr (llvm::cast<VarExpr> (expr)); break;
         default: {
         }
         }
     }
+
+    void
+    dumpLiteralExpr (LiteralExpr *le);
 
     void
     dumpBinaryExpr (BinaryExpr *be);
@@ -59,7 +64,7 @@ private:
     dumpUnaryExpr (UnaryExpr *ue);
 
     void
-    dumpLiteralExpr (LiteralExpr *le);
+    dumpVarExpr (VarExpr *ve);
 
     void
     indent () {
