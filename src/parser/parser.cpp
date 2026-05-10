@@ -44,6 +44,7 @@ Parser::parseStmt (bool expectSemi) {
             "expected statement, found '" + _curTok.Val + "'",
             Severity::Error)
         .AddSpan (_curTok.Start, _curTok.End, "expected statement here");
+    advance ();
     return nullptr;
 }
 
@@ -89,16 +90,16 @@ Parser::parseFuncDef () {
     if (!expectName (name)) {
         return nullptr;
     }
-    basic::Type *retType = nullptr;
-    if (match (TokenKind::Colon)) {
-        retType = consumeType ();
-    }
     if (!expectTok (TokenKind::LParen, "(")) {
         return nullptr;
     }
     std::vector<Argument> args = parseArguments ();
     if (!expectTok (TokenKind::LBrace, "{")) {
         return nullptr;
+    }
+    basic::Type *retType = nullptr;
+    if (match (TokenKind::Colon)) {
+        retType = consumeType ();
     }
     std::vector<Stmt *> body;
     while (!match (TokenKind::RBrace)) {

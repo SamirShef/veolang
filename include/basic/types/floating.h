@@ -16,7 +16,7 @@ public:
     type_classof (Floating);
 
     FloatingKind
-    FloatingKind () const {
+    GetFloatingKind () const {
         return _floatingKind;
     }
 

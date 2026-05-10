@@ -1,5 +1,6 @@
 cmake_minimum_required(VERSION 3.20)
 project(veoc LANGUAGES CXX C)
+include(FetchContent)
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -48,46 +49,50 @@ else()
     message(STATUS "Using static LLVM components: ${LLVM_LINK_LIBS}")
 endif()
 
-include_directories(SYSTEM ${CMAKE_CURRENT_SOURCE_DIR}/include)
+FetchContent_Declare(
+    tomlplusplus
+    GIT_REPOSITORY https://github.com/marzer/tomlplusplus.git
+    GIT_TAG        v3.4.0
+)
+FetchContent_MakeAvailable(tomlplusplus)
 
 file(GLOB_RECURSE SOURCES "src/*.cpp")
 list(FILTER SOURCES EXCLUDE REGEX ".*/main\\.cpp$|main\\.cpp$")
-add_executable(
-    ${PROJECT_NAME}
-    ${CMAKE_CURRENT_SOURCE_DIR}/src/main.cpp ${SOURCES}
-)
 
-target_link_libraries(${PROJECT_NAME} PRIVATE
+add_library(veoc-core STATIC ${SOURCES})
+target_link_libraries(veoc-core PRIVATE
+    tomlplusplus::tomlplusplus
     ${LLVM_LINK_LIBS}
     ${LLVM_SYSTEM_LIBS}
 )
+target_include_directories(veoc-core PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/include)
+
+add_executable(
+    ${PROJECT_NAME}
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/main.cpp
+)
+target_link_libraries(${PROJECT_NAME} PRIVATE veoc-core)
 
 enable_testing()
 
 add_executable(
     test_lexer
-    ${CMAKE_CURRENT_SOURCE_DIR}/tests/unit/lexer/main.cpp ${SOURCES}
+    ${CMAKE_CURRENT_SOURCE_DIR}/tests/unit/lexer/main.cpp
 )
 add_test(
     NAME TestLexer
     COMMAND test_lexer ${CMAKE_CURRENT_SOURCE_DIR}/tests/unit/lexer
 )
 target_compile_options(test_lexer PRIVATE -O0 -g)
-target_link_libraries(test_lexer PRIVATE
-    ${LLVM_LINK_LIBS}
-    ${LLVM_SYSTEM_LIBS}
-)
+target_link_libraries(test_lexer PRIVATE veoc-core)
 
 add_executable(
     test_parser
-    ${CMAKE_CURRENT_SOURCE_DIR}/tests/unit/parser/main.cpp ${SOURCES}
+    ${CMAKE_CURRENT_SOURCE_DIR}/tests/unit/parser/main.cpp
 )
 add_test(
     NAME TestParser
     COMMAND test_parser ${CMAKE_CURRENT_SOURCE_DIR}/tests/unit/parser
 )
 target_compile_options(test_parser PRIVATE -O0 -g)
-target_link_libraries(test_parser PRIVATE
-    ${LLVM_LINK_LIBS}
-    ${LLVM_SYSTEM_LIBS}
-)
+target_link_libraries(test_parser PRIVATE veoc-core)
