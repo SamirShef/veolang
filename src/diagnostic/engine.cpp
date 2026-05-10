@@ -79,13 +79,13 @@ DiagnosticEngine::renderDiag (DiagnosticBuilder &diag) {
 
 void // NOLINTNEXTLINE(readability-convert-member-functions-to-static)
 DiagnosticEngine::printDiagnosticHeader (DiagnosticBuilder &diag) {
-    llvm::errs ().changeColor (SeverityToColor (diag.Severity ()), true);
+    llvm::errs ().changeColor (SeverityToColor (diag.GetSeverity ()), true);
 
-    llvm::errs () << SeverityToString (diag.Severity ()) << llvm::raw_fd_ostream::WHITE
+    llvm::errs () << SeverityToString (diag.GetSeverity ()) << llvm::raw_fd_ostream::WHITE
                   << '[';
-    llvm::errs ().changeColor (SeverityToColor (diag.Severity ()), true);
+    llvm::errs ().changeColor (SeverityToColor (diag.GetSeverity ()), true);
     std::string errCode = std::format ("{:04}", DiagCodeToIntegerCode (diag.Code ()));
-    llvm::errs () << SeverityToPrefix (diag.Severity ()) << errCode
+    llvm::errs () << SeverityToPrefix (diag.GetSeverity ()) << errCode
                   << llvm::raw_fd_ostream::WHITE << "]: " << diag.Message () << '\n';
 }
 
@@ -124,8 +124,10 @@ DiagnosticEngine::printDiagnosticBody (DiagnosticBuilder &diag) {
 
         const char *lineStart = span.Span.Start.getPointer ();
         const char *lineEnd   = lineStart;
-        for (; *(lineStart - 1) != '\n'; --lineStart) {}
-        for (; *lineEnd != '\n'; ++lineEnd) {}
+        for (; *(lineStart - 1) != '\n'; --lineStart) {
+        }
+        for (; *lineEnd != '\n'; ++lineEnd) {
+        }
         llvm::errs () << std::string (lineStart, lineEnd - lineStart) << '\n';
 
         llvm::errs () << std::string (maxLineWidth, ' ') << "  | ";

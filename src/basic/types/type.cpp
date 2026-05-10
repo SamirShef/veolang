@@ -2,6 +2,16 @@
 
 namespace veo::basic {
 
+#define as(kind)                                                                         \
+    const kind##Type *Type::As##kind () const { return llvm::cast<kind##Type> (this); }
+
+as (Integer);
+as (Floating);
+as (Bool);
+as (Char);
+
+#undef as
+
 bool
 Type::operator== (const Type &other) {
     if (this == &other) {
@@ -21,7 +31,7 @@ Type::operator== (const Type &other) {
     case TypeKind::Floating: {
         const auto *lhs = AsFloating ();
         const auto *rhs = AsFloating ();
-        return lhs->FloatingKind () == rhs->FloatingKind ();
+        return lhs->GetFloatingKind () == rhs->GetFloatingKind ();
     }
     default: return true;
     }

@@ -49,7 +49,7 @@ public:
     }
 
     Severity
-    Severity () const {
+    GetSeverity () const {
         return _severity;
     }
 

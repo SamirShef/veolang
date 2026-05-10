@@ -6,6 +6,8 @@ namespace veo::basic {
 class CharType : public Type {
 public:
     CharType () : Type (TypeKind::Char) {}
+
+    type_classof (Char);
 };
 
 }

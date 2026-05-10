@@ -6,6 +6,8 @@ namespace veo::basic {
 
 class IntegerType;
 class FloatingType;
+class BoolType;
+class CharType;
 
 #define type_classof(kind)                                                               \
     static bool classof (const veo::basic::Type *type) {                                 \
@@ -39,15 +41,16 @@ public:
 
 #define is(kind)                                                                         \
     bool Is##kind () const { return _kind == TypeKind::kind; }
-#define as(kind)                                                                         \
-    const kind##Type *As##kind () const { return llvm::cast<kind##Type> (this); }
+#define as(kind) const kind##Type *As##kind () const;
 
     is (Integer);
     as (Integer);
     is (Floating);
     as (Floating);
     is (Bool);
+    as (Bool);
     is (Char);
+    as (Char);
 
 #undef as
 #undef is

@@ -1,3 +1,4 @@
+#include <driver/build.h>
 #include <driver/cli_options.h>
 #include <filesystem>
 #include <fstream>
@@ -71,7 +72,9 @@ CreateNewPackage (const std::string &name) {
 
 void
 BuildPackage () {
-    PrintOptUnimplementedError ("build");
+    fs::path    projectRoot = BuildDriver::GetProjectRoot (fs::current_path ());
+    BuildDriver driver (projectRoot);
+    driver.Build ();
 }
 
 void
