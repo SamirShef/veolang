@@ -8,6 +8,11 @@ public:
     BoolType () : Type (TypeKind::Bool) {}
 
     type_classof (Bool);
+
+    std::string
+    ToString () const override {
+        return "bool";
+    }
 };
 
 }
