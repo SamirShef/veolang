@@ -57,8 +57,8 @@ inline llvm::cl::opt<bool> ForceRebuildOpt (
 inline llvm::cl::opt<bool> EmitIROpt (
     "emit-ir", llvm::cl::desc ("Emits LLVM IR to .ll file "), llvm::cl::cat (Category));
 
-inline llvm::cl::opt<bool> DumpModOpt (
-    "dump-mod",
+inline llvm::cl::opt<bool> DumpSymOpt (
+    "dump-sym",
     llvm::cl::desc ("Dumps symbol table even module to .veomodtxt file"),
     llvm::cl::cat (Category));
 
@@ -67,6 +67,18 @@ inline llvm::cl::opt<std::string> ExplainOpt (
     llvm::cl::desc ("Explain diagnostic code"),
     llvm::cl::value_desc ("code"),
     llvm::cl::init (""),
+    llvm::cl::cat (Category));
+
+enum class DumpASTInto : uint8_t { None, File, Terminal };
+
+inline llvm::cl::opt<DumpASTInto> DumpASTOpt (
+    "dump-ast",
+    llvm::cl::desc ("Dumps AST even module to .txt file"),
+    llvm::cl::values (
+        clEnumValN (DumpASTInto::None, "none", "Does not dump AST"),
+        clEnumValN (DumpASTInto::File, "file", "Dump AST to .txt file"),
+        clEnumValN (DumpASTInto::Terminal, "term", "Dump AST to stderr")),
+    llvm::cl::init (DumpASTInto::None),
     llvm::cl::cat (Category));
 
 // NOLINTEND(cppcoreguidelines-avoid-non-const-global-variables)
