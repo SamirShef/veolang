@@ -45,6 +45,7 @@ Parser::parseStmt (bool expectSemi) {
             Severity::Error)
         .AddSpan (_curTok.Start, _curTok.End, "expected statement here");
     advance ();
+    synchronize ();
     return nullptr;
 }
 
@@ -93,13 +94,13 @@ Parser::parseFuncDef () {
     if (!expectTok (TokenKind::LParen, "(")) {
         return nullptr;
     }
-    std::vector<Argument> args = parseArguments ();
-    if (!expectTok (TokenKind::LBrace, "{")) {
-        return nullptr;
-    }
-    basic::Type *retType = nullptr;
+    std::vector<Argument> args    = parseArguments ();
+    basic::Type          *retType = nullptr;
     if (match (TokenKind::Colon)) {
         retType = consumeType ();
+    }
+    if (!expectTok (TokenKind::LBrace, "{")) {
+        return nullptr;
     }
     std::vector<Stmt *> body;
     while (!match (TokenKind::RBrace)) {
@@ -173,7 +174,8 @@ Expr *
 Parser::parsePrimaryExpr (bool allowStruct) {
     const Token tok = advance ();
 #define lit(kind)                                                                        \
-    case TokenKind::kind: return createNode<LiteralExpr> (tok.Val, tok.Start, tok.End);
+    case TokenKind::kind:                                                                \
+        return createNode<LiteralExpr> (std::move (tok.Val), tok.Start, tok.End);
 #define int_lits(prefix)                                                                 \
     lit (prefix##8Lit) lit (prefix##16Lit) lit (prefix##32Lit) lit (prefix##64Lit)       \
         lit (prefix##128Lit)
@@ -243,7 +245,6 @@ Parser::consumeType () {
 
 void
 Parser::synchronize () {
-    advance ();
     while (!isAtEnd ()) {
         if (check (_lastTok, TokenKind::Semi) || check (_lastTok, TokenKind::RBrace)) {
             return;

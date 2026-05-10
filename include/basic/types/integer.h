@@ -22,6 +22,11 @@ public:
     IsUnsigned () const {
         return _isUnsigned;
     }
+
+    std::string
+    ToString () const override {
+        return (IsUnsigned () ? "u" : "i") + std::to_string (BitWidth ());
+    }
 };
 
 }

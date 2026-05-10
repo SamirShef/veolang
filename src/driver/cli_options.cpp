@@ -49,7 +49,7 @@ InitNewPackage (const std::string &name) {
 
     if (!fs::exists ("src/main.veo")) {
         std::ofstream mainVeo ("src/main.veo");
-        mainVeo << "func main() {\n";
+        mainVeo << "func main(): i32 {\n";
         mainVeo << "    return 0;\n";
         mainVeo << "}\n";
         mainVeo.close ();

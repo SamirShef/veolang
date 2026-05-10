@@ -39,6 +39,9 @@ public:
         return _kind;
     }
 
+    virtual std::string
+    ToString () const = 0;
+
 #define is(kind)                                                                         \
     bool Is##kind () const { return _kind == TypeKind::kind; }
 #define as(kind) const kind##Type *As##kind () const;

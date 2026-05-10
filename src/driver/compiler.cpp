@@ -1,3 +1,4 @@
+#include <ast/dumper.h>
 #include <diagnostic/engine.h>
 #include <driver/compiler.h>
 #include <lexer/lexer.h>
@@ -25,6 +26,14 @@ Compile (const fs::path &projectPath, const fs::path &filePath) {
     Lexer       lex (diag, mgr, bufferId);
     Parser      parser (diag, lex);
     ParseResult parseRes = parser.Parse ();
+    diag.Render ();
+
+    ast::Dumper dumper (llvm::errs ());
+    llvm::errs ().changeColor (llvm::raw_fd_ostream::WHITE, true)
+        << "\nAST Dump:\n"
+        << llvm::raw_fd_ostream::RESET;
+    dumper.Dump (parseRes);
+
     return { .Success = !parseRes.HasErrors, .ObjPath = "" };
 }
 

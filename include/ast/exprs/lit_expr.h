@@ -1,17 +1,17 @@
 #pragma once
 #include <ast/expr.h>
-#include <string_view>
+#include <string>
 
 namespace veo::ast {
 
 class LiteralExpr : public Expr {
-    std::string_view _val;
+    std::string _val;
 
 public:
-    LiteralExpr (std::string_view val, llvm::SMLoc start, llvm::SMLoc end)
-        : _val (val), Expr (NodeKind::LitExpr, start, end) {}
+    LiteralExpr (std::string val, llvm::SMLoc start, llvm::SMLoc end)
+        : _val (std::move (val)), Expr (NodeKind::LitExpr, start, end) {}
 
-    std::string_view
+    std::string
     Value () const {
         return _val;
     }

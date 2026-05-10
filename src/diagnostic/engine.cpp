@@ -97,8 +97,10 @@ DiagnosticEngine::printDiagnosticBody (DiagnosticBuilder &diag) {
         unsigned           buffer = _mgr->FindBufferContainingLoc (span.Span.Start);
         const std::string &bufferId
             = _mgr->getBufferInfo (buffer).Buffer->getBufferIdentifier ().str ();
-        auto lineAndCol = _mgr->getLineAndColumn (span.Span.Start, buffer);
-        int  maxLine    = static_cast<int> (
+        const char *bufferStart = _mgr->getBufferInfo (buffer).Buffer->getBufferStart ();
+        const char *bufferEnd   = _mgr->getBufferInfo (buffer).Buffer->getBufferEnd ();
+        auto        lineAndCol  = _mgr->getLineAndColumn (span.Span.Start, buffer);
+        int         maxLine     = static_cast<int> (
             _mgr->getLineAndColumn (diag.Spans ().back ().Span.Start, buffer).first);
         maxLineWidth = DigitCount (maxLine);
 
@@ -124,9 +126,9 @@ DiagnosticEngine::printDiagnosticBody (DiagnosticBuilder &diag) {
 
         const char *lineStart = span.Span.Start.getPointer ();
         const char *lineEnd   = lineStart;
-        for (; *(lineStart - 1) != '\n'; --lineStart) {
+        for (; *(lineStart - 1) != '\n' && lineStart > bufferStart; --lineStart) {
         }
-        for (; *lineEnd != '\n'; ++lineEnd) {
+        for (; *lineEnd != '\n' && lineEnd <= bufferEnd; ++lineEnd) {
         }
         llvm::errs () << std::string (lineStart, lineEnd - lineStart) << '\n';
 
@@ -134,7 +136,7 @@ DiagnosticEngine::printDiagnosticBody (DiagnosticBuilder &diag) {
         llvm::errs () << std::string (span.Span.Start.getPointer () - lineStart, ' ');
         char underlineSymbol = span.IsPrimary ? '^' : '-';
         llvm::errs ().changeColor (llvm::raw_fd_ostream::RED, true) << std::string (
-            span.Span.End.getPointer () - span.Span.Start.getPointer () + 1,
+            span.Span.End.getPointer () - span.Span.Start.getPointer (),
             underlineSymbol);
         llvm::errs ().changeColor (llvm::raw_fd_ostream::WHITE, true);
         if (!span.Label.empty ()) {

@@ -8,6 +8,11 @@ public:
     CharType () : Type (TypeKind::Char) {}
 
     type_classof (Char);
+
+    std::string
+    ToString () const override {
+        return "char";
+    }
 };
 
 }

@@ -29,6 +29,11 @@ public:
     IsDouble () const {
         return _floatingKind == FloatingKind::Double;
     }
+
+    std::string
+    ToString () const override {
+        return IsFloat () ? "f32" : "f64";
+    }
 };
 
 }

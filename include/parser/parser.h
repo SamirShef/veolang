@@ -45,7 +45,6 @@ public:
                 nodes.push_back (node);
             } else {
                 hasErrors = true;
-                synchronize ();
             }
         }
         size_t count = nodes.size ();
