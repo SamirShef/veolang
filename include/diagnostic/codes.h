@@ -20,6 +20,7 @@ enum class DiagCode : uint8_t {
     ECannotFindCommonType,
     EDivByZero,
     ERedefinition,
+    EUndefined,
 
     WUnusedVar,
     WLossPrecision,

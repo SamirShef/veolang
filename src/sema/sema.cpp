@@ -33,12 +33,17 @@ Sema::analyzeVarDef (VarDef *vd) {
             .AddSpan (vd->Name ().Start, vd->Name ().End, "redefined here");
         return;
     }
-    bool isGlobal = _vars.size () == 1;
+    bool  isGlobal = _vars.size () == 1;
+    Type *type     = vd->Type ();
     resolveType (&vd->Type ());
     auto val = analyzeExpr (vd->Init (), vd->Type ());
+    if (type == nullptr) {
+        type = val.Val->Type;
+    }
     auto var = Variable (
         vd->Name (),
-        vd->Type (),
+        type,
+        vd->IsConst (),
         isGlobal ? _vars.top ().Vars.size () : _localsCount++,
         val.Val);
     _vars.top ().Vars.emplace (vd->Name ().Val, var);
@@ -354,7 +359,31 @@ Sema::analyzeUnaryExpr (UnaryExpr *ue, Type *expectedType) {
 // NOLINTBEGIN(readability-convert-member-functions-to-static)
 Sema::SemanticResult
 Sema::analyzeVarExpr (VarExpr *ve, Type *expectedType) {
-    return {};
+    std::optional<Variable> var = getVariable (ve->Name ().Val);
+    if (!var.has_value ()) {
+        _diag
+            .Report (
+                DiagCode::EUndefined,
+                "variable '" + ve->Name ().Val + "' is not defined",
+                Severity::Error)
+            .AddSpan (ve->Start (), ve->End ());
+        return {};
+    }
+    auto value = Value (
+        var->IsConst ? ValueKind::Const : ValueKind::Unknown,
+        var->Val->Data,
+        var->Type);
+    hir::Node *node = nullptr;
+    if (var->IsConst) {
+        node = _builder.CreateLiteral (value, ve->Start (), ve->End ());
+    } else {
+        node = _builder.CreateLoadVar (var->Index, var->Type, ve->Start (), ve->End ());
+    }
+    auto res = SemanticResult (value, node);
+    if (expectedType != nullptr) {
+        res = implicitlyCast (res, &expectedType, ve->Start (), ve->End ());
+    }
+    return res;
 }
 
 Type *
