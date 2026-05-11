@@ -53,8 +53,8 @@ public:
         return _name;
     }
 
-    basic::Type *
-    RetType () const {
+    basic::Type *&
+    RetType () {
         return _retType;
     }
 

@@ -70,7 +70,7 @@ public:
     }
 
     VarDef *
-    CreateGlobal (
+    CreateVariable (
         basic::NameObj name,
         basic::Type   *type,
         Node          *init,
@@ -95,8 +95,13 @@ public:
 
     BinaryExpr *
     CreateBinary (
-        ast::BinOp op, Node *lhs, Node *rhs, llvm::SMLoc start, llvm::SMLoc end) {
-        return _ctx.CreateNode<BinaryExpr> (op, lhs, rhs, start, end);
+        ast::BinOp   op,
+        basic::Type *commonType,
+        Node        *lhs,
+        Node        *rhs,
+        llvm::SMLoc  start,
+        llvm::SMLoc  end) {
+        return _ctx.CreateNode<BinaryExpr> (op, commonType, lhs, rhs, start, end);
     }
 
     UnaryExpr *

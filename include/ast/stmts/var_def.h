@@ -34,8 +34,8 @@ public:
         return _name;
     }
 
-    basic::Type *
-    Type () const {
+    basic::Type *&
+    Type () {
         return _type;
     }
 

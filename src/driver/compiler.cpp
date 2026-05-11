@@ -1,18 +1,18 @@
-#include "driver/cli_options.h"
-
 #include <ast/dumper.h>
 #include <diagnostic/engine.h>
+#include <driver/cli_options.h>
 #include <driver/compiler.h>
 #include <filesystem>
 #include <lexer/lexer.h>
 #include <llvm/Support/SourceMgr.h>
 #include <llvm/Support/raw_ostream.h>
 #include <parser/parser.h>
+#include <sema/sema.h>
 
 namespace veo::driver {
 
 CompilationResult
-Compile (const fs::path &projectPath, const fs::path &filePath) {
+Compile (const fs::path &projectPath, const fs::path &filePath, Module *mod) {
     fs::path filePathInBuild
         = projectPath / "build"
           / fs::absolute (filePath).lexically_relative (projectPath).lexically_normal ();
@@ -33,7 +33,6 @@ Compile (const fs::path &projectPath, const fs::path &filePath) {
     Lexer       lex (diag, mgr, bufferId);
     Parser      parser (diag, lex);
     ParseResult parseRes = parser.Parse ();
-    diag.Render ();
 
     if (DumpASTOpt == DumpASTInto::Terminal) {
         ast::Dumper dumper (llvm::errs ());
@@ -51,6 +50,11 @@ Compile (const fs::path &projectPath, const fs::path &filePath) {
             << llvm::raw_fd_ostream::RESET;
         dumper.Dump (parseRes);
     }
+
+    hir::Context ctx;
+    Sema         sema (diag, ctx, mod);
+    sema.Analyze (parseRes);
+    diag.Render ();
 
     return { .Success = !parseRes.HasErrors, .ObjPath = "" };
 }

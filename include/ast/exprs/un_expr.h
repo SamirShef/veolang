@@ -21,13 +21,26 @@ TokToUnOp (TokenKind kind) {
 #undef un
 }
 
+inline const char *
+UnOpToString (UnOp op) {
+#define variant(kind, res)                                                               \
+    case UnOp::kind: return res;
+    switch (op) {
+        variant (Minus, "-");
+        variant (Not, "!");
+        variant (Invalid, "<invalid>");
+    }
+#undef variant
+    return ""; // to shut up the fucking warning
+}
+
 class UnaryExpr : public Expr {
     UnOp  _op;
     Expr *_rhs;
 
 public:
     UnaryExpr (UnOp op, Expr *rhs, llvm::SMLoc start, llvm::SMLoc end)
-        : _op (op), _rhs (rhs), Expr (NodeKind::BinExpr, start, end) {}
+        : _op (op), _rhs (rhs), Expr (NodeKind::UnExpr, start, end) {}
 
     ast_classof (UnExpr);
 

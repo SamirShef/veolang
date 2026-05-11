@@ -1,4 +1,5 @@
 #pragma once
+#include <basic/symbols/module.h>
 #include <filesystem>
 
 namespace fs = std::filesystem;
@@ -11,6 +12,6 @@ struct CompilationResult {
 };
 
 CompilationResult
-Compile (const fs::path &projectPath, const fs::path &filePath);
+Compile (const fs::path &projectPath, const fs::path &filePath, symbols::Module *mod);
 
 }

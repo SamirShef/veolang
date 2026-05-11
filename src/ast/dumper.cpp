@@ -16,43 +16,6 @@ AccessToString (AccessModifier access) {
     return ""; // to shut up the fucking warning
 }
 
-inline const char *
-BinOpToString (BinOp op) {
-#define variant(kind, res)                                                               \
-    case BinOp::kind: return res;
-    switch (op) {
-        variant (Plus, "+");
-        variant (Minus, "-");
-        variant (Mul, "*");
-        variant (Div, "/");
-        variant (Rem, "%");
-        variant (Eq, "==");
-        variant (NEq, "!=");
-        variant (Lt, "<");
-        variant (LtEq, "<=");
-        variant (Gt, ">");
-        variant (GtEq, ">=");
-        variant (LogAnd, "&&");
-        variant (LogOr, "||");
-        variant (Invalid, "<invalid>");
-    }
-#undef variant
-    return ""; // to shut up the fucking warning
-}
-
-inline const char *
-UnOpToString (UnOp op) {
-#define variant(kind, res)                                                               \
-    case UnOp::kind: return res;
-    switch (op) {
-        variant (Minus, "-");
-        variant (Not, "!");
-        variant (Invalid, "<invalid>");
-    }
-#undef variant
-    return ""; // to shut up the fucking warning
-}
-
 void
 Dumper::Dump (ParseResult res, unsigned startIndentLevel) {
     _indentLvl = startIndentLevel;

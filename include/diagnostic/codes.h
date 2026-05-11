@@ -14,8 +14,15 @@ enum class DiagCode : uint8_t {
     EIncorrectCharLitLen,
     EIntSuffixForFloat,
     EInvalidNumSuffix,
+    ECannotImplCast,
+    ELitOutOfRange,
+    ECannotApplyOp,
+    ECannotFindCommonType,
+    EDivByZero,
+    ERedefinition,
 
     WUnusedVar,
+    WLossPrecision,
 };
 
 constexpr inline DiagCode errCodeStart = DiagCode::EUnexpectedToken;

@@ -31,9 +31,6 @@ public:
     Type &
     operator= (Type &&) = delete;
 
-    bool
-    operator== (const Type &other);
-
     TypeKind
     Kind () const {
         return _kind;
@@ -55,8 +52,16 @@ public:
     is (Char);
     as (Char);
 
+    bool
+    IsNumber () const {
+        return IsInteger () || IsFloating ();
+    }
+
 #undef as
 #undef is
 };
+
+bool
+operator== (const Type &lhs, const Type &rhs);
 
 }

@@ -28,13 +28,13 @@ public:
         return _kind;
     }
 
-    llvm::SMLoc
-    Start () const {
+    llvm::SMLoc &
+    Start () {
         return _start;
     }
 
-    llvm::SMLoc
-    End () const {
+    llvm::SMLoc &
+    End () {
         return _end;
     }
 };
