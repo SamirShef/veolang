@@ -142,7 +142,7 @@ Sema::analyzeLiteralExpr (LiteralExpr *le, Type *expectedType) {
     case TokenKind::IntLit: {
         if (expectedType == nullptr) {
             // NOLINTNEXTLINE(cppcoreguidelines-owning-memory)
-            expectedType = new IntegerType (INT32_WIDTH);
+            expectedType = new IntegerType (32);
         }
         if (!expectedType->IsInteger ()) {
             _diag
@@ -419,8 +419,8 @@ Sema::getCommonType (Type *lhs, Type *rhs, llvm::SMLoc start, llvm::SMLoc end) {
     if (lhs->IsFloating () && rhs->IsInteger ()) {
         const auto *lhsT = lhs->AsFloating ();
         const auto *rhsT = rhs->AsInteger ();
-        if (lhsT->IsFloat () && rhsT->BitWidth () >= INT32_WIDTH
-            || lhsT->IsDouble () && rhsT->BitWidth () >= INT64_WIDTH) {
+        if (lhsT->IsFloat () && rhsT->BitWidth () >= 32
+            || lhsT->IsDouble () && rhsT->BitWidth () >= 64) {
             _diag
                 .Report (
                     DiagCode::WLossPrecision,
@@ -433,8 +433,8 @@ Sema::getCommonType (Type *lhs, Type *rhs, llvm::SMLoc start, llvm::SMLoc end) {
     if (lhs->IsInteger () && rhs->IsFloating ()) {
         const auto *lhsT = lhs->AsInteger ();
         const auto *rhsT = rhs->AsFloating ();
-        if (rhsT->IsFloat () && lhsT->BitWidth () >= INT32_WIDTH
-            || rhsT->IsDouble () && lhsT->BitWidth () >= INT64_WIDTH) {
+        if (rhsT->IsFloat () && lhsT->BitWidth () >= 32
+            || rhsT->IsDouble () && lhsT->BitWidth () >= 64) {
             _diag
                 .Report (
                     DiagCode::WLossPrecision,
