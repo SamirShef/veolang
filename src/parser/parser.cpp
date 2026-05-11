@@ -1,10 +1,10 @@
-#include "ast/exprs/un_expr.h"
-
 #include <ast/access_modifier.h>
 #include <ast/exprs/bin_expr.h>
 #include <ast/exprs/lit_expr.h>
+#include <ast/exprs/un_expr.h>
 #include <ast/exprs/var_expr.h>
 #include <ast/stmts/func_def.h>
+#include <ast/stmts/ret.h>
 #include <ast/stmts/var_def.h>
 #include <basic/name.h>
 #include <basic/types/all.h>
@@ -35,6 +35,15 @@ Parser::parseStmt (bool expectSemi) {
     }
     case TokenKind::Func: {
         return parseFuncDef ();
+    }
+    case TokenKind::Ret: {
+        auto *ret = parseRet ();
+        if (expectSemi) {
+            if (!this->expectSemi ()) {
+                return nullptr;
+            }
+        }
+        return ret;
     }
         // clang-format off
     default: {}
@@ -120,6 +129,16 @@ Parser::parseFuncDef () {
         _lastTok.End);
 }
 
+Stmt *
+Parser::parseRet () {
+    const Token firstTok = advance ();
+    Expr       *expr     = nullptr;
+    if (!check (TokenKind::Semi)) {
+        expr = parseExpr ();
+    }
+    return createNode<Return> (expr, firstTok.Start, _curTok.End);
+}
+
 std::vector<Argument>
 Parser::parseArguments () {
     std::vector<Argument> args;
@@ -127,6 +146,9 @@ Parser::parseArguments () {
         const Argument arg = parseArgument ();
         if (arg.IsValid ()) {
             args.push_back (arg);
+        }
+        if (!check (TokenKind::RParen)) {
+            expectTok (TokenKind::Comma, ",");
         }
     }
     return std::move (args);
@@ -347,14 +369,12 @@ Parser::expectName (basic::NameObj &res) {
     const Token tok = advance ();
     res             = basic::NameObj (tok);
     if (tok.Kind != TokenKind::Id) {
-        auto &err
-            = _diag
-                  .Report (
-                      DiagCode::EUnexpectedToken,
-                      "expected identifier, found '" + _curTok.Val + "'",
-                      Severity::Error)
-                  .AddSpan (_curTok.Start, _curTok.End, "expected identifier", false)
-                  .AddSpan (tok.Start, tok.End);
+        auto &err = _diag
+                        .Report (
+                            DiagCode::EUnexpectedToken,
+                            "expected identifier, found '" + tok.Val + "'",
+                            Severity::Error)
+                        .AddSpan (tok.Start, tok.End, "expected identifier");
         if (isKeyword (tok.Kind)) {
             err.AddNote ("'" + tok.Val + "' is a reserved keyword");
         } else {

@@ -47,11 +47,11 @@ public:
 
     Function *
     CreateFunction (
-        basic::NameObj        name,
-        basic::Type          *retType,
-        std::vector<Argument> args,
-        llvm::SMLoc           start,
-        llvm::SMLoc           end) {
+        basic::NameObj             name,
+        basic::Type               *retType,
+        std::vector<ast::Argument> args,
+        llvm::SMLoc                start,
+        llvm::SMLoc                end) {
         auto *node = _ctx.CreateNode<Function> (
             std::move (name),
             retType,

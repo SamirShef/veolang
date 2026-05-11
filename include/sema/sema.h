@@ -3,6 +3,7 @@
 #include <ast/exprs/lit_expr.h>
 #include <ast/exprs/un_expr.h>
 #include <ast/exprs/var_expr.h>
+#include <ast/stmts/ret.h>
 #include <ast/stmts/var_def.h>
 #include <basic/symbols/module.h>
 #include <basic/symbols/scope.h>
@@ -20,11 +21,12 @@ using namespace diagnostic;
 using namespace basic;
 
 class Sema {
-    DiagnosticEngine &_diag; // NOLINT(cppcoreguidelines-avoid-const-or-ref-data-members)
-    size_t            _localsCount = 0;
-    Module           *_mod;
-    hir::Builder      _builder;
-    std::stack<Scope> _vars;
+    DiagnosticEngine  &_diag; // NOLINT(cppcoreguidelines-avoid-const-or-ref-data-members)
+    size_t             _localsCount = 0;
+    Module            *_mod;
+    hir::Builder       _builder;
+    std::stack<Scope>  _vars;
+    std::stack<Type *> _funcRetTypes;
 
     struct SemanticResult {
         OptValue   Val;
@@ -57,6 +59,9 @@ private:
     void
     analyzeFuncDef (FuncDef *fd);
 
+    void
+    analyzeRet (Return *ret);
+
     SemanticResult
     analyzeExpr (Expr *expr, Type *expectedType);
 
@@ -77,6 +82,9 @@ private:
 
     std::optional<Variable>
     getVariable (const std::string &name);
+
+    std::optional<Function>
+    getFunction (const std::string &name, const std::vector<Argument> &args);
 
     Type *
     getCommonType (Type *lhs, Type *rhs, llvm::SMLoc start, llvm::SMLoc end);

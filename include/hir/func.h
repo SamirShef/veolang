@@ -1,43 +1,25 @@
 #pragma once
-#include "hir/node.h"
-
+#include <ast/stmts/func_def.h>
 #include <basic/name.h>
 #include <basic/types/type.h>
 #include <hir/basic_block.h>
+#include <hir/node.h>
 
 namespace veo::hir {
 
-struct Argument {
-    basic::NameObj Name;
-    basic::Type   *Type;
-
-    Argument (basic::NameObj name, basic::Type *type)
-        : Name (std::move (name)), Type (type) {}
-
-    bool
-    IsValid () const {
-        return !Name.Val.empty () && Type != nullptr;
-    }
-
-    static Argument
-    Invalid () {
-        return { basic::NameObj (), nullptr };
-    }
-};
-
 class Function : public Node {
-    basic::NameObj            _name;
-    basic::Type              *_retType;
-    std::vector<Argument>     _args;
-    std::vector<BasicBlock *> _body;
+    basic::NameObj             _name;
+    basic::Type               *_retType;
+    std::vector<ast::Argument> _args;
+    std::vector<BasicBlock *>  _body;
 
 public:
     Function (
-        basic::NameObj        name,
-        basic::Type          *retType,
-        std::vector<Argument> args,
-        llvm::SMLoc           start,
-        llvm::SMLoc           end)
+        basic::NameObj             name,
+        basic::Type               *retType,
+        std::vector<ast::Argument> args,
+        llvm::SMLoc                start,
+        llvm::SMLoc                end)
         : _name (std::move (name)),
           _retType (retType),
           _args (std::move (args)),
@@ -55,7 +37,7 @@ public:
         return _retType;
     }
 
-    std::vector<Argument> &
+    std::vector<ast::Argument> &
     Args () {
         return _args;
     }

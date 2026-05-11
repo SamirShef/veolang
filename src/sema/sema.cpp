@@ -1,9 +1,8 @@
-#include "basic/value.h"
-#include "lexer/token_kind.h"
-
 #include <basic/types/all.h>
+#include <basic/value.h>
 #include <cstdint>
 #include <diagnostic/codes.h>
+#include <lexer/token_kind.h>
 #include <sema/sema.h>
 
 namespace veo {
@@ -13,6 +12,7 @@ Sema::analyzeStmt (Stmt *stmt) {
     switch (stmt->Kind ()) {
     case NodeKind::VarDef: analyzeVarDef (llvm::cast<VarDef> (stmt)); break;
     case NodeKind::FuncDef: analyzeFuncDef (llvm::cast<FuncDef> (stmt)); break;
+    case NodeKind::Ret: analyzeRet (llvm::cast<Return> (stmt)); break;
     default: break;
     }
 }
@@ -61,7 +61,100 @@ Sema::analyzeVarDef (VarDef *vd) {
 }
 
 void
-Sema::analyzeFuncDef (FuncDef *fd) {}
+Sema::analyzeFuncDef (FuncDef *fd) {
+    if (auto func = getFunction (fd->Name ().Val, fd->Args ()); func.has_value ()) {
+        _diag
+            .Report (
+                DiagCode::ERedefinition,
+                "funcion '" + fd->Name ().Val + "' is already defined",
+                Severity::Error)
+            .AddSpan (
+                func->Name.Start,
+                func->Name.End,
+                "previous definition was here",
+                false)
+            .AddSpan (fd->Name ().Start, fd->Name ().End, "redefined here");
+        return;
+    }
+    resolveType (&fd->RetType ());
+    for (auto &arg : fd->Args ()) {
+        resolveType (&arg.Type);
+    }
+    auto func = Function (fd->Name (), fd->RetType (), fd->Args ());
+    _mod->Funcs.emplace (fd->Name ().Val, FunctionCandidates ());
+    _mod->Funcs.at (fd->Name ().Val).Candidates.emplace_back (func);
+
+    auto *funcNode = _builder.CreateFunction (
+        fd->Name (),
+        fd->RetType (),
+        fd->Args (),
+        fd->Start (),
+        fd->End ());
+    auto *entry = _builder.CreateBasicBlock (funcNode, "entry");
+    _builder.SetInsertionPoint (entry);
+
+    _funcRetTypes.push (fd->RetType ());
+    _vars.emplace ();
+
+    _localsCount = 0;
+
+    for (const auto &arg : fd->Args ()) {
+        _builder.CreateVariable (
+            arg.Name,
+            arg.Type,
+            nullptr,
+            false,
+            false,
+            arg.Name.Start,
+            arg.Name.End);
+        _vars.top ().Vars.emplace (
+            arg.Name.Val,
+            Variable (arg.Name, arg.Type, false, _localsCount++));
+    }
+
+    for (const auto &stmt : fd->Body ()) {
+        analyzeStmt (stmt);
+    }
+
+    _vars.pop ();
+    _funcRetTypes.pop ();
+}
+
+void
+Sema::analyzeRet (Return *ret) {
+    if (ret->RetExpr () == nullptr) {
+        if (_funcRetTypes.top () != nullptr) {
+            _diag
+                .Report (
+                    DiagCode::ECannotImplCast,
+                    "cannot implicitly cast 'noth' to '"
+                        + _funcRetTypes.top ()->ToString () + "'",
+                    Severity::Error)
+                .AddSpan (ret->Start (), ret->End ());
+            return;
+        }
+    } else {
+        auto res = analyzeExpr (ret->RetExpr (), nullptr);
+        if (!res.Val.has_value ()) {
+            return;
+        }
+        if (_funcRetTypes.top () == nullptr) {
+            _diag
+                .Report (
+                    DiagCode::ECannotImplCast,
+                    "cannot implicitly cast '" + res.Val->Type->ToString ()
+                        + "' to 'noth'",
+                    Severity::Error)
+                .AddSpan (ret->RetExpr ()->Start (), ret->RetExpr ()->End ());
+            return;
+        }
+        res = implicitlyCast (
+            res,
+            &_funcRetTypes.top (),
+            ret->RetExpr ()->Start (),
+            ret->RetExpr ()->End ());
+    }
+}
 
 Sema::SemanticResult
 Sema::analyzeExpr (Expr *expr, Type *expectedType) {
@@ -371,7 +464,7 @@ Sema::analyzeVarExpr (VarExpr *ve, Type *expectedType) {
     }
     auto value = Value (
         var->IsConst ? ValueKind::Const : ValueKind::Unknown,
-        var->Val->Data,
+        var->IsConst ? var->Val->Data : ValueData (),
         var->Type);
     hir::Node *node = nullptr;
     if (var->IsConst) {
@@ -404,6 +497,31 @@ Sema::getVariable (const std::string &name) {
             return it->second;
         }
         vars.pop ();
+    }
+    return std::nullopt;
+}
+
+std::optional<Function>
+Sema::getFunction (const std::string &name, const std::vector<Argument> &args) {
+    if (!_mod->Funcs.contains (name)) {
+        return std::nullopt;
+    }
+    const auto &candidates = _mod->Funcs.at (name);
+    for (const auto &f : candidates.Candidates) {
+        unsigned coincidences = 0;
+        if (f.Args.size () == args.size ()) {
+            for (size_t i = 0; i < args.size (); ++i) {
+                if (*f.Args[i].Type == *args[i].Type) {
+                    ++coincidences;
+                }
+            }
+        } else {
+            continue;
+        }
+
+        if (coincidences == args.size ()) {
+            return f;
+        }
     }
     return std::nullopt;
 }

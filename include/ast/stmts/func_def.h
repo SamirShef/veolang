@@ -58,7 +58,7 @@ public:
         return _retType;
     }
 
-    const std::vector<Argument> &
+    std::vector<Argument> &
     Args () {
         return _args;
     }

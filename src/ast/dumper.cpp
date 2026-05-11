@@ -51,10 +51,15 @@ Dumper::dumpFuncDef (FuncDef *fd) {
     indent ();
     _os << "FuncDef: " << AccessToString (fd->Access ()) << ' ' << fd->Name ().Val
         << " (";
+    size_t i = 0;
     for (const auto &arg : fd->Args ()) {
         if (arg.IsValid ()) {
             _os << arg.Name.Val << ": " << arg.Type->ToString ();
         }
+        if (i < fd->Args ().size () - 1) {
+            _os << ", ";
+        }
+        ++i;
     }
     _os << ')';
     if (fd->RetType () != nullptr) {
@@ -66,6 +71,17 @@ Dumper::dumpFuncDef (FuncDef *fd) {
         dumpStmt (stmt);
     }
     --_indentLvl;
+}
+
+void
+Dumper::dumpRet (Return *ret) {
+    indent ();
+    _os << "Return:\n";
+    if (ret->RetExpr () != nullptr) {
+        ++_indentLvl;
+        dumpExpr (ret->RetExpr ());
+        --_indentLvl;
+    }
 }
 
 void

@@ -3,6 +3,7 @@
 #include <ast/exprs/lit_expr.h>
 #include <ast/exprs/un_expr.h>
 #include <ast/exprs/var_expr.h>
+#include <ast/stmts/ret.h>
 #include <ast/stmts/var_def.h>
 #include <llvm/Support/raw_ostream.h>
 #include <parser/parser.h>
@@ -28,6 +29,7 @@ private:
         switch (stmt->Kind ()) {
         case NodeKind::VarDef: dumpVarDef (llvm::cast<VarDef> (stmt)); break;
         case NodeKind::FuncDef: dumpFuncDef (llvm::cast<FuncDef> (stmt)); break;
+        case NodeKind::Ret: dumpRet (llvm::cast<Return> (stmt)); break;
         default: {
         }
         }
@@ -38,6 +40,9 @@ private:
 
     void
     dumpFuncDef (FuncDef *fd);
+
+    void
+    dumpRet (Return *ret);
 
     void
     dumpExpr (Expr *expr) {
