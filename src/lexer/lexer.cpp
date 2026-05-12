@@ -242,7 +242,7 @@ Lexer::parseNumSuffix (bool isFloat) {
                 return false;
             }
         }
-        if (!isspace (peek (len))) {
+        if (isalnum (peek (len)) != 0 || peek (len) == '_') {
             return false;
         }
         _curPtr += len;

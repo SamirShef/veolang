@@ -20,8 +20,6 @@ static const std::unordered_map<std::string, TokenKind> keywords{
     { "u32",      TokenKind::U32      },
     { "i64",      TokenKind::I64      },
     { "u64",      TokenKind::U64      },
-    { "i128",     TokenKind::I128     },
-    { "u128",     TokenKind::U128     },
     { "isize",    TokenKind::ISize    },
     { "usize",    TokenKind::USize    },
     { "f32",      TokenKind::F32      },

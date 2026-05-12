@@ -13,25 +13,25 @@ as (Char);
 #undef as
 
 bool
-Type::operator== (const Type &other) {
-    if (this == &other) {
+operator== (const Type &lhs, const Type &rhs) {
+    if (&lhs == &rhs) {
         return true;
     }
-    if (Kind () != other.Kind ()) {
+    if (lhs.Kind () != rhs.Kind ()) {
         return false;
     }
 
-    switch (other.Kind ()) {
+    switch (rhs.Kind ()) {
     case TypeKind::Integer: {
-        const auto *lhs = AsInteger ();
-        const auto *rhs = other.AsInteger ();
-        return lhs->BitWidth () == rhs->BitWidth ()
-               && lhs->IsUnsigned () == rhs->IsUnsigned ();
+        const auto *ilhs = lhs.AsInteger ();
+        const auto *irhs = rhs.AsInteger ();
+        return ilhs->BitWidth () == irhs->BitWidth ()
+               && ilhs->IsUnsigned () == irhs->IsUnsigned ();
     }
     case TypeKind::Floating: {
-        const auto *lhs = AsFloating ();
-        const auto *rhs = AsFloating ();
-        return lhs->GetFloatingKind () == rhs->GetFloatingKind ();
+        const auto *flhs = lhs.AsFloating ();
+        const auto *frhs = rhs.AsFloating ();
+        return flhs->GetFloatingKind () == frhs->GetFloatingKind ();
     }
     default: return true;
     }

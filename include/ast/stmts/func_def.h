@@ -46,17 +46,19 @@ public:
           _body (std::move (body)),
           Stmt (access, NodeKind::FuncDef, start, end) {}
 
+    ast_classof (FuncDef);
+
     basic::NameObj
     Name () const {
         return _name;
     }
 
-    basic::Type *
-    RetType () const {
+    basic::Type *&
+    RetType () {
         return _retType;
     }
 
-    const std::vector<Argument> &
+    std::vector<Argument> &
     Args () {
         return _args;
     }

@@ -1,3 +1,5 @@
+#include "basic/symbols/module.h"
+
 #include <driver/build.h>
 #include <driver/compiler.h>
 #include <filesystem>
@@ -34,7 +36,8 @@ BuildDriver::Build () {
         exit (1);
     }
 
-    auto compileRes = Compile (_projectRoot, manif.EntryPointPath);
+    auto *mod        = new symbols::Module (manif.EntryPointPath.stem ().string ());
+    auto  compileRes = Compile (_projectRoot, manif.EntryPointPath, mod);
     if (!compileRes.Success) {
         exit (1);
     }

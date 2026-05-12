@@ -12,13 +12,11 @@ enum class TokenKind : uint8_t {
     I16,   // type `i16`
     I32,   // type `i32`
     I64,   // type `i64`
-    I128,  // type `i128`
     ISize, // type `isize`
     U8,    // type `u8`
     U16,   // type `u16`
     U32,   // type `u32`
     U64,   // type `u64`
-    U128,  // type `u128`
     USize, // type `usize`
     F32,   // type `f32`
     F64,   // type `f64`

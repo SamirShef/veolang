@@ -1,8 +1,10 @@
 #include <ast/access_modifier.h>
 #include <ast/exprs/bin_expr.h>
 #include <ast/exprs/lit_expr.h>
+#include <ast/exprs/un_expr.h>
 #include <ast/exprs/var_expr.h>
 #include <ast/stmts/func_def.h>
+#include <ast/stmts/ret.h>
 #include <ast/stmts/var_def.h>
 #include <basic/name.h>
 #include <basic/types/all.h>
@@ -34,6 +36,15 @@ Parser::parseStmt (bool expectSemi) {
     case TokenKind::Func: {
         return parseFuncDef ();
     }
+    case TokenKind::Ret: {
+        auto *ret = parseRet ();
+        if (expectSemi) {
+            if (!this->expectSemi ()) {
+                return nullptr;
+            }
+        }
+        return ret;
+    }
         // clang-format off
     default: {}
         // clang-format on
@@ -44,7 +55,6 @@ Parser::parseStmt (bool expectSemi) {
             "expected statement, found '" + _curTok.Val + "'",
             Severity::Error)
         .AddSpan (_curTok.Start, _curTok.End, "expected statement here");
-    advance ();
     synchronize ();
     return nullptr;
 }
@@ -119,6 +129,16 @@ Parser::parseFuncDef () {
         _lastTok.End);
 }
 
+Stmt *
+Parser::parseRet () {
+    const Token firstTok = advance ();
+    Expr       *expr     = nullptr;
+    if (!check (TokenKind::Semi)) {
+        expr = parseExpr ();
+    }
+    return createNode<Return> (expr, firstTok.Start, _curTok.End);
+}
+
 std::vector<Argument>
 Parser::parseArguments () {
     std::vector<Argument> args;
@@ -126,6 +146,9 @@ Parser::parseArguments () {
         const Argument arg = parseArgument ();
         if (arg.IsValid ()) {
             args.push_back (arg);
+        }
+        if (!check (TokenKind::RParen)) {
+            expectTok (TokenKind::Comma, ",");
         }
     }
     return std::move (args);
@@ -175,10 +198,13 @@ Parser::parsePrimaryExpr (bool allowStruct) {
     const Token tok = advance ();
 #define lit(kind)                                                                        \
     case TokenKind::kind:                                                                \
-        return createNode<LiteralExpr> (std::move (tok.Val), tok.Start, tok.End);
+        return createNode<LiteralExpr> (                                                 \
+            std::move (tok.Val),                                                         \
+            tok.Kind,                                                                    \
+            tok.Start,                                                                   \
+            tok.End);
 #define int_lits(prefix)                                                                 \
-    lit (prefix##8Lit) lit (prefix##16Lit) lit (prefix##32Lit) lit (prefix##64Lit)       \
-        lit (prefix##128Lit)
+    lit (prefix##8Lit) lit (prefix##16Lit) lit (prefix##32Lit) lit (prefix##64Lit)
     switch (tok.Kind) { // NOLINTBEGIN(bugprone-branch-clone)
         lit (BoolLit);
         lit (CharLit);
@@ -188,8 +214,25 @@ Parser::parsePrimaryExpr (bool allowStruct) {
         lit (F32Lit);
         lit (F64Lit);
 
+    case TokenKind::LParen: {
+        Expr *expr     = parseExpr ();
+        expr->Start () = tok.Start;
+        expr->End ()   = _lastTok.End;
+        if (!expectTok (TokenKind::RParen, ")")) {
+            return nullptr;
+        }
+        return expr;
+    }
+    case TokenKind::Minus:
+    case TokenKind::Bang: {
+        return createNode<UnaryExpr> (
+            TokToUnOp (tok.Kind),
+            parsePrimaryExpr (allowStruct),
+            tok.Start,
+            _lastTok.End);
+    }
     case TokenKind::Id: {
-        return createNode<VarExpr> (tok.Val, tok.Start, tok.End);
+        return createNode<VarExpr> (basic::NameObj (tok), tok.Start, tok.End);
     }
     default: {
     }
@@ -216,21 +259,19 @@ Parser::consumeType () {
     case TokenKind::I16:
     case TokenKind::I32:
     case TokenKind::I64:
-    case TokenKind::I128:
         return new basic::IntegerType (
             1U << ((unsigned) tok.Kind - (unsigned) TokenKind::I8 + 3));
     case TokenKind::U8:
     case TokenKind::U16:
     case TokenKind::U32:
     case TokenKind::U64:
-    case TokenKind::U128:
         return new basic::IntegerType (
             1U << ((unsigned) tok.Kind - (unsigned) TokenKind::U8 + 3),
             true);
     case TokenKind::F32:
     case TokenKind::F64:
         return new basic::FloatingType (
-            (basic::FloatingKind) ((unsigned) TokenKind::F64 - (unsigned) tok.Kind));
+            (basic::FloatingKind) ((unsigned) tok.Kind - (unsigned) TokenKind::F32));
     default:
         _diag
             .Report (
@@ -245,6 +286,7 @@ Parser::consumeType () {
 
 void
 Parser::synchronize () {
+    advance ();
     while (!isAtEnd ()) {
         if (check (_lastTok, TokenKind::Semi) || check (_lastTok, TokenKind::RBrace)) {
             return;
@@ -296,14 +338,13 @@ Parser::isKeyword (TokenKind kind) {
 bool
 Parser::expectSemi () {
     if (!match (TokenKind::Semi)) {
-        auto expectedPos = llvm::SMLoc::getFromPointer (_lastTok.End.getPointer () + 1);
         _diag
             .Report (
                 DiagCode::EUnexpectedToken,
                 "expected ';', found '" + _curTok.Val + "'",
                 Severity::Error)
-            .AddSpan (_curTok.Start, _curTok.End, "expected ';'", false)
-            .AddSpan (expectedPos, expectedPos);
+            .AddSpan (_curTok.Start, _curTok.End, "expected ';'");
+        synchronize ();
         return false;
     }
     return true;
@@ -328,14 +369,12 @@ Parser::expectName (basic::NameObj &res) {
     const Token tok = advance ();
     res             = basic::NameObj (tok);
     if (tok.Kind != TokenKind::Id) {
-        auto &err
-            = _diag
-                  .Report (
-                      DiagCode::EUnexpectedToken,
-                      "expected identifier, found '" + _curTok.Val + "'",
-                      Severity::Error)
-                  .AddSpan (_curTok.Start, _curTok.End, "expected identifier", false)
-                  .AddSpan (tok.Start, tok.End);
+        auto &err = _diag
+                        .Report (
+                            DiagCode::EUnexpectedToken,
+                            "expected identifier, found '" + tok.Val + "'",
+                            Severity::Error)
+                        .AddSpan (tok.Start, tok.End, "expected identifier");
         if (isKeyword (tok.Kind)) {
             err.AddNote ("'" + tok.Val + "' is a reserved keyword");
         } else {

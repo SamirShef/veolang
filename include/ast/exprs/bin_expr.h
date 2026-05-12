@@ -47,6 +47,30 @@ TokToBinOp (TokenKind kind) {
 #undef bin
 }
 
+inline const char *
+BinOpToString (BinOp op) {
+#define variant(kind, res)                                                               \
+    case BinOp::kind: return res;
+    switch (op) {
+        variant (Plus, "+");
+        variant (Minus, "-");
+        variant (Mul, "*");
+        variant (Div, "/");
+        variant (Rem, "%");
+        variant (Eq, "==");
+        variant (NEq, "!=");
+        variant (Lt, "<");
+        variant (LtEq, "<=");
+        variant (Gt, ">");
+        variant (GtEq, ">=");
+        variant (LogAnd, "&&");
+        variant (LogOr, "||");
+        variant (Invalid, "<invalid>");
+    }
+#undef variant
+    return ""; // to shut up the fucking warning
+}
+
 class BinaryExpr : public Expr {
     BinOp _op;
     Expr *_lhs;
@@ -55,6 +79,8 @@ class BinaryExpr : public Expr {
 public:
     BinaryExpr (BinOp op, Expr *lhs, Expr *rhs, llvm::SMLoc start, llvm::SMLoc end)
         : _op (op), _lhs (lhs), _rhs (rhs), Expr (NodeKind::BinExpr, start, end) {}
+
+    ast_classof (BinExpr);
 
     BinOp
     Op () const {

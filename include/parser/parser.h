@@ -78,6 +78,9 @@ private:
     Stmt *
     parseFuncDef ();
 
+    Stmt *
+    parseRet ();
+
     std::vector<Argument>
     parseArguments ();
 

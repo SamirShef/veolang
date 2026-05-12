@@ -2,6 +2,8 @@
 #include <ast/exprs/bin_expr.h>
 #include <ast/exprs/lit_expr.h>
 #include <ast/exprs/un_expr.h>
+#include <ast/exprs/var_expr.h>
+#include <ast/stmts/ret.h>
 #include <ast/stmts/var_def.h>
 #include <llvm/Support/raw_ostream.h>
 #include <parser/parser.h>
@@ -27,6 +29,7 @@ private:
         switch (stmt->Kind ()) {
         case NodeKind::VarDef: dumpVarDef (llvm::cast<VarDef> (stmt)); break;
         case NodeKind::FuncDef: dumpFuncDef (llvm::cast<FuncDef> (stmt)); break;
+        case NodeKind::Ret: dumpRet (llvm::cast<Return> (stmt)); break;
         default: {
         }
         }
@@ -39,6 +42,9 @@ private:
     dumpFuncDef (FuncDef *fd);
 
     void
+    dumpRet (Return *ret);
+
+    void
     dumpExpr (Expr *expr) {
         if (!checkNull (expr)) {
             return;
@@ -47,10 +53,14 @@ private:
         case NodeKind::LitExpr: dumpLiteralExpr (llvm::cast<LiteralExpr> (expr)); break;
         case NodeKind::BinExpr: dumpBinaryExpr (llvm::cast<BinaryExpr> (expr)); break;
         case NodeKind::UnExpr: dumpUnaryExpr (llvm::cast<UnaryExpr> (expr)); break;
+        case NodeKind::VarExpr: dumpVarExpr (llvm::cast<VarExpr> (expr)); break;
         default: {
         }
         }
     }
+
+    void
+    dumpLiteralExpr (LiteralExpr *le);
 
     void
     dumpBinaryExpr (BinaryExpr *be);
@@ -59,7 +69,7 @@ private:
     dumpUnaryExpr (UnaryExpr *ue);
 
     void
-    dumpLiteralExpr (LiteralExpr *le);
+    dumpVarExpr (VarExpr *ve);
 
     void
     indent () {

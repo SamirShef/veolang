@@ -86,7 +86,7 @@ inline llvm::cl::opt<DumpASTInto> DumpASTOpt (
 inline int
 ParseArguments (int argc, char **argv) {
     llvm::cl::HideUnrelatedOptions (Category);
-    llvm::cl::ParseCommandLineOptions (argc, argv, "Bloop Compiler\n");
+    llvm::cl::ParseCommandLineOptions (argc, argv, "Veo Compiler");
 
     if (argc < 2) {
         llvm::cl::PrintHelpMessage ();
