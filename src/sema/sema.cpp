@@ -9,12 +9,15 @@ namespace veo {
 
 void
 Sema::analyzeStmt (Stmt *stmt) {
+#define variant(kind, func, type)                                                        \
+    case NodeKind::kind: func (llvm::cast<type> (stmt)); break;
     switch (stmt->Kind ()) {
-    case NodeKind::VarDef: analyzeVarDef (llvm::cast<VarDef> (stmt)); break;
-    case NodeKind::FuncDef: analyzeFuncDef (llvm::cast<FuncDef> (stmt)); break;
-    case NodeKind::Ret: analyzeRet (llvm::cast<Return> (stmt)); break;
+        variant (VarDef, analyzeVarDef, VarDef);
+        variant (FuncDef, analyzeFuncDef, FuncDef);
+        variant (Ret, analyzeRet, Return);
     default: break;
     }
+#undef variant
 }
 
 void
@@ -57,7 +60,8 @@ Sema::analyzeVarDef (VarDef *vd) {
         vd->IsConst (),
         isGlobal,
         vd->Start (),
-        vd->End ());
+        vd->End (),
+        isGlobal ? &_mod->Vars.at (vd->Name ().Val) : nullptr);
 }
 
 void
@@ -82,14 +86,15 @@ Sema::analyzeFuncDef (FuncDef *fd) {
     }
     auto func = Function (fd->Name (), fd->RetType (), fd->Args ());
     _mod->Funcs.emplace (fd->Name ().Val, FunctionCandidates ());
-    _mod->Funcs.at (fd->Name ().Val).Candidates.emplace_back (func);
+    auto *sym = &_mod->Funcs.at (fd->Name ().Val).Candidates.emplace_back (func);
 
     auto *funcNode = _builder.CreateFunction (
         fd->Name (),
         fd->RetType (),
         fd->Args (),
         fd->Start (),
-        fd->End ());
+        fd->End (),
+        sym);
     auto *entry = _builder.CreateBasicBlock (funcNode, "entry");
     _builder.SetInsertionPoint (entry);
 
@@ -106,7 +111,8 @@ Sema::analyzeFuncDef (FuncDef *fd) {
             false,
             false,
             arg.Name.Start,
-            arg.Name.End);
+            arg.Name.End,
+            nullptr);
         _vars.top ().Vars.emplace (
             arg.Name.Val,
             Variable (arg.Name, arg.Type, false, _localsCount++));
@@ -158,20 +164,19 @@ Sema::analyzeRet (Return *ret) {
 
 Sema::SemanticResult
 Sema::analyzeExpr (Expr *expr, Type *expectedType) {
+#define variant(kind, func, type)                                                        \
+    case NodeKind::kind: return func (llvm::cast<type> (expr), expectedType);
     if (expr == nullptr) {
         return {};
     }
     switch (expr->Kind ()) {
-    case NodeKind::LitExpr:
-        return analyzeLiteralExpr (llvm::cast<LiteralExpr> (expr), expectedType);
-    case NodeKind::BinExpr:
-        return analyzeBinaryExpr (llvm::cast<BinaryExpr> (expr), expectedType);
-    case NodeKind::UnExpr:
-        return analyzeUnaryExpr (llvm::cast<UnaryExpr> (expr), expectedType);
-    case NodeKind::VarExpr:
-        return analyzeVarExpr (llvm::cast<VarExpr> (expr), expectedType);
+        variant (LitExpr, analyzeLiteralExpr, LiteralExpr);
+        variant (BinExpr, analyzeBinaryExpr, BinaryExpr);
+        variant (UnExpr, analyzeUnaryExpr, UnaryExpr);
+        variant (VarExpr, analyzeVarExpr, VarExpr);
     default: return {};
     }
+#undef variant
 }
 
 // NOLINTBEGIN(readability-function-cognitive-complexity)
@@ -240,7 +245,8 @@ Sema::analyzeLiteralExpr (LiteralExpr *le, Type *expectedType) {
     case TokenKind::IntLit: {
         if (expectedType == nullptr) {
             // NOLINTNEXTLINE(cppcoreguidelines-owning-memory)
-            expectedType = new IntegerType (32);
+            expectedType
+                = new IntegerType (32); // NOLINT(cppcoreguidelines-avoid-magic-numbers)
         }
         if (!expectedType->IsInteger ()) {
             _diag
@@ -566,6 +572,7 @@ Sema::getCommonType (Type *lhs, Type *rhs, llvm::SMLoc start, llvm::SMLoc end) {
     if (lhs->IsFloating () && rhs->IsInteger ()) {
         const auto *lhsT = lhs->AsFloating ();
         const auto *rhsT = rhs->AsInteger ();
+        // NOLINTBEGIN(cppcoreguidelines-avoid-magic-numbers)
         if (lhsT->IsFloat () && rhsT->BitWidth () >= 32
             || lhsT->IsDouble () && rhsT->BitWidth () >= 64) {
             _diag
@@ -591,6 +598,7 @@ Sema::getCommonType (Type *lhs, Type *rhs, llvm::SMLoc start, llvm::SMLoc end) {
         }
         return rhs;
     }
+    // NOLINTEND(cppcoreguidelines-avoid-magic-numbers)
     _diag
         .Report (
             DiagCode::ECannotFindCommonType,

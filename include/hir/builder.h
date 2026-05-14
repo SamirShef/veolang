@@ -51,13 +51,15 @@ public:
         basic::Type               *retType,
         std::vector<ast::Argument> args,
         llvm::SMLoc                start,
-        llvm::SMLoc                end) {
+        llvm::SMLoc                end,
+        symbols::Function         *base) {
         auto *node = _ctx.CreateNode<Function> (
             std::move (name),
             retType,
             std::move (args),
             start,
-            end);
+            end,
+            base);
         _ctx.AddFunction (node);
         return node;
     }
@@ -71,15 +73,22 @@ public:
 
     VarDef *
     CreateVariable (
-        basic::NameObj name,
-        basic::Type   *type,
-        Node          *init,
-        bool           isConst,
-        bool           isGlobal,
-        llvm::SMLoc    start,
-        llvm::SMLoc    end) {
-        auto *node
-            = _ctx.CreateNode<VarDef> (std::move (name), type, init, isConst, start, end);
+        basic::NameObj     name,
+        basic::Type       *type,
+        Node              *init,
+        bool               isConst,
+        bool               isGlobal,
+        llvm::SMLoc        start,
+        llvm::SMLoc        end,
+        symbols::Variable *base) {
+        auto *node = _ctx.CreateNode<VarDef> (
+            std::move (name),
+            type,
+            init,
+            isConst,
+            start,
+            end,
+            base);
         if (isGlobal) {
             _ctx.AddGlobal (node);
         } else {
