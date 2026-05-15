@@ -39,7 +39,9 @@ else()
         LLVM_LINK_LIBS
         core
         support
-        native
+        all-targets
+        asmparsers
+        asmprinters
         analysis
         target
         mc
