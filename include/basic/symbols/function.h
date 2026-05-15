@@ -26,7 +26,7 @@ struct Function {
 };
 
 struct FunctionCandidates {
-    std::vector<Function> Candidates;
+    std::vector<std::unique_ptr<Function>> Candidates;
 };
 
 }

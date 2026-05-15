@@ -8,6 +8,8 @@
 #include <llvm/Support/raw_os_ostream.h>
 #include <parser/parser.h>
 
+using namespace veo::ast;
+
 #define init(root, file)                                                                 \
     llvm::SourceMgr              mgr;                                                    \
     diagnostic::DiagnosticEngine diag (mgr);                                             \

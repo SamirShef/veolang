@@ -16,76 +16,101 @@
 
 namespace veo {
 
-using namespace hir;
-
 class CodeGen {
-    std::vector<VarDef *>              &_hirGlobals;
-    std::vector<Function *>            &_hirFuncs;
+    std::vector<hir::VarDef *>         &_hirGlobals;
+    std::vector<hir::Function *>       &_hirFuncs;
     std::vector<llvm::GlobalVariable *> _globals;
     std::vector<llvm::Function *>       _funcs;
-    std::unique_ptr<llvm::Module>       _mod;
     llvm::LLVMContext                   _ctx;
     llvm::IRBuilder<>                   _builder;
+    std::unique_ptr<llvm::Module>       _mod;
+
+    struct CurrentFunction {
+        std::vector<llvm::Value *> Locals;
+    };
+    std::optional<CurrentFunction> _curFunc = std::nullopt;
+
+    struct UserMain {
+        hir::Function  *HIR;
+        llvm::Function *LLVM;
+    };
+    std::optional<UserMain> _userMain = std::nullopt;
 
 public:
     CodeGen (
-        const std::string       &name,
-        std::vector<VarDef *>   &globals,
-        std::vector<Function *> &funcs)
+        const std::string            &name,
+        std::vector<hir::VarDef *>   &globals,
+        std::vector<hir::Function *> &funcs)
         : _hirGlobals (globals),
           _hirFuncs (funcs),
-          _mod (std::make_unique<llvm::Module> (name, _ctx)),
-          _builder (_ctx) {}
+          _builder (_ctx),
+          _mod (std::make_unique<llvm::Module> (name, _ctx)) {}
 
-    void
-    Generate (const std::vector<Node *> &nodes) {
-        for (const auto &node : nodes) {
-            if (node == nullptr) {
-                continue;
-            }
-            generate (node);
+    std::unique_ptr<llvm::Module>
+    Generate () {
+        for (auto &g : _hirGlobals) {
+            generateVarDef (g);
         }
+        for (auto &f : _hirFuncs) {
+            generateFuncDef (f);
+        }
+        if (_userMain.has_value ()) {
+            generateImplicitMain ();
+        }
+        return std::move (_mod);
     }
 
 private:
     void
-    generate (Node *node);
+    generate (hir::Node *node);
 
     void
-    generateVarDef (VarDef *vd);
+    generateBasicBlock (hir::BasicBlock *bb);
 
     void
-    generateFuncDef (Function *fd);
+    generateVarDef (hir::VarDef *vd);
 
     void
-    generateRet (Return *ret);
+    generateFuncDef (hir::Function *fd);
+
+    void
+    generateRet (hir::Return *ret);
 
     llvm::Value *
-    generateExpr (Node *node);
+    generateExpr (hir::Node *node);
 
     llvm::Value *
-    generateLiteralExpr (LiteralExpr *le);
+    generateLiteralExpr (hir::LiteralExpr *le);
 
     llvm::Value *
-    generateBinaryExpr (BinaryExpr *be);
+    generateBinaryExpr (hir::BinaryExpr *be);
 
     llvm::Value *
-    generateUnaryExpr (UnaryExpr *ue);
+    generateUnaryExpr (hir::UnaryExpr *ue);
 
     llvm::Value *
-    generateLoadVar (LoadVar *lv);
+    generateLoadVar (hir::LoadVar *lv);
 
     llvm::Value *
-    generateLValue (Node *node);
+    generateLValue (hir::Node *node);
 
     llvm::Type *
     getType (basic::Type *type);
 
     std::string
-    mangleFunction (Function *func) const;
+    mangleFunction (hir::Function *func) const;
 
     std::string
-    mangleGlobalVar (VarDef *var) const;
+    mangleGlobalVar (hir::VarDef *var) const;
+
+    std::string
+    mangleModule (symbols::Module *mod) const;
+
+    std::string
+    mangleType (basic::Type *type) const;
+
+    void
+    generateImplicitMain ();
 };
 
 }

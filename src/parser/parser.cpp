@@ -15,6 +15,7 @@
 namespace veo {
 
 using namespace diagnostic;
+using namespace ast;
 
 // NOLINTNEXTLINE(cppcoreguidelines-avoid-non-const-global-variables)
 static AccessModifier Access = AccessModifier::Priv;

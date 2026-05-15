@@ -16,17 +16,16 @@
 
 namespace veo {
 
-using namespace symbols;
 using namespace diagnostic;
 using namespace basic;
 
 class Sema {
-    DiagnosticEngine  &_diag; // NOLINT(cppcoreguidelines-avoid-const-or-ref-data-members)
-    size_t             _localsCount = 0;
-    Module            *_mod;
-    hir::Builder       _builder;
-    std::stack<Scope>  _vars;
-    std::stack<Type *> _funcRetTypes;
+    DiagnosticEngine &_diag; // NOLINT(cppcoreguidelines-avoid-const-or-ref-data-members)
+    size_t            _localsCount = 0;
+    symbols::Module  *_mod;
+    hir::Builder      _builder;
+    std::stack<symbols::Scope> _vars;
+    std::stack<Type *>         _funcRetTypes;
 
     struct SemanticResult {
         OptValue   Val;
@@ -37,7 +36,7 @@ class Sema {
     };
 
 public:
-    Sema (DiagnosticEngine &diag, hir::Context &ctx, Module *mod)
+    Sema (DiagnosticEngine &diag, hir::Context &ctx, symbols::Module *mod)
         : _diag (diag), _builder (ctx), _mod (mod) {
         _vars.emplace ();
     }
@@ -45,53 +44,53 @@ public:
     void
     Analyze (ParseResult &res) {
         for (size_t i = 0; i < res.Count; ++i) {
-            analyzeStmt (llvm::cast<Stmt> (res.Nodes[i]));
+            analyzeStmt (llvm::cast<ast::Stmt> (res.Nodes[i]));
         }
     }
 
 private:
     void
-    analyzeStmt (Stmt *stmt);
+    analyzeStmt (ast::Stmt *stmt);
 
     void
-    analyzeVarDef (VarDef *vd);
+    analyzeVarDef (ast::VarDef *vd);
 
     void
-    analyzeFuncDef (FuncDef *fd);
+    analyzeFuncDef (ast::FuncDef *fd);
 
     void
-    analyzeRet (Return *ret);
+    analyzeRet (ast::Return *ret);
 
     SemanticResult
-    analyzeExpr (Expr *expr, Type *expectedType);
+    analyzeExpr (ast::Expr *expr, Type *expectedType);
 
     SemanticResult
-    analyzeLiteralExpr (LiteralExpr *le, Type *expectedType);
+    analyzeLiteralExpr (ast::LiteralExpr *le, Type *expectedType);
 
     SemanticResult
-    analyzeBinaryExpr (BinaryExpr *be, Type *expectedType);
+    analyzeBinaryExpr (ast::BinaryExpr *be, Type *expectedType);
 
     SemanticResult
-    analyzeUnaryExpr (UnaryExpr *ue, Type *expectedType);
+    analyzeUnaryExpr (ast::UnaryExpr *ue, Type *expectedType);
 
     SemanticResult
-    analyzeVarExpr (VarExpr *ve, Type *expectedType);
+    analyzeVarExpr (ast::VarExpr *ve, Type *expectedType);
 
     Type *
     resolveType (Type **type);
 
-    std::optional<Variable>
+    std::optional<symbols::Variable>
     getVariable (const std::string &name);
 
-    std::optional<Function>
-    getFunction (const std::string &name, const std::vector<Argument> &args);
+    std::optional<symbols::Function>
+    getFunction (const std::string &name, const std::vector<ast::Argument> &args);
 
     Type *
     getCommonType (Type *lhs, Type *rhs, llvm::SMLoc start, llvm::SMLoc end);
 
     OptValue
     foldBinary (
-        BinOp        op,
+        ast::BinOp   op,
         const Value &lhs,
         const Value &rhs,
         Type        *resType,
@@ -100,7 +99,11 @@ private:
 
     OptValue
     foldUnary (
-        UnOp op, const Value &rhs, Type *resType, llvm::SMLoc start, llvm::SMLoc end);
+        ast::UnOp    op,
+        const Value &rhs,
+        Type        *resType,
+        llvm::SMLoc  start,
+        llvm::SMLoc  end);
 
     SemanticResult
     implicitlyCast (

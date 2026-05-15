@@ -12,12 +12,10 @@
 
 namespace veo {
 
-using namespace veo::ast;
-
 struct ParseResult {
-    Node **Nodes;
-    size_t Count;
-    bool   HasErrors;
+    ast::Node **Nodes;
+    size_t      Count;
+    bool        HasErrors;
 };
 
 class Parser {
@@ -37,24 +35,24 @@ public:
 
     ParseResult
     Parse () {
-        std::vector<Node *> nodes;
-        bool                hasErrors = false;
+        std::vector<ast::Node *> nodes;
+        bool                     hasErrors = false;
         while (!isAtEnd ()) {
-            Node *node = parseStmt ();
+            auto *node = parseStmt ();
             if (node != nullptr) {
                 nodes.push_back (node);
             } else {
                 hasErrors = true;
             }
         }
-        size_t count = nodes.size ();
-        Node **array = nullptr;
+        size_t      count = nodes.size ();
+        ast::Node **array = nullptr;
         if (count != 0) {
-            array = static_cast<Node **> (_allocator.Allocate<Node *> (count));
+            array = static_cast<ast::Node **> (_allocator.Allocate<ast::Node *> (count));
             std::memcpy (
                 static_cast<void *> (array),
                 static_cast<void *> (nodes.data ()),
-                sizeof (Node *) * count);
+                sizeof (ast::Node *) * count);
         }
         return { .Nodes = array, .Count = count, .HasErrors = hasErrors };
     }
@@ -69,28 +67,28 @@ private:
         return obj;
     }
 
-    Stmt *
+    ast::Stmt *
     parseStmt (bool expectSemi = true);
 
-    Stmt *
+    ast::Stmt *
     parseVarDef ();
 
-    Stmt *
+    ast::Stmt *
     parseFuncDef ();
 
-    Stmt *
+    ast::Stmt *
     parseRet ();
 
-    std::vector<Argument>
+    std::vector<ast::Argument>
     parseArguments ();
 
-    Argument
+    ast::Argument
     parseArgument ();
 
-    Expr *
+    ast::Expr *
     parseExpr (int minPrec = (int) Precedence::Unary, bool allowStruct = true);
 
-    Expr *
+    ast::Expr *
     parsePrimaryExpr (bool allowStruct = true);
 
     basic::Type *

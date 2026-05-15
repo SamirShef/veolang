@@ -67,7 +67,7 @@ public:
     Return *
     CreateRet (Node *expr, llvm::SMLoc start, llvm::SMLoc end) {
         auto *node = _ctx.CreateNode<Return> (expr, start, end);
-        _insertBlock->AddInst (node);
+        AddToBlock (node);
         return node;
     }
 
@@ -114,13 +114,19 @@ public:
     }
 
     UnaryExpr *
-    CreateUnary (ast::UnOp op, Node *rhs, llvm::SMLoc start, llvm::SMLoc end) {
-        return _ctx.CreateNode<UnaryExpr> (op, rhs, start, end);
+    CreateUnary (
+        ast::UnOp    op,
+        basic::Type *commonType,
+        Node        *rhs,
+        llvm::SMLoc  start,
+        llvm::SMLoc  end) {
+        return _ctx.CreateNode<UnaryExpr> (op, commonType, rhs, start, end);
     }
 
     LoadVar *
-    CreateLoadVar (size_t id, basic::Type *type, llvm::SMLoc start, llvm::SMLoc end) {
-        return _ctx.CreateNode<LoadVar> (id, type, start, end);
+    CreateLoadVar (
+        size_t id, basic::Type *type, bool isGlobal, llvm::SMLoc start, llvm::SMLoc end) {
+        return _ctx.CreateNode<LoadVar> (id, type, isGlobal, start, end);
     }
 };
 

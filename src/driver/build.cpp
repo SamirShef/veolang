@@ -1,9 +1,9 @@
-#include "basic/symbols/module.h"
-
+#include <basic/symbols/module.h>
 #include <driver/build.h>
 #include <driver/compiler.h>
 #include <filesystem>
 #include <llvm/Support/raw_ostream.h>
+#include <llvm/TargetParser/Host.h>
 #include <toml++/toml.h>
 
 namespace veo::driver {
@@ -36,9 +36,27 @@ BuildDriver::Build () {
         exit (1);
     }
 
-    auto *mod        = new symbols::Module (manif.EntryPointPath.stem ().string ());
-    auto  compileRes = Compile (_projectRoot, manif.EntryPointPath, mod);
+    auto *mod         = new symbols::Module (manif.ProjectName);
+    auto  artefactDir = manif.ManifestPath.parent_path () / "build" / "obj";
+    auto  objPath     = artefactDir
+                        / fs::absolute (manif.EntryPointPath)
+                              .parent_path ()
+                              .lexically_relative (manif.ManifestPath.parent_path ())
+                        / (mod->Name + ".o");
+    objPath           = objPath.lexically_normal ();
+    fs::create_directories (objPath.parent_path ());
+    auto compileRes = Compile (_projectRoot, manif.EntryPointPath, objPath, mod);
     if (!compileRes.Success) {
+        exit (1);
+    }
+    std::string  targetTripleStr = llvm::sys::getDefaultTargetTriple ();
+    llvm::Triple triple (targetTripleStr);
+    auto         exePath = artefactDir / GetOutputName (manif.ProjectName, triple);
+    if (LinkObjectFiles (exePath, { objPath.string () })) {
+        llvm::errs () << llvm::raw_fd_ostream::GREEN
+                      << "SUCCESS: " << llvm::raw_fd_ostream::RESET << exePath.string ()
+                      << "\n";
+    } else {
         exit (1);
     }
 }
