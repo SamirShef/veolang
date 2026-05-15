@@ -52,7 +52,7 @@ BuildDriver::Build () {
     std::string  targetTripleStr = llvm::sys::getDefaultTargetTriple ();
     llvm::Triple triple (targetTripleStr);
     auto         exePath = artefactDir / GetOutputName (manif.ProjectName, triple);
-    if (LinkObjectFiles (exePath, { objPath.string () })) {
+    if (LinkObjectFiles (exePath.string (), { objPath.string () })) {
         llvm::errs () << llvm::raw_fd_ostream::GREEN
                       << "SUCCESS: " << llvm::raw_fd_ostream::RESET << exePath.string ()
                       << "\n";
