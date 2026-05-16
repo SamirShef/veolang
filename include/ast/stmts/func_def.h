@@ -15,6 +15,11 @@ struct Argument {
         : Name (std::move (name)), Type (type) {}
 
     bool
+    operator== (const Argument &other) const {
+        return Name == other.Name && *Type == *other.Type;
+    }
+
+    bool
     IsValid () const {
         return !Name.Val.empty () && Type != nullptr;
     }

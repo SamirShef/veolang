@@ -57,8 +57,7 @@ CodeGen::generateVarDef (VarDef *vd) {
 }
 
 void
-CodeGen::generateFuncDef (Function *fd) {
-    _curFunc                       = CurrentFunction ();
+CodeGen::declareFunc (hir::Function *fd) {
     std::string               name = mangleFunction (fd);
     std::vector<llvm::Type *> args;
     for (auto &a : fd->Args ()) {
@@ -72,8 +71,13 @@ CodeGen::generateFuncDef (Function *fd) {
         *_mod);
     _funcs.emplace_back (func);
     _funcsMap.emplace (fd->BaseSymbol (), func);
+}
 
-    size_t i = 0;
+void
+CodeGen::generateFuncDef (Function *fd) {
+    _curFunc    = CurrentFunction ();
+    auto  *func = _mod->getFunction (mangleFunction (fd));
+    size_t i    = 0;
     for (auto &a : func->args ()) {
         a.setName (fd->Args ()[i].Name.Val);
         _curFunc->Locals.emplace_back (&a);

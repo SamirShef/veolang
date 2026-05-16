@@ -52,6 +52,9 @@ public:
 
     std::unique_ptr<llvm::Module>
     Generate () {
+        for (auto &f : _hirFuncs) {
+            declareFunc (f);
+        }
         for (auto &g : _hirGlobals) {
             generateVarDef (g);
         }
@@ -73,6 +76,9 @@ private:
 
     void
     generateVarDef (hir::VarDef *vd);
+
+    void
+    declareFunc (hir::Function *fd);
 
     void
     generateFuncDef (hir::Function *fd);

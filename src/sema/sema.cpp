@@ -71,7 +71,7 @@ Sema::analyzeVarDef (VarDef *vd) {
 }
 
 void
-Sema::analyzeFuncDef (FuncDef *fd) {
+Sema::declareFunc (ast::FuncDef *fd) {
     if (auto func = getFunction (fd->Name ().Val, fd->Args ()); func.has_value ()) {
         _diag
             .Report (
@@ -95,16 +95,27 @@ Sema::analyzeFuncDef (FuncDef *fd) {
     if (it == _mod->Funcs.end ()) {
         _mod->Funcs.emplace (func.Name.Val, FunctionCandidates ());
     }
-    auto *sym = &_mod->Funcs.at (func.Name.Val)
-                     .Candidates.emplace_back (std::make_unique<Function> (func));
+    _mod->Funcs.at (func.Name.Val)
+        .Candidates.emplace_back (std::make_unique<Function> (func));
+}
+
+void
+Sema::analyzeFuncDef (FuncDef *fd) {
+    auto     *candidates = &_mod->Funcs.at (fd->Name ().Val);
+    Function *func       = nullptr;
+    for (auto &f : candidates->Candidates) {
+        if (f->Args == fd->Args ()) {
+            func = f.get ();
+        }
+    }
 
     auto *funcNode = _builder.CreateFunction (
-        func.Name,
+        func->Name,
         fd->RetType (),
         fd->Args (),
         fd->Start (),
         fd->End (),
-        sym->get ());
+        func);
     auto *entry = _builder.CreateBasicBlock (funcNode, "entry");
     _builder.SetInsertionPoint (entry);
 
@@ -114,15 +125,6 @@ Sema::analyzeFuncDef (FuncDef *fd) {
     _localsCount = 0;
 
     for (const auto &arg : fd->Args ()) {
-        // _builder.CreateVariable (
-        //     arg.Name,
-        //     arg.Type,
-        //     nullptr,
-        //     false,
-        //     false,
-        //     arg.Name.Start,
-        //     arg.Name.End,
-        //     nullptr);
         _vars.top ().Vars.emplace (
             arg.Name.Val,
             Variable (arg.Name, arg.Type, false, false, _localsCount++));
@@ -809,6 +811,7 @@ Sema::canFit (Value &val, const Type *targetType) {
         val.Data);
 }
 
+// NOLINTBEGIN(readability-function-cognitive-complexity)
 symbols::Function *
 Sema::resolveBestOverload (
     symbols::FunctionCandidates *candidates,
@@ -898,6 +901,7 @@ Sema::resolveBestOverload (
 
     return bestCand;
 }
+// NOLINTEND(readability-function-cognitive-complexity)
 
 Sema::CastCost
 Sema::checkCastCost (Type *src, Type *dst) {
