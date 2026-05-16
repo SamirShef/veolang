@@ -1,8 +1,10 @@
 #include <ast/access_modifier.h>
 #include <ast/exprs/bin_expr.h>
+#include <ast/exprs/func_call.h>
 #include <ast/exprs/lit_expr.h>
 #include <ast/exprs/un_expr.h>
 #include <ast/exprs/var_expr.h>
+#include <ast/stmts/expr_stmt.h>
 #include <ast/stmts/func_def.h>
 #include <ast/stmts/ret.h>
 #include <ast/stmts/var_def.h>
@@ -45,6 +47,20 @@ Parser::parseStmt (bool expectSemi) {
             }
         }
         return ret;
+    }
+    case TokenKind::Id: {
+        Expr *expr = parseExpr ();
+        if (expectSemi) {
+            if (!this->expectSemi ()) {
+                return nullptr;
+            }
+        }
+        if (expr == nullptr) {
+            return nullptr;
+        }
+        auto *stmt   = createNode<ExprStmt> (expr);
+        stmt->End () = _curTok.End;
+        return stmt;
     }
         // clang-format off
     default: {}
@@ -233,6 +249,24 @@ Parser::parsePrimaryExpr (bool allowStruct) {
             _lastTok.End);
     }
     case TokenKind::Id: {
+        if (match (TokenKind::LParen)) { // FuncCall
+            std::vector<Expr *> args;
+            while (!match (TokenKind::RParen)) {
+                Expr *expr = parseExpr ();
+                if (expr != nullptr) {
+                    args.emplace_back (expr);
+                }
+                if (!check (TokenKind::RParen)) {
+                    expectTok (TokenKind::Comma, ",");
+                }
+            }
+            return createNode<FuncCall> (
+                basic::NameObj (tok),
+                std::move (args),
+                tok.Start,
+                _lastTok.End);
+        }
+        // VarExpr
         return createNode<VarExpr> (basic::NameObj (tok), tok.Start, tok.End);
     }
     default: {

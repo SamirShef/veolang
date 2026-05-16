@@ -1,6 +1,8 @@
 #pragma once
 #include <hir/bin_expr.h>
+#include <hir/expr_stmt.h>
 #include <hir/func.h>
+#include <hir/func_call.h>
 #include <hir/lit_expr.h>
 #include <hir/load_var.h>
 #include <hir/ret.h>
@@ -12,18 +14,20 @@
 #include <llvm/IR/LLVMContext.h>
 #include <llvm/IR/Module.h>
 #include <memory>
+#include <unordered_map>
 #include <vector>
 
 namespace veo {
 
 class CodeGen {
-    std::vector<hir::VarDef *>         &_hirGlobals;
-    std::vector<hir::Function *>       &_hirFuncs;
-    std::vector<llvm::GlobalVariable *> _globals;
-    std::vector<llvm::Function *>       _funcs;
-    llvm::LLVMContext                   _ctx;
-    llvm::IRBuilder<>                   _builder;
-    std::unique_ptr<llvm::Module>       _mod;
+    std::vector<hir::VarDef *>                               &_hirGlobals;
+    std::vector<hir::Function *>                             &_hirFuncs;
+    std::vector<llvm::GlobalVariable *>                       _globals;
+    std::unordered_map<symbols::Function *, llvm::Function *> _funcsMap;
+    std::vector<llvm::Function *>                             _funcs;
+    llvm::LLVMContext                                         _ctx;
+    llvm::IRBuilder<>                                         _builder;
+    std::unique_ptr<llvm::Module>                             _mod;
 
     struct CurrentFunction {
         std::vector<llvm::Value *> Locals;
@@ -76,6 +80,9 @@ private:
     void
     generateRet (hir::Return *ret);
 
+    void
+    generateExprStmt (hir::ExprStmt *es);
+
     llvm::Value *
     generateExpr (hir::Node *node);
 
@@ -90,6 +97,9 @@ private:
 
     llvm::Value *
     generateLoadVar (hir::LoadVar *lv);
+
+    llvm::Value *
+    generateFuncCall (hir::FuncCall *fc);
 
     llvm::Value *
     generateLValue (hir::Node *node);

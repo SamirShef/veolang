@@ -4,6 +4,7 @@
 #include <diagnostic/codes.h>
 #include <lexer/token_kind.h>
 #include <sema/sema.h>
+#include <sstream>
 
 namespace veo {
 
@@ -18,6 +19,7 @@ Sema::analyzeStmt (Stmt *stmt) {
         variant (VarDef, analyzeVarDef, VarDef);
         variant (FuncDef, analyzeFuncDef, FuncDef);
         variant (Ret, analyzeRet, Return);
+        variant (ExprStmt, analyzeExprStmt, ExprStmt);
     default: break;
     }
 #undef variant
@@ -43,7 +45,7 @@ Sema::analyzeVarDef (VarDef *vd) {
     Type *type     = vd->Type ();
     resolveType (&vd->Type ());
     auto val = analyzeExpr (vd->Init (), vd->Type ());
-    if (type == nullptr) {
+    if (type == nullptr && val.Val.has_value ()) {
         type = val.Val->Type;
     }
     auto var = Variable (
@@ -172,6 +174,12 @@ Sema::analyzeRet (Return *ret) {
     }
 }
 
+void
+Sema::analyzeExprStmt (ast::ExprStmt *es) {
+    auto res = analyzeExpr (es->GetExpr (), nullptr);
+    _builder.CreateExprStmt (res.Node, es->Start (), es->End ());
+}
+
 Sema::SemanticResult
 Sema::analyzeExpr (Expr *expr, Type *expectedType) {
 #define variant(kind, func, type)                                                        \
@@ -184,6 +192,7 @@ Sema::analyzeExpr (Expr *expr, Type *expectedType) {
         variant (BinExpr, analyzeBinaryExpr, BinaryExpr);
         variant (UnExpr, analyzeUnaryExpr, UnaryExpr);
         variant (VarExpr, analyzeVarExpr, VarExpr);
+        variant (FuncCall, analyzeFuncCall, FuncCall);
     default: return {};
     }
 #undef variant
@@ -258,7 +267,7 @@ Sema::analyzeLiteralExpr (LiteralExpr *le, Type *expectedType) {
             expectedType
                 = new IntegerType (32); // NOLINT(cppcoreguidelines-avoid-magic-numbers)
         }
-        if (!expectedType->IsInteger ()) {
+        if (!expectedType->IsNumber ()) {
             _diag
                 .Report (
                     DiagCode::ECannotImplCast,
@@ -268,8 +277,12 @@ Sema::analyzeLiteralExpr (LiteralExpr *le, Type *expectedType) {
             return {};
         }
         int64_t ival  = std::stoll (val);
-        auto    value = Value (ValueKind::Const, ValueData (ival), expectedType);
-        if (!canFit (value, expectedType)) {
+        auto    value = Value (
+            ValueKind::Const,
+            expectedType->IsInteger () ? ValueData (ival)
+                                       : ValueData (static_cast<double> (ival)),
+            expectedType);
+        if (expectedType->IsInteger () && !canFit (value, expectedType)) {
             const auto *it  = expectedType->AsInteger ();
             int64_t     min = it->IsUnsigned ()
                                   ? 0
@@ -500,6 +513,43 @@ Sema::analyzeVarExpr (VarExpr *ve, Type *expectedType) {
     return res;
 }
 
+Sema::SemanticResult
+Sema::analyzeFuncCall (ast::FuncCall *fc, Type *expectedType) {
+    auto it = _mod->Funcs.find (fc->Name ().Val);
+    if (it == _mod->Funcs.end ()) {
+        _diag
+            .Report (
+                DiagCode::ECannotFindFunction,
+                "cannot find function '" + fc->Name ().Val + "' in this scope",
+                Severity::Error)
+            .AddSpan (fc->Name ().Start, fc->Name ().End, "not found in this scope");
+        return {};
+    }
+    auto *candidates = &it->second;
+
+    std::vector<Type *>         argTypes;
+    std::vector<SemanticResult> argResults;
+    for (auto &a : fc->Args ()) {
+        auto argRes = analyzeExpr (a, nullptr);
+        argResults.emplace_back (argRes);
+        argTypes.emplace_back (argRes.Val->Type);
+    }
+
+    Function *func = resolveBestOverload (candidates, argTypes, fc->Start (), fc->End ());
+    if (func == nullptr) {
+        return {};
+    }
+
+    std::vector<hir::Node *> hirArgs;
+    for (size_t i = 0; i < argResults.size (); ++i) {
+        auto res = analyzeExpr (fc->Args ()[i], func->Args[i].Type);
+        hirArgs.emplace_back (res.Node);
+    }
+
+    return { Value (ValueKind::Unknown, func->RetType),
+             _builder.CreateCall (func, std::move (hirArgs), fc->Start (), fc->End ()) };
+}
+
 Type *
 Sema::resolveType (Type **type) {
     if (*type == nullptr) {
@@ -707,7 +757,7 @@ Sema::foldUnary (
 Sema::SemanticResult
 Sema::implicitlyCast (
     SemanticResult val, Type **expectedType, llvm::SMLoc start, llvm::SMLoc end) {
-    if (!val.Val.has_value ()) {
+    if (!val.Val.has_value () || *expectedType == nullptr) {
         return {};
     }
     resolveType (&val.Val->Type);
@@ -757,6 +807,138 @@ Sema::canFit (Value &val, const Type *targetType) {
             return false;
         },
         val.Data);
+}
+
+symbols::Function *
+Sema::resolveBestOverload (
+    symbols::FunctionCandidates *candidates,
+    const std::vector<Type *>   &argTypes,
+    llvm::SMLoc                  start,
+    llvm::SMLoc                  end) {
+    std::vector<std::pair<Function *, int>> viableCandidates;
+
+    for (auto &cand : candidates->Candidates) {
+        if (cand->Args.size () != argTypes.size ()) {
+            continue;
+        }
+
+        bool viable  = true;
+        int  costSum = 0;
+        for (int i = 0; i < argTypes.size (); ++i) {
+            CastCost cost = checkCastCost (argTypes[i], cand->Args[i].Type);
+            if (cost == CastCost::Incompatible) {
+                viable = false;
+                break;
+            }
+            costSum += static_cast<uint16_t> (cost);
+        }
+
+        if (viable) {
+            viableCandidates.emplace_back (cand.get (), costSum);
+        }
+    }
+
+    if (viableCandidates.empty ()) {
+        std::vector<std::string> foundCandidates;
+        for (auto &func : candidates->Candidates) {
+            std::ostringstream oss;
+            oss << "func " << func->Name.Val << "(";
+            size_t i = 0;
+            for (const auto &a : func->Args) {
+                oss << a.Type->ToString ();
+                if (i < func->Args.size () - 1) {
+                    oss << ", ";
+                }
+                ++i;
+            }
+            oss << "): " << func->RetType->ToString ();
+            foundCandidates.emplace_back (oss.str ());
+        }
+        _diag
+            .Report (
+                DiagCode::ENoMatchingFunction,
+                "no matching function for call to '" + candidates->Candidates[0]->Name.Val
+                    + "'",
+                Severity::Error)
+            .AddSpan (start, end)
+            .AddNote ("candidate functions found:", std::move (foundCandidates));
+        return nullptr;
+    }
+
+    Function *bestCand    = viableCandidates[0].first;
+    int       minCost     = viableCandidates[0].second;
+    bool      isAmbiguous = false;
+
+    for (int i = 1; i < viableCandidates.size (); ++i) {
+        if (viableCandidates[i].second < minCost) {
+            minCost     = viableCandidates[i].second;
+            bestCand    = viableCandidates[i].first;
+            isAmbiguous = false;
+        } else if (viableCandidates[i].second == minCost) {
+            isAmbiguous = true;
+        }
+    }
+
+    if (isAmbiguous) {
+        auto &err = _diag.Report (
+            DiagCode::ECallIsAmbiguous,
+            "call to '' is ambiguous",
+            Severity::Error);
+        size_t i = 0;
+        for (const auto &[c, _] : viableCandidates) {
+            err.AddSpan (
+                c->Name.Start,
+                c->Name.End,
+                "candidate " + std::to_string (i),
+                false);
+            ++i;
+        }
+        return nullptr;
+    }
+
+    return bestCand;
+}
+
+Sema::CastCost
+Sema::checkCastCost (Type *src, Type *dst) {
+    if (*src == *dst) {
+        return CastCost::Exact;
+    }
+
+    if (src->IsInteger () && dst->IsInteger ()) {
+        const auto *srcI = src->AsInteger ();
+        const auto *dstI = dst->AsInteger ();
+
+        if (dstI->BitWidth () >= srcI->BitWidth ()) {
+            if (srcI->IsUnsigned () == dstI->IsUnsigned ()
+                && dstI->BitWidth () == srcI->BitWidth ()) {
+                return CastCost::Exact;
+            }
+            if (srcI->IsUnsigned () == dstI->IsUnsigned ()
+                || dstI->BitWidth () > srcI->BitWidth ()) {
+                return CastCost::SafeImplicit;
+            }
+        }
+    }
+
+    if (src->IsInteger () && dst->IsFloating ()) {
+        return CastCost::SafeImplicit;
+    }
+
+    if (src->IsFloating () && dst->IsFloating ()) {
+        const auto *srcF = src->AsFloating ();
+        const auto *dstF = dst->AsFloating ();
+
+        if (dstF->IsDouble () && srcF->IsFloat ()) {
+            return CastCost::SafeImplicit;
+        }
+        if (dstF->IsFloat () == srcF->IsFloat ()
+            || dstF->IsDouble () == srcF->IsDouble ()) {
+            return CastCost::Exact;
+        }
+    }
+
+    return CastCost::Incompatible;
 }
 
 }

@@ -21,6 +21,9 @@ enum class DiagCode : uint8_t {
     EDivByZero,
     ERedefinition,
     EUndefined,
+    ECannotFindFunction,
+    ENoMatchingFunction,
+    ECallIsAmbiguous,
 
     WUnusedVar,
     WLossPrecision,

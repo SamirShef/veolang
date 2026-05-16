@@ -16,6 +16,7 @@ CodeGen::generate (Node *node) {
         variant (VarDef, generateVarDef, VarDef);
         variant (Func, generateFuncDef, Function);
         variant (Ret, generateRet, Return);
+        variant (ExprStmt, generateExprStmt, ExprStmt);
     default: return;
     }
 #undef variant
@@ -70,11 +71,13 @@ CodeGen::generateFuncDef (Function *fd) {
         name,
         *_mod);
     _funcs.emplace_back (func);
+    _funcsMap.emplace (fd->BaseSymbol (), func);
 
     size_t i = 0;
     for (auto &a : func->args ()) {
         a.setName (fd->Args ()[i].Name.Val);
         _curFunc->Locals.emplace_back (&a);
+        ++i;
     }
 
     for (auto &bb : fd->Body ()) {
@@ -98,6 +101,11 @@ CodeGen::generateRet (Return *ret) {
     _builder.CreateRet (val);
 }
 
+void
+CodeGen::generateExprStmt (hir::ExprStmt *es) {
+    generateExpr (es->Expr ());
+}
+
 llvm::Value *
 CodeGen::generateExpr (Node *node) {
 #define variant(kind, func, type)                                                        \
@@ -110,6 +118,7 @@ CodeGen::generateExpr (Node *node) {
         variant (BinExpr, generateBinaryExpr, BinaryExpr);
         variant (UnExpr, generateUnaryExpr, UnaryExpr);
         variant (LoadVar, generateLoadVar, LoadVar);
+        variant (FuncCall, generateFuncCall, FuncCall);
     default: return nullptr;
     }
 #undef variant
@@ -247,6 +256,17 @@ CodeGen::generateLoadVar (LoadVar *lv) {
         return arg;
     }
     return _builder.CreateLoad (getType (lv->Type ()), lvalue);
+}
+
+llvm::Value *
+CodeGen::generateFuncCall (hir::FuncCall *fc) {
+    auto                      *func = _funcsMap.at (fc->Function ());
+    std::vector<llvm::Value *> args;
+    args.reserve (fc->Args ().size ());
+    for (const auto &a : fc->Args ()) {
+        args.emplace_back (generateExpr (a));
+    }
+    return _builder.CreateCall (func, args);
 }
 
 llvm::Value *

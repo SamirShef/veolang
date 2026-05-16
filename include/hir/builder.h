@@ -4,6 +4,8 @@
 #include <hir/basic_block.h>
 #include <hir/bin_expr.h>
 #include <hir/context.h>
+#include <hir/expr_stmt.h>
+#include <hir/func_call.h>
 #include <hir/lit_expr.h>
 #include <hir/load_var.h>
 #include <hir/ret.h>
@@ -127,6 +129,22 @@ public:
     CreateLoadVar (
         size_t id, basic::Type *type, bool isGlobal, llvm::SMLoc start, llvm::SMLoc end) {
         return _ctx.CreateNode<LoadVar> (id, type, isGlobal, start, end);
+    }
+
+    ExprStmt *
+    CreateExprStmt (Node *expr, llvm::SMLoc start, llvm::SMLoc end) {
+        auto *node = _ctx.CreateNode<ExprStmt> (expr, start, end);
+        AddToBlock (node);
+        return node;
+    }
+
+    FuncCall *
+    CreateCall (
+        symbols::Function  *func,
+        std::vector<Node *> args,
+        llvm::SMLoc         start,
+        llvm::SMLoc         end) {
+        return _ctx.CreateNode<FuncCall> (func, std::move (args), start, end);
     }
 };
 
