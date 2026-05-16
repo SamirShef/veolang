@@ -39,14 +39,17 @@ else()
         LLVM_LINK_LIBS
         core
         support
-        all-targets
-        asmparsers
-        asmprinters
         analysis
         target
         mc
         bitreader
         passes
+        AllTargetsCodeGens
+        AllTargetsAsmParsers
+        AllTargetsAsmPrinters
+        AllTargetsDescs
+        AllTargetsInfos
+        AllTargetsDisassemblers
     )
     message(STATUS "Using static LLVM components: ${LLVM_LINK_LIBS}")
 endif()
