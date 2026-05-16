@@ -1,4 +1,6 @@
 #pragma once
+#include "ast/exprs/asgn_expr.h"
+
 #include <ast/exprs/bin_expr.h>
 #include <ast/exprs/func_call.h>
 #include <ast/exprs/lit_expr.h>
@@ -28,14 +30,17 @@ private:
         if (!checkNull (stmt)) {
             return;
         }
+#define variant(kind, func, type)                                                        \
+    case NodeKind::kind: func (llvm::cast<type> (stmt)); break;
         switch (stmt->Kind ()) {
-        case NodeKind::VarDef: dumpVarDef (llvm::cast<VarDef> (stmt)); break;
-        case NodeKind::FuncDef: dumpFuncDef (llvm::cast<FuncDef> (stmt)); break;
-        case NodeKind::Ret: dumpRet (llvm::cast<Return> (stmt)); break;
-        case NodeKind::ExprStmt: dumpExprStmt (llvm::cast<ExprStmt> (stmt)); break;
+            variant (VarDef, dumpVarDef, VarDef);
+            variant (FuncDef, dumpFuncDef, FuncDef);
+            variant (Ret, dumpRet, Return);
+            variant (ExprStmt, dumpExprStmt, ExprStmt);
         default: {
         }
         }
+#undef variant
     }
 
     void
@@ -55,15 +60,19 @@ private:
         if (!checkNull (expr)) {
             return;
         }
+#define variant(kind, func, type)                                                        \
+    case NodeKind::kind: func (llvm::cast<type> (expr)); break;
         switch (expr->Kind ()) {
-        case NodeKind::LitExpr: dumpLiteralExpr (llvm::cast<LiteralExpr> (expr)); break;
-        case NodeKind::BinExpr: dumpBinaryExpr (llvm::cast<BinaryExpr> (expr)); break;
-        case NodeKind::UnExpr: dumpUnaryExpr (llvm::cast<UnaryExpr> (expr)); break;
-        case NodeKind::VarExpr: dumpVarExpr (llvm::cast<VarExpr> (expr)); break;
-        case NodeKind::FuncCall: dumpFuncCall (llvm::cast<FuncCall> (expr)); break;
+            variant (LitExpr, dumpLiteralExpr, LiteralExpr);
+            variant (BinExpr, dumpBinaryExpr, BinaryExpr);
+            variant (UnExpr, dumpUnaryExpr, UnaryExpr);
+            variant (VarExpr, dumpVarExpr, VarExpr);
+            variant (FuncCall, dumpFuncCall, FuncCall);
+            variant (AsgnExpr, dumpAsgnExpr, AsgnExpr);
         default: {
         }
         }
+#undef variant
     }
 
     void
@@ -80,6 +89,9 @@ private:
 
     void
     dumpFuncCall (FuncCall *fc);
+
+    void
+    dumpAsgnExpr (AsgnExpr *ae);
 
     void
     indent () {

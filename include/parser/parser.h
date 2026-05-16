@@ -114,6 +114,9 @@ private:
     static bool
     isKeyword (TokenKind kind);
 
+    static bool
+    isAsgnOp (TokenKind kind);
+
     bool
     expectSemi ();
 
