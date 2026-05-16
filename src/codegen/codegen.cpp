@@ -307,7 +307,7 @@ std::string
 CodeGen::mangleFunction (Function *func) const {
     auto              *sym = func->BaseSymbol ();
     std::ostringstream oss;
-    oss << "_BF";
+    oss << "_VF";
     oss << mangleModule (sym->Parent);
     oss << "E" << sym->Name.Val.size () << sym->Name.Val << "I";
     for (auto &a : sym->Args) {
@@ -321,7 +321,7 @@ std::string
 CodeGen::mangleGlobalVar (VarDef *var) const {
     auto              *sym = var->BaseSymbol ();
     std::ostringstream oss;
-    oss << "_BG";
+    oss << "_VG";
     oss << mangleModule (sym->Parent);
     oss << "E" << sym->Name.Val.size () << sym->Name.Val;
     return oss.str ();
