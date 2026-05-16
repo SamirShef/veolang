@@ -123,6 +123,7 @@ CodeGen::generateExpr (Node *node) {
         variant (UnExpr, generateUnaryExpr, UnaryExpr);
         variant (LoadVar, generateLoadVar, LoadVar);
         variant (FuncCall, generateFuncCall, FuncCall);
+        variant (StoreVar, generateStoreVar, StoreVar);
     default: return nullptr;
     }
 #undef variant
@@ -271,6 +272,13 @@ CodeGen::generateFuncCall (hir::FuncCall *fc) {
         args.emplace_back (generateExpr (a));
     }
     return _builder.CreateCall (func, args);
+}
+
+llvm::Value *
+CodeGen::generateStoreVar (hir::StoreVar *sv) {
+    auto *lvalue = generateLValue (sv->Ptr ());
+    auto *val    = generateExpr (sv->Expr ());
+    return _builder.CreateStore (val, lvalue);
 }
 
 llvm::Value *

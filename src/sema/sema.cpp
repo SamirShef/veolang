@@ -11,6 +11,21 @@ namespace veo {
 using namespace symbols;
 using namespace ast;
 
+static BinOp
+AsgnOpToBinOp (AsgnOp op) {
+#define variant(kind, op)                                                                \
+    case AsgnOp::kind: return BinOp::op;
+    switch (op) {
+        variant (PlusEq, Plus);
+        variant (MinusEq, Minus);
+        variant (MulEq, Mul);
+        variant (DivEq, Div);
+        variant (RemEq, Rem);
+    default: return BinOp::Invalid;
+    }
+#undef variant
+}
+
 void
 Sema::analyzeStmt (Stmt *stmt) {
 #define variant(kind, func, type)                                                        \
@@ -234,6 +249,7 @@ Sema::analyzeExpr (Expr *expr, Type *expectedType) {
         variant (UnExpr, analyzeUnaryExpr, UnaryExpr);
         variant (VarExpr, analyzeVarExpr, VarExpr);
         variant (FuncCall, analyzeFuncCall, FuncCall);
+        variant (AsgnExpr, analyzeAsgnExpr, AsgnExpr);
     default: return {};
     }
 #undef variant
@@ -555,7 +571,7 @@ Sema::analyzeVarExpr (VarExpr *ve, Type *expectedType) {
 }
 
 Sema::SemanticResult
-Sema::analyzeFuncCall (ast::FuncCall *fc, Type *expectedType) {
+Sema::analyzeFuncCall (FuncCall *fc, Type *expectedType) {
     auto it = _mod->Funcs.find (fc->Name ().Val);
     if (it == _mod->Funcs.end ()) {
         _diag
@@ -589,6 +605,42 @@ Sema::analyzeFuncCall (ast::FuncCall *fc, Type *expectedType) {
 
     return { Value (ValueKind::Unknown, func->RetType),
              _builder.CreateCall (func, std::move (hirArgs), fc->Start (), fc->End ()) };
+}
+
+Sema::SemanticResult
+Sema::analyzeAsgnExpr (AsgnExpr *ae, Type *expectedType) {
+    // always variable
+    auto ptr = analyzeExpr (ae->Ptr (), nullptr);
+    if (!ptr.Val.has_value ()) {
+        return {};
+    }
+    auto expr = analyzeExpr (ae->Init (), ptr.Val->Type);
+    if (!expr.Val.has_value ()) {
+        return {};
+    }
+    if (!canApplyAsgnOp (ae->Op (), ptr.Val->Type)) {
+        // TODO: report error
+        return {};
+    }
+    auto  var     = getVariable (llvm::cast<VarExpr> (ae->Ptr ())->Name ().Val);
+    auto *loadVar = _builder.CreateLoadVar (
+        var->Index,
+        var->Type,
+        var->IsGlobal,
+        ae->Ptr ()->Start (),
+        ae->Ptr ()->End ());
+    if (ae->Op () != AsgnOp::Eq) {
+        auto op   = AsgnOpToBinOp (ae->Op ());
+        expr.Node = _builder.CreateBinary (
+            op,
+            expr.Val->Type,
+            loadVar,
+            expr.Node,
+            ae->Init ()->Start (),
+            ae->Init ()->End ());
+    }
+    auto *node = _builder.CreateStoreVar (loadVar, expr.Node, ae->Start (), ae->End ());
+    return { expr.Val, node };
 }
 
 Type *
@@ -983,4 +1035,16 @@ Sema::checkCastCost (Type *src, Type *dst) {
 
     return CastCost::Incompatible;
 }
+
+bool
+Sema::canApplyAsgnOp (ast::AsgnOp op, Type *type) {
+    if (op == AsgnOp::Eq) {
+        return true;
+    }
+    if (type->IsNumber ()) {
+        return true;
+    }
+    return false;
+}
+
 }

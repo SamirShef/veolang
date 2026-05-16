@@ -9,6 +9,7 @@
 #include <hir/lit_expr.h>
 #include <hir/load_var.h>
 #include <hir/ret.h>
+#include <hir/store_var.h>
 #include <hir/un_expr.h>
 
 namespace veo::hir {
@@ -129,6 +130,11 @@ public:
     CreateLoadVar (
         size_t id, basic::Type *type, bool isGlobal, llvm::SMLoc start, llvm::SMLoc end) {
         return _ctx.CreateNode<LoadVar> (id, type, isGlobal, start, end);
+    }
+
+    StoreVar *
+    CreateStoreVar (Node *ptr, Node *expr, llvm::SMLoc start, llvm::SMLoc end) {
+        return _ctx.CreateNode<StoreVar> (ptr, expr, start, end);
     }
 
     ExprStmt *
