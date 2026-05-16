@@ -45,6 +45,45 @@ Sema::analyzeVarDef (VarDef *vd) {
     Type *type     = vd->Type ();
     resolveType (&vd->Type ());
     auto val = analyzeExpr (vd->Init (), vd->Type ());
+    if (val.Val.has_value ()) {
+        if (isGlobal) {
+            switch (vd->Init ()->Kind ()) {
+            case ast::NodeKind::LitExpr:
+            case ast::NodeKind::BinExpr:
+            case ast::NodeKind::UnExpr:
+            case ast::NodeKind::VarExpr: break;
+            default: {
+                _diag
+                    .Report (
+                        DiagCode::ECannotInitRuntimeVal,
+                        "cannot initialize global variable with a runtime value",
+                        Severity::Error)
+                    .AddSpan (
+                        vd->Init ()->Start (),
+                        vd->Init ()->End (),
+                        "evaluated at runtime")
+                    .AddNote (
+                        "global variables can only be initialized with compile-time "
+                        "constants or other global variables");
+                return;
+            }
+            }
+        }
+        if (vd->IsConst ()) {
+            if (val.Val->Kind != ValueKind::Const) {
+                _diag
+                    .Report (
+                        DiagCode::ENotAConst,
+                        "initializer element is not a constant expression",
+                        Severity::Error)
+                    .AddSpan (
+                        vd->Init ()->Start (),
+                        vd->Init ()->End (),
+                        "non-constant expression");
+                return;
+            }
+        }
+    }
     if (type == nullptr && val.Val.has_value ()) {
         type = val.Val->Type;
     }
@@ -944,5 +983,4 @@ Sema::checkCastCost (Type *src, Type *dst) {
 
     return CastCost::Incompatible;
 }
-
 }
