@@ -44,12 +44,10 @@ else()
         mc
         bitreader
         passes
-        AllTargetsCodeGens
-        AllTargetsAsmParsers
-        AllTargetsAsmPrinters
-        AllTargetsDescs
-        AllTargetsInfos
-        AllTargetsDisassemblers
+        codegen
+        asmparser
+        asmprinter
+        ${LLVM_TARGETS_TO_BUILD}
     )
     message(STATUS "Using static LLVM components: ${LLVM_LINK_LIBS}")
 endif()
