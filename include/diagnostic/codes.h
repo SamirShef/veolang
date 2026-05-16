@@ -24,6 +24,8 @@ enum class DiagCode : uint8_t {
     ECannotFindFunction,
     ENoMatchingFunction,
     ECallIsAmbiguous,
+    ENotAConst,
+    ECannotInitRuntimeVal,
 
     WUnusedVar,
     WLossPrecision,
