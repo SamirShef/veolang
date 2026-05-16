@@ -7,14 +7,20 @@
 
 namespace veo {
 
+using namespace symbols;
+using namespace ast;
+
 void
 Sema::analyzeStmt (Stmt *stmt) {
+#define variant(kind, func, type)                                                        \
+    case NodeKind::kind: func (llvm::cast<type> (stmt)); break;
     switch (stmt->Kind ()) {
-    case NodeKind::VarDef: analyzeVarDef (llvm::cast<VarDef> (stmt)); break;
-    case NodeKind::FuncDef: analyzeFuncDef (llvm::cast<FuncDef> (stmt)); break;
-    case NodeKind::Ret: analyzeRet (llvm::cast<Return> (stmt)); break;
+        variant (VarDef, analyzeVarDef, VarDef);
+        variant (FuncDef, analyzeFuncDef, FuncDef);
+        variant (Ret, analyzeRet, Return);
     default: break;
     }
+#undef variant
 }
 
 void
@@ -44,20 +50,22 @@ Sema::analyzeVarDef (VarDef *vd) {
         vd->Name (),
         type,
         vd->IsConst (),
+        isGlobal,
         isGlobal ? _vars.top ().Vars.size () : _localsCount++,
         val.Val);
-    _vars.top ().Vars.emplace (vd->Name ().Val, var);
+    _vars.top ().Vars.emplace (var.Name.Val, var);
     if (isGlobal) {
-        _mod->Vars.emplace (vd->Name ().Val, var);
+        _mod->Vars.emplace (var.Name.Val, var);
     }
     _builder.CreateVariable (
-        vd->Name (),
-        vd->Type (),
+        var.Name,
+        type,
         val.Node,
         vd->IsConst (),
         isGlobal,
         vd->Start (),
-        vd->End ());
+        vd->End (),
+        isGlobal ? &_mod->Vars.at (var.Name.Val) : nullptr);
 }
 
 void
@@ -80,16 +88,21 @@ Sema::analyzeFuncDef (FuncDef *fd) {
     for (auto &arg : fd->Args ()) {
         resolveType (&arg.Type);
     }
-    auto func = Function (fd->Name (), fd->RetType (), fd->Args ());
-    _mod->Funcs.emplace (fd->Name ().Val, FunctionCandidates ());
-    _mod->Funcs.at (fd->Name ().Val).Candidates.emplace_back (func);
+    auto func = Function (fd->Name (), fd->RetType (), fd->Args (), _mod);
+    auto it   = _mod->Funcs.find (func.Name.Val);
+    if (it == _mod->Funcs.end ()) {
+        _mod->Funcs.emplace (func.Name.Val, FunctionCandidates ());
+    }
+    auto *sym = &_mod->Funcs.at (func.Name.Val)
+                     .Candidates.emplace_back (std::make_unique<Function> (func));
 
     auto *funcNode = _builder.CreateFunction (
-        fd->Name (),
+        func.Name,
         fd->RetType (),
         fd->Args (),
         fd->Start (),
-        fd->End ());
+        fd->End (),
+        sym->get ());
     auto *entry = _builder.CreateBasicBlock (funcNode, "entry");
     _builder.SetInsertionPoint (entry);
 
@@ -99,17 +112,18 @@ Sema::analyzeFuncDef (FuncDef *fd) {
     _localsCount = 0;
 
     for (const auto &arg : fd->Args ()) {
-        _builder.CreateVariable (
-            arg.Name,
-            arg.Type,
-            nullptr,
-            false,
-            false,
-            arg.Name.Start,
-            arg.Name.End);
+        // _builder.CreateVariable (
+        //     arg.Name,
+        //     arg.Type,
+        //     nullptr,
+        //     false,
+        //     false,
+        //     arg.Name.Start,
+        //     arg.Name.End,
+        //     nullptr);
         _vars.top ().Vars.emplace (
             arg.Name.Val,
-            Variable (arg.Name, arg.Type, false, _localsCount++));
+            Variable (arg.Name, arg.Type, false, false, _localsCount++));
     }
 
     for (const auto &stmt : fd->Body ()) {
@@ -133,6 +147,7 @@ Sema::analyzeRet (Return *ret) {
                 .AddSpan (ret->Start (), ret->End ());
             return;
         }
+        _builder.CreateRet (nullptr, ret->Start (), ret->End ());
     } else {
         auto res = analyzeExpr (ret->RetExpr (), nullptr);
         if (!res.Val.has_value ()) {
@@ -153,25 +168,25 @@ Sema::analyzeRet (Return *ret) {
             &_funcRetTypes.top (),
             ret->RetExpr ()->Start (),
             ret->RetExpr ()->End ());
+        _builder.CreateRet (res.Node, ret->Start (), ret->End ());
     }
 }
 
 Sema::SemanticResult
 Sema::analyzeExpr (Expr *expr, Type *expectedType) {
+#define variant(kind, func, type)                                                        \
+    case NodeKind::kind: return func (llvm::cast<type> (expr), expectedType);
     if (expr == nullptr) {
         return {};
     }
     switch (expr->Kind ()) {
-    case NodeKind::LitExpr:
-        return analyzeLiteralExpr (llvm::cast<LiteralExpr> (expr), expectedType);
-    case NodeKind::BinExpr:
-        return analyzeBinaryExpr (llvm::cast<BinaryExpr> (expr), expectedType);
-    case NodeKind::UnExpr:
-        return analyzeUnaryExpr (llvm::cast<UnaryExpr> (expr), expectedType);
-    case NodeKind::VarExpr:
-        return analyzeVarExpr (llvm::cast<VarExpr> (expr), expectedType);
+        variant (LitExpr, analyzeLiteralExpr, LiteralExpr);
+        variant (BinExpr, analyzeBinaryExpr, BinaryExpr);
+        variant (UnExpr, analyzeUnaryExpr, UnaryExpr);
+        variant (VarExpr, analyzeVarExpr, VarExpr);
     default: return {};
     }
+#undef variant
 }
 
 // NOLINTBEGIN(readability-function-cognitive-complexity)
@@ -240,7 +255,8 @@ Sema::analyzeLiteralExpr (LiteralExpr *le, Type *expectedType) {
     case TokenKind::IntLit: {
         if (expectedType == nullptr) {
             // NOLINTNEXTLINE(cppcoreguidelines-owning-memory)
-            expectedType = new IntegerType (32);
+            expectedType
+                = new IntegerType (32); // NOLINT(cppcoreguidelines-avoid-magic-numbers)
         }
         if (!expectedType->IsInteger ()) {
             _diag
@@ -439,7 +455,7 @@ Sema::analyzeUnaryExpr (UnaryExpr *ue, Type *expectedType) {
         }
     }
 
-    auto *node = _builder.CreateUnary (op, rhs.Node, ue->Start (), ue->End ());
+    auto *node = _builder.CreateUnary (op, resType, rhs.Node, ue->Start (), ue->End ());
     auto  res  = SemanticResult (Value (ValueKind::Unknown, resType), node);
 
     if (expectedType != nullptr) {
@@ -470,7 +486,12 @@ Sema::analyzeVarExpr (VarExpr *ve, Type *expectedType) {
     if (var->IsConst) {
         node = _builder.CreateLiteral (value, ve->Start (), ve->End ());
     } else {
-        node = _builder.CreateLoadVar (var->Index, var->Type, ve->Start (), ve->End ());
+        node = _builder.CreateLoadVar (
+            var->Index,
+            var->Type,
+            var->IsGlobal,
+            ve->Start (),
+            ve->End ());
     }
     auto res = SemanticResult (value, node);
     if (expectedType != nullptr) {
@@ -509,9 +530,9 @@ Sema::getFunction (const std::string &name, const std::vector<Argument> &args) {
     const auto &candidates = _mod->Funcs.at (name);
     for (const auto &f : candidates.Candidates) {
         unsigned coincidences = 0;
-        if (f.Args.size () == args.size ()) {
+        if (f->Args.size () == args.size ()) {
             for (size_t i = 0; i < args.size (); ++i) {
-                if (*f.Args[i].Type == *args[i].Type) {
+                if (*f->Args[i].Type == *args[i].Type) {
                     ++coincidences;
                 }
             }
@@ -520,7 +541,7 @@ Sema::getFunction (const std::string &name, const std::vector<Argument> &args) {
         }
 
         if (coincidences == args.size ()) {
-            return f;
+            return *f;
         }
     }
     return std::nullopt;
@@ -566,6 +587,7 @@ Sema::getCommonType (Type *lhs, Type *rhs, llvm::SMLoc start, llvm::SMLoc end) {
     if (lhs->IsFloating () && rhs->IsInteger ()) {
         const auto *lhsT = lhs->AsFloating ();
         const auto *rhsT = rhs->AsInteger ();
+        // NOLINTBEGIN(cppcoreguidelines-avoid-magic-numbers)
         if (lhsT->IsFloat () && rhsT->BitWidth () >= 32
             || lhsT->IsDouble () && rhsT->BitWidth () >= 64) {
             _diag
@@ -591,6 +613,7 @@ Sema::getCommonType (Type *lhs, Type *rhs, llvm::SMLoc start, llvm::SMLoc end) {
         }
         return rhs;
     }
+    // NOLINTEND(cppcoreguidelines-avoid-magic-numbers)
     _diag
         .Report (
             DiagCode::ECannotFindCommonType,

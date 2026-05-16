@@ -39,12 +39,15 @@ else()
         LLVM_LINK_LIBS
         core
         support
-        native
         analysis
         target
         mc
         bitreader
         passes
+        codegen
+        asmparser
+        asmprinter
+        ${LLVM_TARGETS_TO_BUILD}
     )
     message(STATUS "Using static LLVM components: ${LLVM_LINK_LIBS}")
 endif()

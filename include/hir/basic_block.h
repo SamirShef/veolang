@@ -25,9 +25,8 @@ public:
         }
         if (node->IsTerminator ()) {
             _terminator = node;
-        } else {
-            _nodes.push_back (node);
         }
+        _nodes.push_back (node);
     }
 
     std::string
