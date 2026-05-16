@@ -1,5 +1,5 @@
 #pragma once
-#include <ast/ast.h>
+#include <ast/expr.h>
 #include <ast/stmts/func_def.h>
 #include <basic/name.h>
 #include <basic/types/type.h>

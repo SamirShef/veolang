@@ -1,8 +1,10 @@
 #pragma once
 #include <ast/exprs/bin_expr.h>
+#include <ast/exprs/func_call.h>
 #include <ast/exprs/lit_expr.h>
 #include <ast/exprs/un_expr.h>
 #include <ast/exprs/var_expr.h>
+#include <ast/stmts/expr_stmt.h>
 #include <ast/stmts/ret.h>
 #include <ast/stmts/var_def.h>
 #include <basic/symbols/module.h>
@@ -35,6 +37,8 @@ class Sema {
         SemanticResult (OptValue val, hir::Node *node) : Val (val), Node (node) {}
     };
 
+    enum class CastCost : uint16_t { Exact = 0, SafeImplicit = 1, Incompatible = 1000 };
+
 public:
     Sema (DiagnosticEngine &diag, hir::Context &ctx, symbols::Module *mod)
         : _diag (diag), _builder (ctx), _mod (mod) {
@@ -61,6 +65,9 @@ private:
     void
     analyzeRet (ast::Return *ret);
 
+    void
+    analyzeExprStmt (ast::ExprStmt *es);
+
     SemanticResult
     analyzeExpr (ast::Expr *expr, Type *expectedType);
 
@@ -75,6 +82,9 @@ private:
 
     SemanticResult
     analyzeVarExpr (ast::VarExpr *ve, Type *expectedType);
+
+    SemanticResult
+    analyzeFuncCall (ast::FuncCall *fc, Type *expectedType);
 
     Type *
     resolveType (Type **type);
@@ -111,6 +121,16 @@ private:
 
     static bool
     canFit (Value &val, const Type *targetType);
+
+    symbols::Function *
+    resolveBestOverload (
+        symbols::FunctionCandidates *candidates,
+        const std::vector<Type *>   &argTypes,
+        llvm::SMLoc                  start,
+        llvm::SMLoc                  end);
+
+    static CastCost
+    checkCastCost (Type *src, Type *dst);
 };
 
 }

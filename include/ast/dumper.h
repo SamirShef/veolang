@@ -1,8 +1,10 @@
 #pragma once
 #include <ast/exprs/bin_expr.h>
+#include <ast/exprs/func_call.h>
 #include <ast/exprs/lit_expr.h>
 #include <ast/exprs/un_expr.h>
 #include <ast/exprs/var_expr.h>
+#include <ast/stmts/expr_stmt.h>
 #include <ast/stmts/ret.h>
 #include <ast/stmts/var_def.h>
 #include <llvm/Support/raw_ostream.h>
@@ -30,6 +32,7 @@ private:
         case NodeKind::VarDef: dumpVarDef (llvm::cast<VarDef> (stmt)); break;
         case NodeKind::FuncDef: dumpFuncDef (llvm::cast<FuncDef> (stmt)); break;
         case NodeKind::Ret: dumpRet (llvm::cast<Return> (stmt)); break;
+        case NodeKind::ExprStmt: dumpExprStmt (llvm::cast<ExprStmt> (stmt)); break;
         default: {
         }
         }
@@ -45,6 +48,9 @@ private:
     dumpRet (Return *ret);
 
     void
+    dumpExprStmt (ExprStmt *es);
+
+    void
     dumpExpr (Expr *expr) {
         if (!checkNull (expr)) {
             return;
@@ -54,6 +60,7 @@ private:
         case NodeKind::BinExpr: dumpBinaryExpr (llvm::cast<BinaryExpr> (expr)); break;
         case NodeKind::UnExpr: dumpUnaryExpr (llvm::cast<UnaryExpr> (expr)); break;
         case NodeKind::VarExpr: dumpVarExpr (llvm::cast<VarExpr> (expr)); break;
+        case NodeKind::FuncCall: dumpFuncCall (llvm::cast<FuncCall> (expr)); break;
         default: {
         }
         }
@@ -70,6 +77,9 @@ private:
 
     void
     dumpVarExpr (VarExpr *ve);
+
+    void
+    dumpFuncCall (FuncCall *fc);
 
     void
     indent () {

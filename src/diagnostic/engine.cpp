@@ -150,10 +150,14 @@ DiagnosticEngine::printDiagnosticBody (DiagnosticBuilder &diag) {
         }
     }
 
-    for (const std::string &note : diag.Notes ()) {
+    for (const auto &[label, els] : diag.Notes ()) {
         llvm::errs ().changeColor (llvm::raw_fd_ostream::CYAN, true)
             << std::string (maxLineWidth, ' ') << "  = note: ";
-        llvm::errs () << llvm::raw_fd_ostream::RESET << note << '\n';
+        llvm::errs () << llvm::raw_fd_ostream::RESET << label << '\n';
+        for (const auto &el : els) {
+            llvm::errs () << std::string (maxLineWidth + sizeof ("  = note: ") - 1, ' ');
+            llvm::errs () << llvm::raw_fd_ostream::RESET << el << '\n';
+        }
     }
 }
 

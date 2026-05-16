@@ -1,5 +1,4 @@
-#include "ast/access_modifier.h"
-
+#include <ast/access_modifier.h>
 #include <ast/dumper.h>
 
 namespace veo::ast {
@@ -85,6 +84,15 @@ Dumper::dumpRet (Return *ret) {
 }
 
 void
+Dumper::dumpExprStmt (ExprStmt *es) {
+    indent ();
+    _os << "ExprStmt:\n";
+    ++_indentLvl;
+    dumpExpr (es->GetExpr ());
+    --_indentLvl;
+}
+
+void
 Dumper::dumpLiteralExpr (LiteralExpr *le) {
     indent ();
     _os << "LiteralExpr: " << le->Value () << '\n';
@@ -113,6 +121,17 @@ void
 Dumper::dumpVarExpr (VarExpr *ve) {
     indent ();
     _os << "VarExpr: " << ve->Name ().Val << '\n';
+}
+
+void
+Dumper::dumpFuncCall (FuncCall *fc) {
+    indent ();
+    _os << "FuncCall: " << fc->Name ().Val << '\n';
+    ++_indentLvl;
+    for (auto &a : fc->Args ()) {
+        dumpExpr (a);
+    }
+    --_indentLvl;
 }
 
 }
