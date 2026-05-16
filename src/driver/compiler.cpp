@@ -152,7 +152,8 @@ Compile (
         llvm::raw_fd_ostream output (outputPath.string (), ec);
         ast::Dumper          dumper (output);
         llvm::errs ().changeColor (llvm::raw_fd_ostream::WHITE, true)
-            << "\nAST dumped to " << outputPath.string () << '\n'
+            << "AST was dumped to "
+            << outputPath.lexically_relative (projectPath).string () << '\n'
             << llvm::raw_fd_ostream::RESET;
         dumper.Dump (parseRes);
     }
@@ -183,6 +184,10 @@ Compile (
             exit (1);
         }
         llvmMod->print (os, nullptr);
+        llvm::errs ().changeColor (llvm::raw_fd_ostream::WHITE, true)
+            << "LLVM IR was dumped to "
+            << llvmIRPath.lexically_relative (projectPath).string () << '\n'
+            << llvm::raw_fd_ostream::RESET;
     }
 
     if (!EmitObjectFile (llvmMod.get (), objPath.string (), tripleStr)) {

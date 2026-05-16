@@ -75,6 +75,7 @@ CodeGen::generateFuncDef (Function *fd) {
     for (auto &a : func->args ()) {
         a.setName (fd->Args ()[i].Name.Val);
         _curFunc->Locals.emplace_back (&a);
+        ++i;
     }
 
     for (auto &bb : fd->Body ()) {
