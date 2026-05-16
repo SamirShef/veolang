@@ -48,6 +48,13 @@ public:
     void
     Analyze (ParseResult &res) {
         for (size_t i = 0; i < res.Count; ++i) {
+            auto *stmt = llvm::cast<ast::Stmt> (res.Nodes[i]);
+            if (stmt->Kind () == ast::NodeKind::FuncDef) {
+                declareFunc (llvm::cast<ast::FuncDef> (stmt));
+            }
+        }
+
+        for (size_t i = 0; i < res.Count; ++i) {
             analyzeStmt (llvm::cast<ast::Stmt> (res.Nodes[i]));
         }
     }
@@ -58,6 +65,9 @@ private:
 
     void
     analyzeVarDef (ast::VarDef *vd);
+
+    void
+    declareFunc (ast::FuncDef *fd);
 
     void
     analyzeFuncDef (ast::FuncDef *fd);

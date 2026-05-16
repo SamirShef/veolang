@@ -11,8 +11,15 @@ struct NameObj {
 
     NameObj (std::string val, llvm::SMLoc start, llvm::SMLoc end)
         : Val (std::move (val)), Start (start), End (end) {}
+
     explicit NameObj (Token tok) : NameObj (std::move (tok.Val), tok.Start, tok.End) {}
+
     NameObj () = default;
+
+    bool
+    operator== (const NameObj &other) const {
+        return Val == other.Val && Start == other.Start && End == other.End;
+    }
 };
 
 }
