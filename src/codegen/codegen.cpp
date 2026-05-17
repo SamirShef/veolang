@@ -36,7 +36,9 @@ void
 CodeGen::generateVarDef (VarDef *vd) {
     bool        isGlobal = !_curFunc.has_value ();
     std::string name     = isGlobal ? mangleGlobalVar (vd) : vd->Name ().Val;
-    auto       *init     = generateExpr (vd->Init ());
+    auto       *init     = vd->Init () != nullptr
+                               ? generateExpr (vd->Init ())
+                               : llvm::ConstantExpr::getNullValue (getType (vd->Type ()));
     auto       *type     = getType (vd->Type ());
     if (isGlobal) {
         auto *gv = new llvm::GlobalVariable (
