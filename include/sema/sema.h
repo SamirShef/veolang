@@ -5,7 +5,9 @@
 #include <ast/exprs/lit_expr.h>
 #include <ast/exprs/un_expr.h>
 #include <ast/exprs/var_expr.h>
+#include <ast/stmts/break_continue.h>
 #include <ast/stmts/expr_stmt.h>
+#include <ast/stmts/for_loop.h>
 #include <ast/stmts/if_else.h>
 #include <ast/stmts/ret.h>
 #include <ast/stmts/var_def.h>
@@ -40,6 +42,12 @@ class Sema {
     };
 
     enum class CastCost : uint16_t { Exact = 0, SafeImplicit = 1, Incompatible = 1000 };
+
+    struct Loop {
+        hir::BasicBlock *Break;
+        hir::BasicBlock *Continue;
+    };
+    std::stack<Loop> _loops;
 
 public:
     Sema (DiagnosticEngine &diag, hir::Context &ctx, symbols::Module *mod)
@@ -82,6 +90,12 @@ private:
 
     void
     analyzeIfElseStmt (ast::IfElseStmt *ies);
+
+    void
+    analyzeForLoop (ast::ForLoopStmt *fls);
+
+    void
+    analyzeBreakContinue (ast::BreakContinue *bc);
 
     SemanticResult
     analyzeExpr (ast::Expr *expr, Type *expectedType);

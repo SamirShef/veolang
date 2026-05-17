@@ -122,40 +122,40 @@ Dumper::dumpIfElse (IfElseStmt *ies) {
 }
 
 void
-Dumper::dumpForLoop (ForLoopStmt *fl) {
+Dumper::dumpForLoop (ForLoopStmt *fls) {
     indent ();
     _os << "ForLoopStmt:\n";
     ++_indentLvl;
 
-    if (fl->Cond () != nullptr) {
+    if (fls->Cond () != nullptr) {
         indent ();
         _os << "Cond:\n";
         ++_indentLvl;
-        dumpExpr (fl->Cond ());
+        dumpExpr (fls->Cond ());
         --_indentLvl;
     }
 
-    if (fl->Indexator () != nullptr) {
+    if (fls->Indexator () != nullptr) {
         indent ();
         _os << "Indexator:\n";
         ++_indentLvl;
-        dumpStmt (fl->Indexator ());
+        dumpStmt (fls->Indexator ());
         --_indentLvl;
     }
 
-    if (fl->Iteration () != nullptr) {
+    if (fls->Iteration () != nullptr) {
         indent ();
         _os << "Iteration:\n";
         ++_indentLvl;
-        dumpStmt (fl->Iteration ());
+        dumpStmt (fls->Iteration ());
         --_indentLvl;
     }
 
-    if (!fl->Body ().empty ()) {
+    if (!fls->Body ().empty ()) {
         indent ();
         _os << "Body:\n";
         ++_indentLvl;
-        for (const auto &stmt : fl->Body ()) {
+        for (const auto &stmt : fls->Body ()) {
             dumpStmt (stmt);
         }
         --_indentLvl;
