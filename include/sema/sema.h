@@ -1,6 +1,4 @@
 #pragma once
-#include "basic/types/type.h"
-
 #include <ast/exprs/asgn_expr.h>
 #include <ast/exprs/bin_expr.h>
 #include <ast/exprs/func_call.h>
@@ -8,6 +6,7 @@
 #include <ast/exprs/un_expr.h>
 #include <ast/exprs/var_expr.h>
 #include <ast/stmts/expr_stmt.h>
+#include <ast/stmts/if_else.h>
 #include <ast/stmts/ret.h>
 #include <ast/stmts/var_def.h>
 #include <basic/symbols/module.h>
@@ -80,6 +79,9 @@ private:
 
     void
     analyzeExprStmt (ast::ExprStmt *es);
+
+    void
+    analyzeIfElseStmt (ast::IfElseStmt *ies);
 
     SemanticResult
     analyzeExpr (ast::Expr *expr, Type *expectedType);

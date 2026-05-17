@@ -17,6 +17,7 @@ CodeGen::generate (Node *node) {
         variant (Func, generateFuncDef, Function);
         variant (Ret, generateRet, Return);
         variant (ExprStmt, generateExprStmt, ExprStmt);
+        variant (Branch, generateBranch, Branch);
     default: return;
     }
 #undef variant
@@ -24,10 +25,7 @@ CodeGen::generate (Node *node) {
 
 void
 CodeGen::generateBasicBlock (BasicBlock *bb) {
-    auto *block = llvm::BasicBlock::Create (
-        _ctx,
-        bb->Name (),
-        _mod->getFunction (mangleFunction (bb->Parent ())));
+    auto *block = _basicBlocksMap.at (bb);
     _builder.SetInsertPoint (block);
     for (auto &node : bb->Body ()) {
         generate (node);
@@ -57,7 +55,7 @@ CodeGen::generateVarDef (VarDef *vd) {
 }
 
 void
-CodeGen::declareFunc (hir::Function *fd) {
+CodeGen::declareFunc (Function *fd) {
     std::string               name = mangleFunction (fd);
     std::vector<llvm::Type *> args;
     for (auto &a : fd->Args ()) {
@@ -85,6 +83,12 @@ CodeGen::generateFuncDef (Function *fd) {
     }
 
     for (auto &bb : fd->Body ()) {
+        // declaration of basic blocks
+        auto *block = llvm::BasicBlock::Create (_ctx, bb->Name (), func);
+        _basicBlocksMap.emplace (bb, block);
+    }
+    for (auto &bb : fd->Body ()) {
+        // definition of basic blocks
         generateBasicBlock (bb);
     }
     _curFunc = std::nullopt;
@@ -106,8 +110,20 @@ CodeGen::generateRet (Return *ret) {
 }
 
 void
-CodeGen::generateExprStmt (hir::ExprStmt *es) {
+CodeGen::generateExprStmt (ExprStmt *es) {
     generateExpr (es->Expr ());
+}
+
+void
+CodeGen::generateBranch (Branch *br) {
+    if (br->Cond () != nullptr) {
+        auto *thenBB = _basicBlocksMap.at (br->Then ());
+        auto *elseBB = _basicBlocksMap.at (br->Else ());
+        _builder.CreateCondBr (generateExpr (br->Cond ()), thenBB, elseBB);
+    } else {
+        auto *bb = _basicBlocksMap.at (br->Then ());
+        _builder.CreateBr (bb);
+    }
 }
 
 llvm::Value *
@@ -264,7 +280,7 @@ CodeGen::generateLoadVar (LoadVar *lv) {
 }
 
 llvm::Value *
-CodeGen::generateFuncCall (hir::FuncCall *fc) {
+CodeGen::generateFuncCall (FuncCall *fc) {
     auto                      *func = _funcsMap.at (fc->Function ());
     std::vector<llvm::Value *> args;
     args.reserve (fc->Args ().size ());
@@ -275,7 +291,7 @@ CodeGen::generateFuncCall (hir::FuncCall *fc) {
 }
 
 llvm::Value *
-CodeGen::generateStoreVar (hir::StoreVar *sv) {
+CodeGen::generateStoreVar (StoreVar *sv) {
     auto *lvalue = generateLValue (sv->Ptr ());
     auto *val    = generateExpr (sv->Expr ());
     _builder.CreateStore (val, lvalue);
@@ -288,7 +304,7 @@ CodeGen::generateLValue (Node *node) {
         return nullptr;
     }
     switch (node->Kind ()) {
-    case hir::NodeKind::LoadVar: {
+    case NodeKind::LoadVar: {
         auto *lv = llvm::cast<LoadVar> (node);
         if (lv->IsGlobal ()) {
             return _globals[lv->Id ()];

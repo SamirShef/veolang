@@ -1,4 +1,6 @@
 #pragma once
+#include "hir/branch.h"
+
 #include <basic/name.h>
 #include <basic/types/type.h>
 #include <hir/basic_block.h>
@@ -151,6 +153,23 @@ public:
         llvm::SMLoc         start,
         llvm::SMLoc         end) {
         return _ctx.CreateNode<FuncCall> (func, std::move (args), start, end);
+    }
+
+    Branch *
+    CreateBr (
+        Node       *cond,
+        BasicBlock *thenBB,
+        BasicBlock *elseBB,
+        llvm::SMLoc start,
+        llvm::SMLoc end) {
+        auto *node = _ctx.CreateNode<Branch> (cond, thenBB, elseBB, start, end);
+        AddToBlock (node);
+        return node;
+    }
+
+    Branch *
+    CreateBr (BasicBlock *branch, llvm::SMLoc start, llvm::SMLoc end) {
+        return CreateBr (nullptr, branch, nullptr, start, end);
     }
 };
 

@@ -35,6 +35,7 @@ Sema::analyzeStmt (Stmt *stmt) {
         variant (FuncDef, analyzeFuncDef, FuncDef);
         variant (Ret, analyzeRet, Return);
         variant (ExprStmt, analyzeExprStmt, ExprStmt);
+        variant (IfElse, analyzeIfElseStmt, IfElseStmt);
     default: break;
     }
 #undef variant
@@ -234,6 +235,43 @@ void
 Sema::analyzeExprStmt (ast::ExprStmt *es) {
     auto res = analyzeExpr (es->GetExpr (), nullptr);
     _builder.CreateExprStmt (res.Node, es->Start (), es->End ());
+}
+
+void
+Sema::analyzeIfElseStmt (ast::IfElseStmt *ies) {
+    // NOLINTNEXTLINE(cppcoreguidelines-owning-memory)
+    auto  cond    = analyzeExpr (ies->Cond (), new BoolType ());
+    auto *thenBB  = _builder.CreateBasicBlock (_builder.Parent (), "then");
+    auto *elseBB  = _builder.CreateBasicBlock (_builder.Parent (), "else");
+    auto *mergeBB = _builder.CreateBasicBlock (_builder.Parent (), "merge");
+
+    _builder.CreateBr (
+        cond.Node,
+        thenBB,
+        elseBB,
+        ies->Cond ()->Start (),
+        ies->Cond ()->End ());
+
+    // then
+    _builder.SetInsertionPoint (thenBB);
+    _vars.emplace ();
+    for (const auto &stmt : ies->Then ()) {
+        analyzeStmt (stmt);
+    }
+    _vars.pop ();
+    _builder.CreateBr (mergeBB, ies->Cond ()->Start (), ies->Cond ()->End ());
+
+    // else
+    _builder.SetInsertionPoint (elseBB);
+    _vars.emplace ();
+    for (const auto &stmt : ies->Else ()) {
+        analyzeStmt (stmt);
+    }
+    _vars.pop ();
+    _builder.CreateBr (mergeBB, ies->Cond ()->Start (), ies->Cond ()->End ());
+
+    // merge
+    _builder.SetInsertionPoint (mergeBB);
 }
 
 Sema::SemanticResult
@@ -644,6 +682,17 @@ Sema::analyzeAsgnExpr (AsgnExpr *ae, Type *expectedType) {
             expr.Node,
             ae->Init ()->Start (),
             ae->Init ()->End ());
+        if (var->IsConst) {
+            expr.Val = foldBinary (
+                op,
+                *var->Val,
+                *expr.Val,
+                expr.Val->Type,
+                ae->Init ()->Start (),
+                ae->Init ()->End ());
+        } else {
+            expr.Val = Value (ValueKind::Unknown, expr.Val->Type);
+        }
     }
     auto *node = _builder.CreateStoreVar (loadVar, expr.Node, ae->Start (), ae->End ());
     return { expr.Val, node };

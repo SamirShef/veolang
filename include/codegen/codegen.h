@@ -1,5 +1,6 @@
 #pragma once
 #include <hir/bin_expr.h>
+#include <hir/branch.h>
 #include <hir/expr_stmt.h>
 #include <hir/func.h>
 #include <hir/func_call.h>
@@ -29,6 +30,7 @@ class CodeGen {
     llvm::LLVMContext                                         _ctx;
     llvm::IRBuilder<>                                         _builder;
     std::unique_ptr<llvm::Module>                             _mod;
+    std::unordered_map<hir::BasicBlock *, llvm::BasicBlock *> _basicBlocksMap;
 
     struct CurrentFunction {
         std::vector<llvm::Value *> Locals;
@@ -89,6 +91,9 @@ private:
 
     void
     generateExprStmt (hir::ExprStmt *es);
+
+    void
+    generateBranch (hir::Branch *br);
 
     llvm::Value *
     generateExpr (hir::Node *node);
