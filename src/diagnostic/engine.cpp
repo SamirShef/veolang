@@ -136,7 +136,9 @@ DiagnosticEngine::printDiagnosticBody (DiagnosticBuilder &diag) {
         llvm::errs () << std::string (span.Span.Start.getPointer () - lineStart, ' ');
         char underlineSymbol = span.IsPrimary ? '^' : '-';
         llvm::errs ().changeColor (llvm::raw_fd_ostream::RED, true) << std::string (
-            span.Span.End.getPointer () - span.Span.Start.getPointer (),
+            std::min (
+                span.Span.End.getPointer () - span.Span.Start.getPointer (),
+                lineEnd - lineStart),
             underlineSymbol);
         llvm::errs ().changeColor (llvm::raw_fd_ostream::WHITE, true);
         if (!span.Label.empty ()) {

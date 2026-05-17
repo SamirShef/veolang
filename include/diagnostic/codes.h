@@ -26,6 +26,7 @@ enum class DiagCode : uint8_t {
     ECallIsAmbiguous,
     ENotAConst,
     ECannotInitRuntimeVal,
+    ENotAllowedInThisScope,
 
     WUnusedVar,
     WLossPrecision,
