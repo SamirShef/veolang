@@ -1,12 +1,12 @@
 #pragma once
-#include "ast/exprs/asgn_expr.h"
-
+#include <ast/exprs/asgn_expr.h>
 #include <ast/exprs/bin_expr.h>
 #include <ast/exprs/func_call.h>
 #include <ast/exprs/lit_expr.h>
 #include <ast/exprs/un_expr.h>
 #include <ast/exprs/var_expr.h>
 #include <ast/stmts/expr_stmt.h>
+#include <ast/stmts/if_else.h>
 #include <ast/stmts/ret.h>
 #include <ast/stmts/var_def.h>
 #include <llvm/Support/raw_ostream.h>
@@ -37,6 +37,7 @@ private:
             variant (FuncDef, dumpFuncDef, FuncDef);
             variant (Ret, dumpRet, Return);
             variant (ExprStmt, dumpExprStmt, ExprStmt);
+            variant (IfElse, dumpIfElse, IfElseStmt);
         default: {
         }
         }
@@ -54,6 +55,9 @@ private:
 
     void
     dumpExprStmt (ExprStmt *es);
+
+    void
+    dumpIfElse (IfElseStmt *ies);
 
     void
     dumpExpr (Expr *expr) {

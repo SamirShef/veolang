@@ -9,6 +9,7 @@ enum class NodeKind : uint8_t {
     FuncDef,
     Ret,
     ExprStmt,
+    IfElse,
     StmtEnd,
 
     ExprStart,

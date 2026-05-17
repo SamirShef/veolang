@@ -7,6 +7,7 @@
 #include <ast/exprs/var_expr.h>
 #include <ast/stmts/expr_stmt.h>
 #include <ast/stmts/func_def.h>
+#include <ast/stmts/if_else.h>
 #include <ast/stmts/ret.h>
 #include <ast/stmts/var_def.h>
 #include <basic/name.h>
@@ -48,6 +49,9 @@ Parser::parseStmt (bool expectSemi) {
             }
         }
         return ret;
+    }
+    case TokenKind::If: {
+        return parseIfElse ();
     }
     case TokenKind::Id: {
         Expr *expr = parseExpr ();
@@ -155,6 +159,44 @@ Parser::parseRet () {
         expr = parseExpr ();
     }
     return createNode<Return> (expr, firstTok.Start, _curTok.End);
+}
+
+Stmt *
+Parser::parseIfElse () {
+    const Token firstTok = advance ();
+    Expr       *cond     = parseExpr ((int) Precedence::Unary, false);
+    if (!expectTok (TokenKind::LBrace, "{")) {
+        return nullptr;
+    }
+    std::vector<Stmt *> thenBranch;
+    while (!match (TokenKind::RBrace)) {
+        Stmt *stmt = parseStmt ();
+        if (stmt != nullptr) {
+            thenBranch.push_back (stmt);
+        }
+    }
+    std::vector<Stmt *> elseBranch;
+    if (match (TokenKind::Else)) {
+        if (match (TokenKind::LBrace)) {
+            while (!match (TokenKind::RBrace)) {
+                Stmt *stmt = parseStmt ();
+                if (stmt != nullptr) {
+                    elseBranch.push_back (stmt);
+                }
+            }
+        } else {
+            Stmt *stmt = parseStmt ();
+            if (stmt != nullptr) {
+                elseBranch.push_back (stmt);
+            }
+        }
+    }
+    return createNode<IfElseStmt> (
+        cond,
+        std::move (thenBranch),
+        std::move (elseBranch),
+        firstTok.Start,
+        _lastTok.End);
 }
 
 std::vector<Argument>
