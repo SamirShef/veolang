@@ -79,6 +79,9 @@ private:
     ast::Stmt *
     parseRet ();
 
+    ast::Stmt *
+    parseIfElse ();
+
     std::vector<ast::Argument>
     parseArguments ();
 

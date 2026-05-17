@@ -93,6 +93,35 @@ Dumper::dumpExprStmt (ExprStmt *es) {
 }
 
 void
+Dumper::dumpIfElse (IfElseStmt *ies) {
+    indent ();
+    _os << "IfElseStmt:\n";
+
+    ++_indentLvl; // common
+    dumpExpr (ies->Cond ());
+
+    indent ();
+    _os << "Then:\n";
+    ++_indentLvl; // then
+    for (const auto &stmt : ies->Then ()) {
+        dumpStmt (stmt);
+    }
+    --_indentLvl; // then
+
+    if (!ies->Else ().empty ()) {
+        indent ();
+        _os << "Else:\n";
+        ++_indentLvl; // else
+        for (const auto &stmt : ies->Else ()) {
+            dumpStmt (stmt);
+        }
+        --_indentLvl; // else
+    }
+
+    --_indentLvl; // common
+}
+
+void
 Dumper::dumpLiteralExpr (LiteralExpr *le) {
     indent ();
     _os << "LiteralExpr: " << le->Value () << '\n';

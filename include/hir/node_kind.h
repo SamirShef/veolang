@@ -13,7 +13,8 @@ enum class NodeKind : uint8_t {
     BinExpr,
     UnExpr,
     ExprStmt,
-    StoreVar
+    StoreVar,
+    Branch
 };
 
 }

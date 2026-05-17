@@ -35,7 +35,7 @@ public:
 
     bool
     IsTerminator () const {
-        return Kind () == NodeKind::Ret; // TODO: add 'br' inst
+        return Kind () == NodeKind::Ret || Kind () == NodeKind::Branch;
     }
 };
 
