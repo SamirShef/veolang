@@ -43,17 +43,15 @@ Sema::analyzeStmt (Stmt *stmt) {
 
 void
 Sema::analyzeVarDef (VarDef *vd) {
-    if (auto var = getVariable (vd->Name ().Val); var.has_value ()) {
+    if (auto it = _vars.top ().Vars.find (vd->Name ().Val);
+        it != _vars.top ().Vars.end ()) {
+        auto var = it->second;
         _diag
             .Report (
                 DiagCode::ERedefinition,
                 "variable '" + vd->Name ().Val + "' is already defined",
                 Severity::Error)
-            .AddSpan (
-                var->Name.Start,
-                var->Name.End,
-                "previous definition was here",
-                false)
+            .AddSpan (var.Name.Start, var.Name.End, "previous definition was here", false)
             .AddSpan (vd->Name ().Start, vd->Name ().End, "redefined here");
         return;
     }
