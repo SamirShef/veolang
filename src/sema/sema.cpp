@@ -36,6 +36,8 @@ Sema::analyzeStmt (Stmt *stmt) {
         variant (Ret, analyzeRet, Return);
         variant (ExprStmt, analyzeExprStmt, ExprStmt);
         variant (IfElse, analyzeIfElseStmt, IfElseStmt);
+        variant (ForLoop, analyzeForLoop, ForLoopStmt);
+        variant (BreakContinue, analyzeBreakContinue, BreakContinue);
     default: break;
     }
 #undef variant
@@ -313,6 +315,92 @@ Sema::analyzeIfElseStmt (ast::IfElseStmt *ies) {
 
     // merge
     _builder.SetInsertionPoint (mergeBB);
+}
+
+void
+Sema::analyzeForLoop (ast::ForLoopStmt *fls) {
+    if (inGlobalScope ()) {
+        _diag
+            .Report (
+                DiagCode::ENotAllowedInThisScope,
+                "statement not allowed in this scope",
+                Severity::Error)
+            .AddSpan (
+                fls->Start (),
+                fls->End (),
+                "statement found outside of a function");
+        return;
+    }
+    auto *indexatorBB = _builder.CreateBasicBlock (_builder.Parent (), "indexator");
+    auto *condBB      = _builder.CreateBasicBlock (_builder.Parent (), "cond");
+    auto *iterationBB = _builder.CreateBasicBlock (_builder.Parent (), "iteration");
+    auto *bodyBB      = _builder.CreateBasicBlock (_builder.Parent (), "body");
+    auto *mergeBB     = _builder.CreateBasicBlock (_builder.Parent (), "merge");
+    _builder.CreateBr (indexatorBB, fls->Start (), fls->End ());
+
+    _vars.emplace ();
+    _loops.emplace (mergeBB, iterationBB);
+
+    // indexator
+    _builder.SetInsertionPoint (indexatorBB);
+    if (fls->Indexator () != nullptr) {
+        analyzeStmt (fls->Indexator ());
+    }
+    _builder.CreateBr (condBB, fls->Start (), fls->End ());
+
+    // cond
+    _builder.SetInsertionPoint (condBB);
+    // NOLINTNEXTLINE(cppcoreguidelines-owning-memory)
+    auto          *boolType = new BoolType ();
+    SemanticResult cond;
+    if (fls->Cond () != nullptr) {
+        cond = analyzeExpr (fls->Cond (), boolType);
+        if (!cond.Val.has_value ()) {
+            return;
+        }
+    } else {
+        auto val = Value (ValueKind::Const, ValueData (1), boolType);
+        cond     = { val, _builder.CreateLiteral (val, fls->Start (), fls->End ()) };
+    }
+    _builder.CreateBr (cond.Node, bodyBB, mergeBB, fls->Start (), fls->End ());
+
+    // iteration
+    _builder.SetInsertionPoint (iterationBB);
+    if (fls->Iteration () != nullptr) {
+        analyzeStmt (fls->Iteration ());
+    }
+    _builder.CreateBr (condBB, fls->Start (), fls->End ());
+
+    // body
+    _builder.SetInsertionPoint (bodyBB);
+    for (const auto &stmt : fls->Body ()) {
+        analyzeStmt (stmt);
+    }
+    _builder.CreateBr (iterationBB, fls->Start (), fls->End ());
+
+    // merge
+    _builder.SetInsertionPoint (mergeBB);
+
+    _loops.pop ();
+    _vars.pop ();
+}
+
+void
+Sema::analyzeBreakContinue (BreakContinue *bc) {
+    if (inGlobalScope ()) {
+        _diag
+            .Report (
+                DiagCode::ENotAllowedInThisScope,
+                "statement not allowed in this scope",
+                Severity::Error)
+            .AddSpan (bc->Start (), bc->End (), "statement found outside of a function");
+        return;
+    }
+    if (bc->GetKind () == BreakContinue::Kind::Break) {
+        _builder.CreateBr (_loops.top ().Break, bc->Start (), bc->End ());
+    } else {
+        _builder.CreateBr (_loops.top ().Continue, bc->Start (), bc->End ());
+    }
 }
 
 Sema::SemanticResult

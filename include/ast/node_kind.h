@@ -10,6 +10,8 @@ enum class NodeKind : uint8_t {
     Ret,
     ExprStmt,
     IfElse,
+    ForLoop,
+    BreakContinue,
     StmtEnd,
 
     ExprStart,

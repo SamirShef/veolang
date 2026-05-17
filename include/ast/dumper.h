@@ -5,7 +5,9 @@
 #include <ast/exprs/lit_expr.h>
 #include <ast/exprs/un_expr.h>
 #include <ast/exprs/var_expr.h>
+#include <ast/stmts/break_continue.h>
 #include <ast/stmts/expr_stmt.h>
+#include <ast/stmts/for_loop.h>
 #include <ast/stmts/if_else.h>
 #include <ast/stmts/ret.h>
 #include <ast/stmts/var_def.h>
@@ -38,6 +40,8 @@ private:
             variant (Ret, dumpRet, Return);
             variant (ExprStmt, dumpExprStmt, ExprStmt);
             variant (IfElse, dumpIfElse, IfElseStmt);
+            variant (ForLoop, dumpForLoop, ForLoopStmt);
+            variant (BreakContinue, dumpBreakContinue, BreakContinue);
         default: {
         }
         }
@@ -58,6 +62,12 @@ private:
 
     void
     dumpIfElse (IfElseStmt *ies);
+
+    void
+    dumpForLoop (ForLoopStmt *fl);
+
+    void
+    dumpBreakContinue (BreakContinue *bc);
 
     void
     dumpExpr (Expr *expr) {
