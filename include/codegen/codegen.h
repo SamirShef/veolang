@@ -6,6 +6,7 @@
 #include <hir/lit_expr.h>
 #include <hir/load_var.h>
 #include <hir/ret.h>
+#include <hir/store_var.h>
 #include <hir/un_expr.h>
 #include <hir/var_def.h>
 #include <llvm/IR/Function.h>
@@ -106,6 +107,9 @@ private:
 
     llvm::Value *
     generateFuncCall (hir::FuncCall *fc);
+
+    llvm::Value *
+    generateStoreVar (hir::StoreVar *sv);
 
     llvm::Value *
     generateLValue (hir::Node *node);

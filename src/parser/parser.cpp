@@ -1,4 +1,5 @@
 #include <ast/access_modifier.h>
+#include <ast/exprs/asgn_expr.h>
 #include <ast/exprs/bin_expr.h>
 #include <ast/exprs/func_call.h>
 #include <ast/exprs/lit_expr.h>
@@ -267,7 +268,16 @@ Parser::parsePrimaryExpr (bool allowStruct) {
                 _lastTok.End);
         }
         // VarExpr
-        return createNode<VarExpr> (basic::NameObj (tok), tok.Start, tok.End);
+        auto *var = createNode<VarExpr> (basic::NameObj (tok), tok.Start, tok.End);
+        if (isAsgnOp (_curTok.Kind)) {
+            AsgnOp op   = TokToAsgnOp (advance ().Kind);
+            Expr  *expr = parseExpr ();
+            if (expr == nullptr) {
+                return nullptr;
+            }
+            return createNode<AsgnExpr> (op, var, expr, var->Start (), expr->End ());
+        }
+        return var;
     }
     default: {
     }
@@ -365,6 +375,17 @@ Parser::isKeyword (TokenKind kind) {
                 variant (Struct) variant (Pub) variant (Impl) variant (Trait)
                     variant (Del) variant (Mod) variant (Import)
                         variant (Static) return true;
+    default: return false;
+    }
+#undef variant
+}
+
+bool
+Parser::isAsgnOp (TokenKind kind) {
+#define variant(kind) case TokenKind::kind:
+    switch (kind) {
+        variant (Eq) variant (PlusEq) variant (MinusEq) variant (StarEq) variant (SlashEq)
+            variant (PercentEq) return true;
     default: return false;
     }
 #undef variant

@@ -134,4 +134,14 @@ Dumper::dumpFuncCall (FuncCall *fc) {
     --_indentLvl;
 }
 
+void
+Dumper::dumpAsgnExpr (AsgnExpr *ae) {
+    indent ();
+    _os << "AsgnExpr: " << AsgnOpToString (ae->Op ()) << '\n';
+    ++_indentLvl;
+    dumpExpr (ae->Ptr ());
+    dumpExpr (ae->Init ());
+    --_indentLvl;
+}
+
 }

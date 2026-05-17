@@ -1,4 +1,7 @@
 #pragma once
+#include "basic/types/type.h"
+
+#include <ast/exprs/asgn_expr.h>
 #include <ast/exprs/bin_expr.h>
 #include <ast/exprs/func_call.h>
 #include <ast/exprs/lit_expr.h>
@@ -96,6 +99,9 @@ private:
     SemanticResult
     analyzeFuncCall (ast::FuncCall *fc, Type *expectedType);
 
+    SemanticResult
+    analyzeAsgnExpr (ast::AsgnExpr *ae, Type *expectedType);
+
     Type *
     resolveType (Type **type);
 
@@ -141,6 +147,9 @@ private:
 
     static CastCost
     checkCastCost (Type *src, Type *dst);
+
+    static bool
+    canApplyAsgnOp (ast::AsgnOp op, Type *type);
 };
 
 }
