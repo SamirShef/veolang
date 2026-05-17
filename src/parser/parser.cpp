@@ -5,7 +5,9 @@
 #include <ast/exprs/lit_expr.h>
 #include <ast/exprs/un_expr.h>
 #include <ast/exprs/var_expr.h>
+#include <ast/stmts/break_continue.h>
 #include <ast/stmts/expr_stmt.h>
+#include <ast/stmts/for_loop.h>
 #include <ast/stmts/func_def.h>
 #include <ast/stmts/if_else.h>
 #include <ast/stmts/ret.h>
@@ -52,6 +54,19 @@ Parser::parseStmt (bool expectSemi) {
     }
     case TokenKind::If: {
         return parseIfElse ();
+    }
+    case TokenKind::For: {
+        return parseForLoop ();
+    }
+    case TokenKind::Break:
+    case TokenKind::Continue: {
+        auto *bc = parseBreakContinue ();
+        if (expectSemi) {
+            if (!this->expectSemi ()) {
+                return nullptr;
+            }
+        }
+        return bc;
     }
     case TokenKind::Id: {
         Expr *expr = parseExpr ();
@@ -197,6 +212,55 @@ Parser::parseIfElse () {
         std::move (elseBranch),
         firstTok.Start,
         _lastTok.End);
+}
+
+Stmt *
+Parser::parseForLoop () {
+    const Token firstTok  = advance ();
+    Stmt       *indexator = nullptr;
+    Expr       *cond      = nullptr;
+    Stmt       *iteration = nullptr;
+
+    if (!check (TokenKind::LBrace)) {
+        if (!match (TokenKind::Semi)) {
+            if (check (TokenKind::Let)) {
+                indexator = parseStmt (); // consume semi
+            }
+        }
+        cond = parseExpr ();
+        if (!expectSemi ()) {
+            return nullptr;
+        }
+        if (!check (TokenKind::LBrace)) {
+            iteration = parseStmt (false);
+        }
+    }
+
+    if (!expectTok (TokenKind::LBrace, "{")) {
+        return nullptr;
+    }
+    std::vector<Stmt *> body;
+    while (!match (TokenKind::RBrace)) {
+        Stmt *stmt = parseStmt ();
+        if (stmt != nullptr) {
+            body.push_back (stmt);
+        }
+    }
+    return createNode<ForLoopStmt> (
+        cond,
+        indexator,
+        iteration,
+        std::move (body),
+        firstTok.Start,
+        _lastTok.End);
+}
+
+Stmt *
+Parser::parseBreakContinue () {
+    const Token firstTok = advance ();
+    auto        kind = firstTok.Kind == TokenKind::Break ? BreakContinue::Kind::Break
+                                                         : BreakContinue::Kind::Continue;
+    return createNode<BreakContinue> (kind, firstTok.Start, _curTok.End);
 }
 
 std::vector<Argument>

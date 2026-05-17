@@ -42,6 +42,7 @@ public:
             if (node != nullptr) {
                 nodes.push_back (node);
             } else {
+                synchronize ();
                 hasErrors = true;
             }
         }
@@ -81,6 +82,12 @@ private:
 
     ast::Stmt *
     parseIfElse ();
+
+    ast::Stmt *
+    parseForLoop ();
+
+    ast::Stmt *
+    parseBreakContinue ();
 
     std::vector<ast::Argument>
     parseArguments ();

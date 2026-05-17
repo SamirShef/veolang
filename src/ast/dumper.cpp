@@ -122,6 +122,56 @@ Dumper::dumpIfElse (IfElseStmt *ies) {
 }
 
 void
+Dumper::dumpForLoop (ForLoopStmt *fl) {
+    indent ();
+    _os << "ForLoopStmt:\n";
+    ++_indentLvl;
+
+    if (fl->Cond () != nullptr) {
+        indent ();
+        _os << "Cond:\n";
+        ++_indentLvl;
+        dumpExpr (fl->Cond ());
+        --_indentLvl;
+    }
+
+    if (fl->Indexator () != nullptr) {
+        indent ();
+        _os << "Indexator:\n";
+        ++_indentLvl;
+        dumpStmt (fl->Indexator ());
+        --_indentLvl;
+    }
+
+    if (fl->Iteration () != nullptr) {
+        indent ();
+        _os << "Iteration:\n";
+        ++_indentLvl;
+        dumpStmt (fl->Iteration ());
+        --_indentLvl;
+    }
+
+    if (!fl->Body ().empty ()) {
+        indent ();
+        _os << "Body:\n";
+        ++_indentLvl;
+        for (const auto &stmt : fl->Body ()) {
+            dumpStmt (stmt);
+        }
+        --_indentLvl;
+    }
+
+    --_indentLvl;
+}
+
+void
+Dumper::dumpBreakContinue (BreakContinue *bc) {
+    indent ();
+    _os << "BreakContinue: "
+        << (bc->GetKind () == BreakContinue::Kind::Break ? "Break\n" : "Continue\n");
+}
+
+void
 Dumper::dumpLiteralExpr (LiteralExpr *le) {
     indent ();
     _os << "LiteralExpr: " << le->Value () << '\n';
