@@ -120,7 +120,7 @@ Compile (
     const fs::path  &objPath,
     symbols::Module *mod) {
     fs::path filePathInBuild
-        = projectPath / "build"
+        = projectPath / "build" / "obj"
           / fs::absolute (filePath).lexically_relative (projectPath).lexically_normal ();
     fs::create_directories (filePathInBuild.parent_path ());
     llvm::SourceMgr              mgr;

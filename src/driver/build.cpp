@@ -42,7 +42,7 @@ BuildDriver::Build () {
                         / fs::absolute (manif.EntryPointPath)
                               .parent_path ()
                               .lexically_relative (manif.ManifestPath.parent_path ())
-                        / (mod->Name + ".o");
+                        / (manif.EntryPointPath.stem ().string () + ".o");
     objPath           = objPath.lexically_normal ();
     fs::create_directories (objPath.parent_path ());
     auto compileRes = Compile (_projectRoot, manif.EntryPointPath, objPath, mod);
