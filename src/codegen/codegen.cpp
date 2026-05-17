@@ -278,7 +278,8 @@ llvm::Value *
 CodeGen::generateStoreVar (hir::StoreVar *sv) {
     auto *lvalue = generateLValue (sv->Ptr ());
     auto *val    = generateExpr (sv->Expr ());
-    return _builder.CreateStore (val, lvalue);
+    _builder.CreateStore (val, lvalue);
+    return val;
 }
 
 llvm::Value *

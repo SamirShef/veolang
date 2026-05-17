@@ -619,7 +619,13 @@ Sema::analyzeAsgnExpr (AsgnExpr *ae, Type *expectedType) {
         return {};
     }
     if (!canApplyAsgnOp (ae->Op (), ptr.Val->Type)) {
-        // TODO: report error
+        _diag
+            .Report (
+                DiagCode::ECannotApplyOp,
+                "cannot apply operator '" + std::string (AsgnOpToString (ae->Op ()))
+                    + "' with type '" + ptr.Val->Type->ToString () + "'",
+                Severity::Error)
+            .AddSpan (ae->Ptr ()->Start (), ae->Ptr ()->End ());
         return {};
     }
     auto  var     = getVariable (llvm::cast<VarExpr> (ae->Ptr ())->Name ().Val);
