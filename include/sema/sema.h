@@ -152,6 +152,9 @@ private:
 
     static bool
     canApplyAsgnOp (ast::AsgnOp op, Type *type);
+
+    bool
+    inGlobalScope () const;
 };
 
 }

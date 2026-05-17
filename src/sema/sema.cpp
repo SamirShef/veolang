@@ -156,6 +156,16 @@ Sema::declareFunc (ast::FuncDef *fd) {
 
 void
 Sema::analyzeFuncDef (FuncDef *fd) {
+    if (!inGlobalScope ()) {
+        _diag
+            .Report (
+                DiagCode::ENotAllowedInThisScope,
+                "statement not allowed in this scope",
+                Severity::Error)
+            .AddSpan (fd->Start (), fd->End (), "statement found inside of a function");
+        return;
+    }
+
     auto     *candidates = &_mod->Funcs.at (fd->Name ().Val);
     Function *func       = nullptr;
     for (auto &f : candidates->Candidates) {
@@ -195,6 +205,18 @@ Sema::analyzeFuncDef (FuncDef *fd) {
 
 void
 Sema::analyzeRet (Return *ret) {
+    if (inGlobalScope ()) {
+        _diag
+            .Report (
+                DiagCode::ENotAllowedInThisScope,
+                "statement not allowed in this scope",
+                Severity::Error)
+            .AddSpan (
+                ret->Start (),
+                ret->End (),
+                "statement found outside of a function");
+        return;
+    }
     if (ret->RetExpr () == nullptr) {
         if (_funcRetTypes.top () != nullptr) {
             _diag
@@ -233,12 +255,33 @@ Sema::analyzeRet (Return *ret) {
 
 void
 Sema::analyzeExprStmt (ast::ExprStmt *es) {
+    if (inGlobalScope ()) {
+        _diag
+            .Report (
+                DiagCode::ENotAllowedInThisScope,
+                "statement not allowed in this scope",
+                Severity::Error)
+            .AddSpan (es->Start (), es->End (), "statement found outside of a function");
+        return;
+    }
     auto res = analyzeExpr (es->GetExpr (), nullptr);
     _builder.CreateExprStmt (res.Node, es->Start (), es->End ());
 }
 
 void
 Sema::analyzeIfElseStmt (ast::IfElseStmt *ies) {
+    if (inGlobalScope ()) {
+        _diag
+            .Report (
+                DiagCode::ENotAllowedInThisScope,
+                "statement not allowed in this scope",
+                Severity::Error)
+            .AddSpan (
+                ies->Start (),
+                ies->End (),
+                "statement found outside of a function");
+        return;
+    }
     // NOLINTNEXTLINE(cppcoreguidelines-owning-memory)
     auto  cond    = analyzeExpr (ies->Cond (), new BoolType ());
     auto *thenBB  = _builder.CreateBasicBlock (_builder.Parent (), "then");
@@ -1100,6 +1143,11 @@ Sema::canApplyAsgnOp (ast::AsgnOp op, Type *type) {
         return true;
     }
     return false;
+}
+
+bool
+Sema::inGlobalScope () const {
+    return _vars.size () == 1;
 }
 
 }
