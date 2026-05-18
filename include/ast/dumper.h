@@ -1,6 +1,7 @@
 #pragma once
 #include <ast/exprs/asgn_expr.h>
 #include <ast/exprs/bin_expr.h>
+#include <ast/exprs/field_expr.h>
 #include <ast/exprs/func_call.h>
 #include <ast/exprs/lit_expr.h>
 #include <ast/exprs/un_expr.h>
@@ -42,6 +43,7 @@ private:
             variant (IfElse, dumpIfElse, IfElseStmt);
             variant (ForLoop, dumpForLoop, ForLoopStmt);
             variant (BreakContinue, dumpBreakContinue, BreakContinue);
+            variant (StructDef, dumpStructDef, StructDef);
         default: {
         }
         }
@@ -67,6 +69,9 @@ private:
     dumpForLoop (ForLoopStmt *fl);
 
     void
+    dumpStructDef (StructDef *sd);
+
+    void
     dumpBreakContinue (BreakContinue *bc);
 
     void
@@ -83,6 +88,7 @@ private:
             variant (VarExpr, dumpVarExpr, VarExpr);
             variant (FuncCall, dumpFuncCall, FuncCall);
             variant (AsgnExpr, dumpAsgnExpr, AsgnExpr);
+            variant (FieldExpr, dumpFieldExpr, FieldExpr);
         default: {
         }
         }
@@ -106,6 +112,9 @@ private:
 
     void
     dumpAsgnExpr (AsgnExpr *ae);
+
+    void
+    dumpFieldExpr (FieldExpr *fe);
 
     void
     indent () {

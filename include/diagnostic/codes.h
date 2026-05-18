@@ -27,6 +27,7 @@ enum class DiagCode : uint8_t {
     ENotAConst,
     ECannotInitRuntimeVal,
     ENotAllowedInThisScope,
+    EExpectedIdOrMemberName,
 
     WUnusedVar,
     WLossPrecision,

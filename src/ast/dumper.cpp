@@ -165,6 +165,22 @@ Dumper::dumpForLoop (ForLoopStmt *fls) {
 }
 
 void
+Dumper::dumpStructDef (StructDef *sd) {
+    indent ();
+    _os << "StructDef: " << AccessToString (sd->Access ()) << ' ' << sd->Name ().Val
+        << '\n';
+
+    ++_indentLvl;
+    for (const auto &field : sd->Fields ()) {
+        indent ();
+        _os << "Field: " << AccessToString (field.Access) << ' '
+            << (field.IsStatic ? "static " : "") << (field.IsConst ? "const " : "")
+            << field.Name.Val << ": " << field.Type->ToString () << "\n";
+    }
+    --_indentLvl;
+}
+
+void
 Dumper::dumpBreakContinue (BreakContinue *bc) {
     indent ();
     _os << "BreakContinue: "
@@ -220,6 +236,21 @@ Dumper::dumpAsgnExpr (AsgnExpr *ae) {
     ++_indentLvl;
     dumpExpr (ae->Ptr ());
     dumpExpr (ae->Init ());
+    --_indentLvl;
+}
+
+void
+Dumper::dumpFieldExpr (FieldExpr *fe) {
+    indent ();
+    _os << "FieldExpr: " << fe->Name ().Val << '\n';
+    ++_indentLvl;
+
+    indent ();
+    _os << "From:\n";
+    ++_indentLvl;
+    dumpExpr (fe->Base ());
+    --_indentLvl;
+
     --_indentLvl;
 }
 

@@ -1,6 +1,7 @@
 #include <ast/access_modifier.h>
 #include <ast/exprs/asgn_expr.h>
 #include <ast/exprs/bin_expr.h>
+#include <ast/exprs/field_expr.h>
 #include <ast/exprs/func_call.h>
 #include <ast/exprs/lit_expr.h>
 #include <ast/exprs/un_expr.h>
@@ -11,6 +12,7 @@
 #include <ast/stmts/func_def.h>
 #include <ast/stmts/if_else.h>
 #include <ast/stmts/ret.h>
+#include <ast/stmts/struct_def.h>
 #include <ast/stmts/var_def.h>
 #include <basic/name.h>
 #include <basic/types/all.h>
@@ -67,6 +69,9 @@ Parser::parseStmt (bool expectSemi) {
             }
         }
         return bc;
+    }
+    case TokenKind::Struct: {
+        return parseStructDef ();
     }
     case TokenKind::Id: {
         Expr *expr = parseExpr ();
@@ -263,6 +268,26 @@ Parser::parseBreakContinue () {
     return createNode<BreakContinue> (kind, firstTok.Start, _curTok.End);
 }
 
+Stmt *
+Parser::parseStructDef () {
+    auto           access   = Access;
+    const Token    firstTok = advance ();
+    basic::NameObj name;
+    if (!expectName (name)) {
+        return nullptr;
+    }
+    if (!expectTok (TokenKind::LBrace, "{")) {
+        return nullptr;
+    }
+    std::vector<Field> fields = parseFields ();
+    return createNode<StructDef> (
+        std::move (name),
+        std::move (fields),
+        access,
+        firstTok.Start,
+        _lastTok.End);
+}
+
 std::vector<Argument>
 Parser::parseArguments () {
     std::vector<Argument> args;
@@ -292,6 +317,41 @@ Parser::parseArgument () {
         return Argument::Invalid ();
     }
     return { name, type };
+}
+
+std::vector<Field>
+Parser::parseFields () {
+    std::vector<Field> fields;
+    while (!match (TokenKind::RBrace)) {
+        const Field field = parseField ();
+        if (field.IsValid ()) {
+            fields.push_back (field);
+        }
+    }
+    return std::move (fields);
+}
+
+Field
+Parser::parseField () {
+    AccessModifier access
+        = match (TokenKind::Pub) ? AccessModifier::Pub : AccessModifier::Priv;
+    bool           isStatic = match (TokenKind::Static);
+    bool           isConst  = match (TokenKind::Const);
+    basic::NameObj name;
+    if (!expectName (name)) {
+        return Field::Invalid ();
+    }
+    if (!expectTok (TokenKind::Colon, ":")) {
+        return Field::Invalid ();
+    }
+    basic::Type *type = consumeType ();
+    if (type == nullptr) {
+        return Field::Invalid ();
+    }
+    if (!expectTok (TokenKind::Semi, ";")) {
+        return Field::Invalid ();
+    }
+    return { name, type, isStatic, isConst, access };
 }
 
 Expr *
@@ -374,16 +434,26 @@ Parser::parsePrimaryExpr (bool allowStruct) {
                 _lastTok.End);
         }
         // VarExpr
-        auto *var = createNode<VarExpr> (basic::NameObj (tok), tok.Start, tok.End);
+        Expr *varOrField = createNode<VarExpr> (basic::NameObj (tok), tok.Start, tok.End);
+
+        if (check (TokenKind::Dot)) {
+            varOrField = parseChain (varOrField);
+        }
+
         if (isAsgnOp (_curTok.Kind)) {
             AsgnOp op   = TokToAsgnOp (advance ().Kind);
             Expr  *expr = parseExpr ();
             if (expr == nullptr) {
                 return nullptr;
             }
-            return createNode<AsgnExpr> (op, var, expr, var->Start (), expr->End ());
+            return createNode<AsgnExpr> (
+                op,
+                varOrField,
+                expr,
+                varOrField->Start (),
+                expr->End ());
         }
-        return var;
+        return varOrField;
     }
     default: {
     }
@@ -397,6 +467,34 @@ Parser::parsePrimaryExpr (bool allowStruct) {
             Severity::Error)
         .AddSpan (tok.Start, tok.End, "expected expression here");
     return nullptr;
+}
+
+Expr *
+Parser::parseChain (Expr *base) {
+    while (true) {
+        if (match (TokenKind::Dot)) {
+            const Token    tok = _curTok;
+            basic::NameObj name;
+            if (!expectName (name)) {
+                _diag
+                    .Report (
+                        DiagCode::EExpectedIdOrMemberName,
+                        "expected identifier or member name after '.'",
+                        Severity::Error)
+                    .AddSpan (
+                        tok.Start,
+                        tok.End,
+                        "expected member, found '" + tok.Val + "'");
+                return nullptr;
+            }
+
+            // TODO: add parsing of method calling
+            base = createNode<FieldExpr> (base, std::move (name), tok.Start, tok.End);
+        } else {
+            break;
+        }
+    }
+    return base;
 }
 
 // NOLINTBEGIN(cppcoreguidelines-owning-memory)
@@ -551,5 +649,4 @@ bool
 Parser::isAtEnd () const {
     return check (TokenKind::Eof);
 }
-
 }
