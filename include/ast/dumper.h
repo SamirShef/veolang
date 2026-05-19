@@ -4,6 +4,7 @@
 #include <ast/exprs/field_expr.h>
 #include <ast/exprs/func_call.h>
 #include <ast/exprs/lit_expr.h>
+#include <ast/exprs/struct_instance.h>
 #include <ast/exprs/un_expr.h>
 #include <ast/exprs/var_expr.h>
 #include <ast/stmts/break_continue.h>
@@ -89,6 +90,7 @@ private:
             variant (FuncCall, dumpFuncCall, FuncCall);
             variant (AsgnExpr, dumpAsgnExpr, AsgnExpr);
             variant (FieldExpr, dumpFieldExpr, FieldExpr);
+            variant (StructInstance, dumpStructInstance, StructInstance);
         default: {
         }
         }
@@ -115,6 +117,9 @@ private:
 
     void
     dumpFieldExpr (FieldExpr *fe);
+
+    void
+    dumpStructInstance (StructInstance *si);
 
     void
     indent () {

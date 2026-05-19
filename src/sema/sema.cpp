@@ -776,6 +776,15 @@ Sema::analyzeFuncCall (FuncCall *fc, Type *expectedType) {
 
 Sema::SemanticResult
 Sema::analyzeAsgnExpr (AsgnExpr *ae, Type *expectedType) {
+    if (ae->Ptr () == nullptr) {
+        return {};
+    }
+    if (ae->Ptr ()->Kind () != NodeKind::VarExpr
+        && ae->Ptr ()->Kind () != NodeKind::FieldExpr) {
+        // TODO: report error
+        return {};
+    }
+
     // TODO: variable or field
     auto ptr = analyzeExpr (ae->Ptr (), nullptr);
     if (!ptr.Val.has_value ()) {

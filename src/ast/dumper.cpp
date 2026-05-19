@@ -254,4 +254,25 @@ Dumper::dumpFieldExpr (FieldExpr *fe) {
     --_indentLvl;
 }
 
+void
+Dumper::dumpStructInstance (StructInstance *si) {
+    indent ();
+    _os << "StructInstance: " << si->Path ().Val << '\n';
+    ++_indentLvl;
+
+    indent ();
+    _os << "Fields:\n";
+    ++_indentLvl;
+    for (const auto &[name, expr] : si->Fields ()) {
+        indent ();
+        _os << name.Val << ":\n";
+        ++_indentLvl;
+        dumpExpr (expr);
+        --_indentLvl;
+    }
+    --_indentLvl;
+
+    --_indentLvl;
+}
+
 }

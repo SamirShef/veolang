@@ -105,6 +105,12 @@ private:
     ast::Field
     parseField ();
 
+    std::vector<std::tuple<basic::NameObj, ast::Expr *>>
+    parseFieldsForInstance ();
+
+    std::tuple<basic::NameObj, ast::Expr *>
+    parseFieldForInstance ();
+
     ast::Expr *
     parseExpr (int minPrec = (int) Precedence::Unary, bool allowStruct = true);
 
@@ -112,7 +118,7 @@ private:
     parsePrimaryExpr (bool allowStruct = true);
 
     ast::Expr *
-    parseChain (ast::Expr *base);
+    parseChain (ast::Expr *base, bool allowStruct = true);
 
     basic::Type *
     consumeType ();

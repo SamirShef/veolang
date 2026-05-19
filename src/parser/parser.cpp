@@ -4,6 +4,7 @@
 #include <ast/exprs/field_expr.h>
 #include <ast/exprs/func_call.h>
 #include <ast/exprs/lit_expr.h>
+#include <ast/exprs/struct_instance.h>
 #include <ast/exprs/un_expr.h>
 #include <ast/exprs/var_expr.h>
 #include <ast/stmts/break_continue.h>
@@ -354,6 +355,38 @@ Parser::parseField () {
     return { name, type, isStatic, isConst, access };
 }
 
+std::vector<std::tuple<basic::NameObj, Expr *>>
+Parser::parseFieldsForInstance () {
+    std::vector<std::tuple<basic::NameObj, Expr *>> fields;
+    while (!match (TokenKind::RBrace)) {
+        auto field         = parseFieldForInstance ();
+        auto &[name, expr] = field;
+        if (name != basic::NameObj () && expr != nullptr) {
+            fields.push_back (field);
+        }
+        if (!check (TokenKind::RBrace)) {
+            expectTok (TokenKind::Comma, ",");
+        }
+    }
+    return std::move (fields);
+}
+
+std::tuple<basic::NameObj, Expr *>
+Parser::parseFieldForInstance () {
+    basic::NameObj name;
+    if (!expectName (name)) {
+        return { basic::NameObj (), nullptr };
+    }
+    if (!expectTok (TokenKind::Colon, ":")) {
+        return { basic::NameObj (), nullptr };
+    }
+    Expr *expr = parseExpr ();
+    if (expr == nullptr) {
+        return { basic::NameObj (), nullptr };
+    }
+    return { name, expr };
+}
+
 Expr *
 Parser::parseExpr (int minPrec, bool allowStruct) {
     Expr *lhs = parsePrimaryExpr (allowStruct);
@@ -416,6 +449,14 @@ Parser::parsePrimaryExpr (bool allowStruct) {
             _lastTok.End);
     }
     case TokenKind::Id: {
+        if (allowStruct && match (TokenKind::LBrace)) { // StructInstance
+            auto fields = parseFieldsForInstance ();
+            return createNode<StructInstance> (
+                basic::NameObj (tok),
+                std::move (fields),
+                tok.Start,
+                _lastTok.End);
+        }
         if (match (TokenKind::LParen)) { // FuncCall
             std::vector<Expr *> args;
             while (!match (TokenKind::RParen)) {
@@ -434,26 +475,21 @@ Parser::parsePrimaryExpr (bool allowStruct) {
                 _lastTok.End);
         }
         // VarExpr
-        Expr *varOrField = createNode<VarExpr> (basic::NameObj (tok), tok.Start, tok.End);
+        Expr *expr = createNode<VarExpr> (basic::NameObj (tok), tok.Start, tok.End);
 
         if (check (TokenKind::Dot)) {
-            varOrField = parseChain (varOrField);
+            expr = parseChain (expr, allowStruct);
         }
 
         if (isAsgnOp (_curTok.Kind)) {
             AsgnOp op   = TokToAsgnOp (advance ().Kind);
-            Expr  *expr = parseExpr ();
-            if (expr == nullptr) {
+            Expr  *init = parseExpr ();
+            if (init == nullptr) {
                 return nullptr;
             }
-            return createNode<AsgnExpr> (
-                op,
-                varOrField,
-                expr,
-                varOrField->Start (),
-                expr->End ());
+            return createNode<AsgnExpr> (op, expr, init, expr->Start (), init->End ());
         }
-        return varOrField;
+        return expr;
     }
     default: {
     }
@@ -470,7 +506,7 @@ Parser::parsePrimaryExpr (bool allowStruct) {
 }
 
 Expr *
-Parser::parseChain (Expr *base) {
+Parser::parseChain (Expr *base, bool allowStruct) {
     while (true) {
         if (match (TokenKind::Dot)) {
             const Token    tok = _curTok;
@@ -486,6 +522,15 @@ Parser::parseChain (Expr *base) {
                         tok.End,
                         "expected member, found '" + tok.Val + "'");
                 return nullptr;
+            }
+
+            if (allowStruct && match (TokenKind::LBrace)) { // StructInstance
+                auto fields = parseFieldsForInstance ();
+                return createNode<StructInstance> (
+                    std::move (name),
+                    std::move (fields),
+                    tok.Start,
+                    _lastTok.End);
             }
 
             // TODO: add parsing of method calling

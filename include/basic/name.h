@@ -20,6 +20,11 @@ struct NameObj {
     operator== (const NameObj &other) const {
         return Val == other.Val && Start == other.Start && End == other.End;
     }
+
+    bool
+    operator!= (const NameObj &other) const {
+        return !(*this == other);
+    }
 };
 
 }
