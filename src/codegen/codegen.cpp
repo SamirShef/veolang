@@ -18,6 +18,7 @@ CodeGen::generate (Node *node) {
         variant (Ret, generateRet, Return);
         variant (ExprStmt, generateExprStmt, ExprStmt);
         variant (Branch, generateBranch, Branch);
+        variant (StructDef, generateStruct, StructDef);
     default: return;
     }
 #undef variant
@@ -126,6 +127,17 @@ CodeGen::generateBranch (Branch *br) {
         auto *bb = _basicBlocksMap.at (br->Then ());
         _builder.CreateBr (bb);
     }
+}
+
+void
+CodeGen::generateStruct (hir::StructDef *sd) {
+    const auto               &name = mangleStruct (sd);
+    std::vector<llvm::Type *> fields;
+    fields.reserve (sd->Fields ().size ());
+    for (const auto &field : sd->Fields ()) {
+        fields.emplace_back (getType (field));
+    }
+    llvm::StructType::create (_ctx, fields, name);
 }
 
 llvm::Value *
@@ -349,6 +361,16 @@ CodeGen::mangleGlobalVar (VarDef *var) const {
     auto              *sym = var->BaseSymbol ();
     std::ostringstream oss;
     oss << "_VG";
+    oss << mangleModule (sym->Parent);
+    oss << "E" << sym->Name.Val.size () << sym->Name.Val;
+    return oss.str ();
+}
+
+std::string
+CodeGen::mangleStruct (hir::StructDef *sd) const {
+    auto              *sym = sd->BaseSymbol ();
+    std::ostringstream oss;
+    oss << "_VS";
     oss << mangleModule (sym->Parent);
     oss << "E" << sym->Name.Val.size () << sym->Name.Val;
     return oss.str ();

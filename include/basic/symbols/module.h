@@ -1,5 +1,6 @@
 #pragma once
 #include <basic/symbols/function.h>
+#include <basic/symbols/struct.h>
 #include <basic/symbols/variable.h>
 #include <unordered_map>
 
@@ -10,6 +11,7 @@ struct Module {
     Module                                             *Parent;
     std::unordered_map<std::string, Variable>           Vars;
     std::unordered_map<std::string, FunctionCandidates> Funcs;
+    std::unordered_map<std::string, Struct>             Structs;
     std::unordered_map<std::string, Module *>           Imports;
     std::unordered_map<std::string, Module *>           Submods;
 

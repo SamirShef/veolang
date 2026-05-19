@@ -58,14 +58,23 @@ public:
     void
     Analyze (ParseResult &res) {
         for (size_t i = 0; i < res.Count; ++i) {
+            if (res.Nodes[i] == nullptr) {
+                continue;
+            }
             auto *stmt = llvm::cast<ast::Stmt> (res.Nodes[i]);
             if (stmt->Kind () == ast::NodeKind::FuncDef) {
                 declareFunc (llvm::cast<ast::FuncDef> (stmt));
+            } else if (stmt->Kind () == ast::NodeKind::StructDef) {
+                analyzeStructDef (llvm::cast<ast::StructDef> (stmt));
             }
         }
 
         for (size_t i = 0; i < res.Count; ++i) {
-            analyzeStmt (llvm::cast<ast::Stmt> (res.Nodes[i]));
+            auto *stmt = llvm::cast<ast::Stmt> (res.Nodes[i]);
+            if (stmt->Kind () == ast::NodeKind::StructDef) {
+                continue;
+            }
+            analyzeStmt (stmt);
         }
     }
 
@@ -96,6 +105,9 @@ private:
 
     void
     analyzeBreakContinue (ast::BreakContinue *bc);
+
+    void
+    analyzeStructDef (ast::StructDef *sd);
 
     SemanticResult
     analyzeExpr (ast::Expr *expr, Type *expectedType);

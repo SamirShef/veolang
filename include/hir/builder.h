@@ -1,10 +1,9 @@
 #pragma once
-#include "hir/branch.h"
-
 #include <basic/name.h>
 #include <basic/types/type.h>
 #include <hir/basic_block.h>
 #include <hir/bin_expr.h>
+#include <hir/branch.h>
 #include <hir/context.h>
 #include <hir/expr_stmt.h>
 #include <hir/func_call.h>
@@ -12,6 +11,7 @@
 #include <hir/load_var.h>
 #include <hir/ret.h>
 #include <hir/store_var.h>
+#include <hir/struct_def.h>
 #include <hir/un_expr.h>
 
 namespace veo::hir {
@@ -170,6 +170,23 @@ public:
     Branch *
     CreateBr (BasicBlock *branch, llvm::SMLoc start, llvm::SMLoc end) {
         return CreateBr (nullptr, branch, nullptr, start, end);
+    }
+
+    StructDef *
+    CreateStruct (
+        basic::NameObj             name,
+        std::vector<basic::Type *> fields,
+        symbols::Struct           *base,
+        llvm::SMLoc                start,
+        llvm::SMLoc                end) {
+        auto *node = _ctx.CreateNode<StructDef> (
+            std::move (name),
+            std::move (fields),
+            base,
+            start,
+            end);
+        _ctx.AddStruct (node);
+        return node;
     }
 };
 

@@ -1,5 +1,6 @@
 #pragma once
 #include <hir/func.h>
+#include <hir/struct_def.h>
 #include <hir/var_def.h>
 #include <llvm/Support/Allocator.h>
 #include <vector>
@@ -7,9 +8,10 @@
 namespace veo::hir {
 
 class Context {
-    llvm::BumpPtrAllocator  _allocator;
-    std::vector<Function *> _funcs;
-    std::vector<VarDef *>   _globals;
+    llvm::BumpPtrAllocator   _allocator;
+    std::vector<Function *>  _funcs;
+    std::vector<VarDef *>    _globals;
+    std::vector<StructDef *> _structs;
 
 public:
     Context ()                = default;
@@ -42,14 +44,24 @@ public:
         return _globals;
     }
 
+    std::vector<StructDef *> &
+    Structs () {
+        return _structs;
+    }
+
     void
     AddFunction (Function *func) {
-        _funcs.push_back (func);
+        _funcs.emplace_back (func);
     }
 
     void
     AddGlobal (VarDef *var) {
-        _globals.push_back (var);
+        _globals.emplace_back (var);
+    }
+
+    void
+    AddStruct (StructDef *s) {
+        _structs.emplace_back (s);
     }
 };
 

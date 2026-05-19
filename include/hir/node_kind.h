@@ -14,7 +14,8 @@ enum class NodeKind : uint8_t {
     UnExpr,
     ExprStmt,
     StoreVar,
-    Branch
+    Branch,
+    StructDef,
 };
 
 }

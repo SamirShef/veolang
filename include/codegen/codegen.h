@@ -8,6 +8,7 @@
 #include <hir/load_var.h>
 #include <hir/ret.h>
 #include <hir/store_var.h>
+#include <hir/struct_def.h>
 #include <hir/un_expr.h>
 #include <hir/var_def.h>
 #include <llvm/IR/Function.h>
@@ -24,6 +25,7 @@ namespace veo {
 class CodeGen {
     std::vector<hir::VarDef *>                               &_hirGlobals;
     std::vector<hir::Function *>                             &_hirFuncs;
+    std::vector<hir::StructDef *>                            &_hirStructs;
     std::vector<llvm::GlobalVariable *>                       _globals;
     std::unordered_map<symbols::Function *, llvm::Function *> _funcsMap;
     std::vector<llvm::Function *>                             _funcs;
@@ -45,16 +47,21 @@ class CodeGen {
 
 public:
     CodeGen (
-        const std::string            &name,
-        std::vector<hir::VarDef *>   &globals,
-        std::vector<hir::Function *> &funcs)
+        const std::string             &name,
+        std::vector<hir::VarDef *>    &globals,
+        std::vector<hir::Function *>  &funcs,
+        std::vector<hir::StructDef *> &structs)
         : _hirGlobals (globals),
           _hirFuncs (funcs),
+          _hirStructs (structs),
           _builder (_ctx),
           _mod (std::make_unique<llvm::Module> (name, _ctx)) {}
 
     std::unique_ptr<llvm::Module>
     Generate () {
+        for (auto &s : _hirStructs) {
+            generateStruct (s);
+        }
         for (auto &f : _hirFuncs) {
             declareFunc (f);
         }
@@ -95,6 +102,9 @@ private:
     void
     generateBranch (hir::Branch *br);
 
+    void
+    generateStruct (hir::StructDef *sd);
+
     llvm::Value *
     generateExpr (hir::Node *node);
 
@@ -127,6 +137,9 @@ private:
 
     std::string
     mangleGlobalVar (hir::VarDef *var) const;
+
+    std::string
+    mangleStruct (hir::StructDef *sd) const;
 
     std::string
     mangleModule (symbols::Module *mod) const;

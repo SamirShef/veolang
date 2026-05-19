@@ -109,6 +109,7 @@ Sema::analyzeVarDef (VarDef *vd) {
         vd->IsConst (),
         isGlobal,
         isGlobal ? _vars.top ().Vars.size () : _localsCount++,
+        _mod,
         val.Val);
     _vars.top ().Vars.emplace (var.Name.Val, var);
     if (isGlobal) {
@@ -192,7 +193,7 @@ Sema::analyzeFuncDef (FuncDef *fd) {
     for (const auto &arg : fd->Args ()) {
         _vars.top ().Vars.emplace (
             arg.Name.Val,
-            Variable (arg.Name, arg.Type, false, false, _localsCount++));
+            Variable (arg.Name, arg.Type, false, false, _localsCount++, nullptr));
     }
 
     for (const auto &stmt : fd->Body ()) {
@@ -401,6 +402,44 @@ Sema::analyzeBreakContinue (BreakContinue *bc) {
     } else {
         _builder.CreateBr (_loops.top ().Continue, bc->Start (), bc->End ());
     }
+}
+
+void
+Sema::analyzeStructDef (StructDef *sd) {
+    if (auto it = _mod->Structs.find (sd->Name ().Val); it != _mod->Structs.end ()) {
+        auto &s = it->second; // struct
+        _diag
+            .Report (
+                DiagCode::ERedefinition,
+                "struct '" + sd->Name ().Val + "' is already defined",
+                Severity::Error)
+            .AddSpan (s.Name.Start, s.Name.End, "previous definition was here", false)
+            .AddSpan (sd->Name ().Start, sd->Name ().End, "redefined here");
+        return;
+    }
+
+    std::vector<symbols::Field> fields;
+    fields.reserve (sd->Fields ().size ());
+    std::vector<Type *> hirFields;
+    hirFields.reserve (sd->Fields ().size ());
+    for (auto &field : sd->Fields ()) {
+        resolveType (&field.Type);
+        fields.emplace_back (
+            std::move (field.Name),
+            field.Type,
+            field.IsStatic,
+            field.IsConst,
+            field.Access);
+        hirFields.emplace_back (field.Type);
+    }
+    auto s = Struct (sd->Name (), fields, _mod);
+    _mod->Structs.emplace (sd->Name ().Val, s);
+    _builder.CreateStruct (
+        sd->Name (),
+        hirFields,
+        &_mod->Structs.at (sd->Name ().Val),
+        sd->Start (),
+        sd->End ());
 }
 
 Sema::SemanticResult
@@ -1096,12 +1135,12 @@ Sema::canFit (Value &val, const Type *targetType) {
 }
 
 // NOLINTBEGIN(readability-function-cognitive-complexity)
-symbols::Function *
+Function *
 Sema::resolveBestOverload (
-    symbols::FunctionCandidates *candidates,
-    const std::vector<Type *>   &argTypes,
-    llvm::SMLoc                  start,
-    llvm::SMLoc                  end) {
+    FunctionCandidates        *candidates,
+    const std::vector<Type *> &argTypes,
+    llvm::SMLoc                start,
+    llvm::SMLoc                end) {
     std::vector<std::pair<Function *, int>> viableCandidates;
 
     for (auto &cand : candidates->Candidates) {

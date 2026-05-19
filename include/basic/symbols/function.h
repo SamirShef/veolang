@@ -18,7 +18,7 @@ struct Function {
         basic::NameObj             name,
         basic::Type               *retType,
         std::vector<ast::Argument> args,
-        Module                    *parent = nullptr)
+        Module                    *parent)
         : Name (std::move (name)),
           RetType (retType),
           Args (std::move (args)),
