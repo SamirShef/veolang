@@ -175,11 +175,11 @@ public:
 
     StructDef *
     CreateStruct (
-        basic::NameObj             name,
-        std::vector<basic::Type *> fields,
-        symbols::Struct           *base,
-        llvm::SMLoc                start,
-        llvm::SMLoc                end) {
+        basic::NameObj     name,
+        std::vector<Field> fields,
+        symbols::Struct   *base,
+        llvm::SMLoc        start,
+        llvm::SMLoc        end) {
         auto *node = _ctx.CreateNode<StructDef> (
             std::move (name),
             std::move (fields),

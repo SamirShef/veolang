@@ -14,24 +14,27 @@ struct Field {
     bool                IsStatic;
     bool                IsConst;
     ast::AccessModifier Access;
+    size_t              Index;
 
     Field (
         basic::NameObj      name,
         basic::Type        *type,
         bool                isStatic,
         bool                isConst,
-        ast::AccessModifier access)
+        ast::AccessModifier access,
+        size_t              index)
         : Name (std::move (name)),
           Type (type),
           IsStatic (isStatic),
           IsConst (isConst),
-          Access (access) {}
+          Access (access),
+          Index (index) {}
 
     bool
     operator== (const Field &other) const {
         return Name.Val == other.Name.Val && *Type == *other.Type
                && IsStatic == other.IsStatic && IsConst == other.IsConst
-               && Access == other.Access;
+               && Access == other.Access && Index == other.Index;
     }
 
     bool

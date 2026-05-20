@@ -1,6 +1,5 @@
-#include "ast/exprs/struct_instance.h"
-
 #include <algorithm>
+#include <ast/exprs/struct_instance.h>
 #include <basic/types/all.h>
 #include <basic/value.h>
 #include <cstdint>
@@ -443,17 +442,22 @@ Sema::analyzeStructDef (StructDef *sd) {
 
     std::vector<symbols::Field> fields;
     fields.reserve (sd->Fields ().size ());
-    std::vector<Type *> hirFields;
+    std::vector<hir::Field> hirFields;
     hirFields.reserve (sd->Fields ().size ());
+    size_t index = 0;
     for (auto &field : sd->Fields ()) {
         resolveType (&field.Type);
         fields.emplace_back (
-            std::move (field.Name),
+            field.Name,
             field.Type,
             field.IsStatic,
             field.IsConst,
-            field.Access);
-        hirFields.emplace_back (field.Type);
+            field.Access,
+            index);
+        hirFields.emplace_back (field.Name, field.Type, field.IsStatic, field.IsConst);
+        if (!field.IsStatic) {
+            ++index;
+        }
     }
     auto s = Struct (sd->Name (), fields, _mod);
     _mod->Structs.emplace (sd->Name ().Val, s);
@@ -909,37 +913,75 @@ Sema::SemanticResult
 Sema::analyzeStructInstance (StructInstance *si, Type *expectedType) {
     auto it = _mod->Structs.find (si->Path ().Val);
     if (it == _mod->Structs.end ()) {
-        // TODO: report error
+        _diag
+            .Report (
+                DiagCode::EUndefined,
+                "struct '" + si->Path ().Val + "' is not defined",
+                Severity::Error)
+            .AddSpan (si->Path ().Start, si->Path ().End);
         return {};
     }
     auto                                       *s = &it->second;
     std::vector<std::pair<size_t, hir::Node *>> fields;
     std::unordered_map<size_t, NameObj>         initializedFields;
     ValueKind                                   valKind = ValueKind::Const;
+    for (const auto &field : s->Fields) {
+        if (field.Access == AccessModifier::Priv) {
+            _diag
+                .Report (
+                    DiagCode::ECannotInitStructWithPrivFields,
+                    "cannot structurally initialize '" + s->Name.Val
+                        + "' because it contains private "
+                          "fields",
+                    Severity::Error)
+                .AddSpan (si->Path ().Start, si->Path ().End)
+                .AddNote (
+                    "use the constructor function '" + s->Name.Val
+                    + ".New()' instead if available");
+            return {};
+        }
+    }
     for (const auto &[name, expr] : si->Fields ()) {
         auto it = std::ranges::find_if (s->Fields, [&] (const symbols::Field &f) {
             return f.Name.Val == name.Val; // NOLINT(modernize-type-traits)
         });
         if (it == s->Fields.end ()) {
-            // TODO: report error
+            _diag
+                .Report (
+                    DiagCode::EUndefined,
+                    "stuct '" + s->Name.Val + "' has no field named '" + name.Val + "'",
+                    Severity::Error)
+                .AddSpan (name.Start, name.End);
             return {};
         }
         const auto *field = it.base ();
-        size_t      index = it - s->Fields.begin ();
+        size_t      index = field->Index;
         if (auto it = initializedFields.find (index); it != initializedFields.end ()) {
-            // TODO: report error
-            return {};
-        }
-        if (it->Access == AccessModifier::Priv) {
-            // TODO: report error
+            _diag
+                .Report (
+                    DiagCode::EFieldSpecifiedMoreOnce,
+                    "field '" + name.Val + "' specified more than once",
+                    Severity::Error)
+                .AddSpan (it->second.Start, it->second.End, "first assignment", false)
+                .AddSpan (name.Start, name.End, "field already initialized here");
             return {};
         }
         if (it->IsConst) {
-            // TODO: report error
+            _diag
+                .Report (
+                    DiagCode::ECannotInitConstField,
+                    "cannot initialize constant field '" + name.Val + "'",
+                    Severity::Error)
+                .AddSpan (name.Start, name.End);
             return {};
         }
         if (it->IsStatic) {
-            // TODO: report error
+            _diag
+                .Report (
+                    DiagCode::ECannotInitStaticField,
+                    "cannot initialize static field '" + name.Val + "'",
+                    Severity::Error)
+                .AddSpan (name.Start, name.End);
             return {};
         }
         initializedFields.emplace (index, name);

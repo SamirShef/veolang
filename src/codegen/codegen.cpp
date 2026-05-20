@@ -134,7 +134,19 @@ CodeGen::generateStruct (hir::StructDef *sd) {
     std::vector<llvm::Type *> fields;
     fields.reserve (sd->Fields ().size ());
     for (const auto &field : sd->Fields ()) {
-        fields.emplace_back (getType (field));
+        auto *type = getType (field.Type);
+        if (!field.IsStatic) {
+            fields.emplace_back (type);
+        } else {
+            const auto &fieldName = mangleStaticField (sd->BaseSymbol (), field.Name.Val);
+            new llvm::GlobalVariable (
+                *_mod,
+                type,
+                field.IsConst,
+                llvm::GlobalValue::ExternalLinkage,
+                nullptr,
+                fieldName);
+        }
     }
     llvm::StructType::create (_ctx, fields, name);
 }
@@ -417,6 +429,16 @@ CodeGen::mangleStructSymbol (symbols::Struct *sym) const {
     oss << "_VS";
     oss << mangleModule (sym->Parent);
     oss << "E" << sym->Name.Val.size () << sym->Name.Val;
+    return oss.str ();
+}
+
+std::string
+CodeGen::mangleStaticField (symbols::Struct *sym, const std::string &fieldName) const {
+    std::ostringstream oss;
+    oss << "_VF";
+    oss << mangleModule (sym->Parent);
+    oss << "E" << sym->Name.Val.size () << sym->Name.Val;
+    oss << "E" << fieldName.size () << fieldName;
     return oss.str ();
 }
 

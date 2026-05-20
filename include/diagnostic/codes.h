@@ -28,6 +28,10 @@ enum class DiagCode : uint8_t {
     ECannotInitRuntimeVal,
     ENotAllowedInThisScope,
     EExpectedIdOrMemberName,
+    EFieldSpecifiedMoreOnce,
+    ECannotInitStructWithPrivFields,
+    ECannotInitConstField,
+    ECannotInitStaticField,
 
     WUnusedVar,
     WLossPrecision,

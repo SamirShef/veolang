@@ -7,18 +7,39 @@
 
 namespace veo::hir {
 
+struct Field {
+    basic::NameObj Name;
+    basic::Type   *Type;
+    bool           IsStatic;
+    bool           IsConst;
+
+    Field (basic::NameObj name, basic::Type *type, bool isStatic, bool isConst)
+        : Name (std::move (name)), Type (type), IsStatic (isStatic), IsConst (isConst) {}
+
+    bool
+    operator== (const Field &other) const {
+        return Name.Val == other.Name.Val && *Type == *other.Type
+               && IsStatic == other.IsStatic && IsConst == other.IsConst;
+    }
+
+    bool
+    operator!= (const Field &other) const {
+        return !(*this == other);
+    }
+};
+
 class StructDef : public Node {
-    basic::NameObj             _name;
-    std::vector<basic::Type *> _fields;
-    symbols::Struct           *_base;
+    basic::NameObj     _name;
+    std::vector<Field> _fields;
+    symbols::Struct   *_base;
 
 public:
     StructDef (
-        basic::NameObj             name,
-        std::vector<basic::Type *> fields,
-        symbols::Struct           *base,
-        llvm::SMLoc                start,
-        llvm::SMLoc                end)
+        basic::NameObj     name,
+        std::vector<Field> fields,
+        symbols::Struct   *base,
+        llvm::SMLoc        start,
+        llvm::SMLoc        end)
         : _name (std::move (name)),
           _fields (std::move (fields)),
           _base (base),
@@ -31,7 +52,7 @@ public:
         return _name;
     }
 
-    std::vector<basic::Type *> &
+    std::vector<Field> &
     Fields () {
         return _fields;
     }

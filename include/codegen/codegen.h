@@ -149,6 +149,9 @@ private:
     mangleStructSymbol (symbols::Struct *sym) const;
 
     std::string
+    mangleStaticField (symbols::Struct *sym, const std::string &fieldName) const;
+
+    std::string
     mangleModule (symbols::Module *mod) const;
 
     std::string
