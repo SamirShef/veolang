@@ -1,6 +1,5 @@
 #include <basic/symbols/module.h>
-#include <basic/types/floating.h>
-#include <basic/types/integer.h>
+#include <basic/types/all.h>
 #include <codegen/codegen.h>
 #include <sstream>
 
@@ -154,6 +153,7 @@ CodeGen::generateExpr (Node *node) {
         variant (LoadVar, generateLoadVar, LoadVar);
         variant (FuncCall, generateFuncCall, FuncCall);
         variant (StoreVar, generateStoreVar, StoreVar);
+        variant (StructInstance, generateStructInstance, StructInstance);
     default: return nullptr;
     }
 #undef variant
@@ -174,6 +174,8 @@ CodeGen::generateLiteralExpr (LiteralExpr *le) {
             std::get<1> (val.Data));
     case basic::TypeKind::Bool: return _builder.getInt1 (std::get<0> (val.Data) != 0);
     case basic::TypeKind::Char: return _builder.getInt32 (std::get<0> (val.Data));
+    default: {
+    }
     }
     return nullptr;
 }
@@ -313,6 +315,40 @@ CodeGen::generateStoreVar (StoreVar *sv) {
 }
 
 llvm::Value *
+CodeGen::generateStructInstance (hir::StructInstance *si) {
+    const auto       *sym = si->BaseSymbol ();
+    llvm::StructType *type
+        = llvm::StructType::getTypeByName (_ctx, mangleStructSymbol (si->BaseSymbol ()));
+    if (_curFunc.has_value ()) {
+        // local scope
+        auto                      *structAlloca = _builder.CreateAlloca (type);
+        std::vector<llvm::Value *> fields (sym->Fields.size ());
+        llvm::Value               *indices[2] = {
+            _builder.getInt64 (0) // get the pointer to the struct
+        };
+        for (const auto &[index, expr] : si->Fields ()) {
+            indices[1] = _builder.getInt64 (index); // fields index
+            auto *val  = generateExpr (expr);
+            auto *gep  = _builder.CreateInBoundsGEP (type, structAlloca, indices);
+            _builder.CreateStore (val, gep);
+        }
+        return _builder.CreateLoad (type, structAlloca);
+    }
+    // global scope
+    std::vector<llvm::Constant *> fields (sym->Fields.size ());
+    for (const auto &[index, expr] : si->Fields ()) {
+        auto *val     = generateExpr (expr);
+        fields[index] = llvm::cast<llvm::Constant> (val);
+    }
+    for (size_t i = 0; i < fields.size (); ++i) {
+        if (fields[i] == nullptr) {
+            fields[i] = llvm::Constant::getNullValue (getType (sym->Fields[i].Type));
+        }
+    }
+    return llvm::ConstantStruct::get (type, fields);
+}
+
+llvm::Value *
 CodeGen::generateLValue (Node *node) {
     if (node == nullptr) {
         return nullptr;
@@ -339,6 +375,10 @@ CodeGen::getType (basic::Type *type) {
                                                : _builder.getDoubleTy ();
     case basic::TypeKind::Bool: return _builder.getInt1Ty ();
     case basic::TypeKind::Char: return _builder.getInt32Ty ();
+    case basic::TypeKind::Struct:
+        return llvm::StructType::getTypeByName (
+            _ctx,
+            mangleStructSymbol (type->AsStruct ()->BaseSymbol ()));
     }
 }
 
@@ -368,7 +408,11 @@ CodeGen::mangleGlobalVar (VarDef *var) const {
 
 std::string
 CodeGen::mangleStruct (hir::StructDef *sd) const {
-    auto              *sym = sd->BaseSymbol ();
+    return mangleStructSymbol (sd->BaseSymbol ());
+}
+
+std::string
+CodeGen::mangleStructSymbol (symbols::Struct *sym) const {
     std::ostringstream oss;
     oss << "_VS";
     oss << mangleModule (sym->Parent);
@@ -404,6 +448,10 @@ CodeGen::mangleType (basic::Type *type) const {
         return llvm::cast<basic::FloatingType> (type)->IsFloat () ? "f" : "d";
     case basic::TypeKind::Bool: return "b";
     case basic::TypeKind::Char: return "c";
+    case basic::TypeKind::Struct: {
+        auto *sym = type->AsStruct ()->BaseSymbol ();
+        return "S" + std::to_string (sym->Name.Val.size ()) + sym->Name.Val;
+    }
     }
     return "";
 }

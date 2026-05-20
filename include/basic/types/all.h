@@ -2,4 +2,5 @@
 #include <basic/types/char.h>
 #include <basic/types/floating.h>
 #include <basic/types/integer.h>
+#include <basic/types/struct_type.h>
 #include <basic/types/type.h>

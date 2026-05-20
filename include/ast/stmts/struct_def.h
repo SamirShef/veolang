@@ -27,8 +27,9 @@ struct Field {
 
     bool
     operator== (const Field &other) const {
-        return Name == other.Name && *Type == *other.Type && IsStatic == other.IsStatic
-               && IsConst == other.IsConst && Access == other.Access;
+        return Name.Val == other.Name.Val && *Type == *other.Type
+               && IsStatic == other.IsStatic && IsConst == other.IsConst
+               && Access == other.Access;
     }
 
     bool

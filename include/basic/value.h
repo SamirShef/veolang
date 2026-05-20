@@ -21,6 +21,16 @@ struct Value {
     Value (ValueKind kind, class Type *type) : Kind (kind), Type (type) {}
 
     bool
+    operator== (const Value &other) const {
+        return Kind == other.Kind && Data == other.Data && *Type == *other.Type;
+    }
+
+    bool
+    operator!= (const Value &other) const {
+        return !(*this == other);
+    }
+
+    bool
     IsUnknown () const {
         return Kind == ValueKind::Unknown;
     }

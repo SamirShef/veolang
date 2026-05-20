@@ -16,6 +16,7 @@ enum class NodeKind : uint8_t {
     StoreVar,
     Branch,
     StructDef,
+    StructInstance,
 };
 
 }

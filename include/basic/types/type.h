@@ -8,13 +8,14 @@ class IntegerType;
 class FloatingType;
 class BoolType;
 class CharType;
+class StructType;
 
 #define type_classof(kind)                                                               \
     static bool classof (const veo::basic::Type *type) {                                 \
         return type->Kind () == (veo::basic::TypeKind::kind);                            \
     }
 
-enum class TypeKind : uint8_t { Integer, Floating, Bool, Char };
+enum class TypeKind : uint8_t { Integer, Floating, Bool, Char, Struct };
 
 class Type {
     TypeKind _kind;
@@ -51,6 +52,8 @@ public:
     as (Bool);
     is (Char);
     as (Char);
+    is (Struct);
+    as (Struct);
 
     bool
     IsNumber () const {

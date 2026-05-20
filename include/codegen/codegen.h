@@ -9,6 +9,7 @@
 #include <hir/ret.h>
 #include <hir/store_var.h>
 #include <hir/struct_def.h>
+#include <hir/struct_instance.h>
 #include <hir/un_expr.h>
 #include <hir/var_def.h>
 #include <llvm/IR/Function.h>
@@ -127,6 +128,9 @@ private:
     generateStoreVar (hir::StoreVar *sv);
 
     llvm::Value *
+    generateStructInstance (hir::StructInstance *si);
+
+    llvm::Value *
     generateLValue (hir::Node *node);
 
     llvm::Type *
@@ -140,6 +144,9 @@ private:
 
     std::string
     mangleStruct (hir::StructDef *sd) const;
+
+    std::string
+    mangleStructSymbol (symbols::Struct *sym) const;
 
     std::string
     mangleModule (symbols::Module *mod) const;

@@ -12,6 +12,7 @@
 #include <hir/ret.h>
 #include <hir/store_var.h>
 #include <hir/struct_def.h>
+#include <hir/struct_instance.h>
 #include <hir/un_expr.h>
 
 namespace veo::hir {
@@ -187,6 +188,15 @@ public:
             end);
         _ctx.AddStruct (node);
         return node;
+    }
+
+    StructInstance *
+    CreateStructInstance (
+        std::vector<std::pair<size_t, Node *>> fields,
+        symbols::Struct                       *base,
+        llvm::SMLoc                            start,
+        llvm::SMLoc                            end) {
+        return _ctx.CreateNode<StructInstance> (std::move (fields), base, start, end);
     }
 };
 

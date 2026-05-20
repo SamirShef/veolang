@@ -23,10 +23,28 @@ struct Function {
           RetType (retType),
           Args (std::move (args)),
           Parent (parent) {}
+
+    bool
+    operator== (const Function &other) const;
+
+    bool
+    operator!= (const Function &other) const {
+        return !(*this == other);
+    }
 };
 
 struct FunctionCandidates {
     std::vector<std::unique_ptr<Function>> Candidates;
+
+    bool
+    operator== (const FunctionCandidates &other) const {
+        return Candidates == other.Candidates;
+    }
+
+    bool
+    operator!= (const FunctionCandidates &other) const {
+        return !(*this == other);
+    }
 };
 
 }

@@ -31,6 +31,14 @@ struct Variable {
           Index (index),
           Val (val),
           Parent (parent) {}
+
+    bool
+    operator== (const Variable &other) const;
+
+    bool
+    operator!= (const Variable &other) const {
+        return !(*this == other);
+    }
 };
 
 }

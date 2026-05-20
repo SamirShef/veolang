@@ -1,8 +1,10 @@
 #pragma once
 #include <ast/exprs/asgn_expr.h>
 #include <ast/exprs/bin_expr.h>
+#include <ast/exprs/field_expr.h>
 #include <ast/exprs/func_call.h>
 #include <ast/exprs/lit_expr.h>
+#include <ast/exprs/struct_instance.h>
 #include <ast/exprs/un_expr.h>
 #include <ast/exprs/var_expr.h>
 #include <ast/stmts/break_continue.h>
@@ -129,6 +131,12 @@ private:
 
     SemanticResult
     analyzeAsgnExpr (ast::AsgnExpr *ae, Type *expectedType);
+
+    SemanticResult
+    analyzeFieldExpr (ast::FieldExpr *fe, Type *expectedType);
+
+    SemanticResult
+    analyzeStructInstance (ast::StructInstance *si, Type *expectedType);
 
     Type *
     resolveType (Type **type);

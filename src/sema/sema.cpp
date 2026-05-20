@@ -1,3 +1,6 @@
+#include "ast/exprs/struct_instance.h"
+
+#include <algorithm>
 #include <basic/types/all.h>
 #include <basic/value.h>
 #include <cstdint>
@@ -63,12 +66,33 @@ Sema::analyzeVarDef (VarDef *vd) {
     auto val = analyzeExpr (vd->Init (), vd->Type ());
     if (val.Val.has_value ()) {
         if (isGlobal) {
-            switch (vd->Init ()->Kind ()) {
-            case ast::NodeKind::LitExpr:
-            case ast::NodeKind::BinExpr:
-            case ast::NodeKind::UnExpr:
-            case ast::NodeKind::VarExpr: break;
-            default: {
+            //     switch (vd->Init ()->Kind ()) {
+            //     case ast::NodeKind::LitExpr:
+            //     case ast::NodeKind::BinExpr:
+            //     case ast::NodeKind::UnExpr:
+            //     case ast::NodeKind::VarExpr: break;
+            //     case ast::NodeKind::StructInstance: {
+            //         if (val.Val->Kind == ValueKind::Const) {
+            //             break;
+            //         }
+            //     }
+            //     default: {
+            //         _diag
+            //             .Report (
+            //                 DiagCode::ECannotInitRuntimeVal,
+            //                 "cannot initialize global variable with a runtime value",
+            //                 Severity::Error)
+            //             .AddSpan (
+            //                 vd->Init ()->Start (),
+            //                 vd->Init ()->End (),
+            //                 "evaluated at runtime")
+            //             .AddNote (
+            //                 "global variables can only be initialized with compile-time
+            //                 " "constants or other global variables");
+            //         return;
+            //     }
+            //     }
+            if (val.Val->Kind != ValueKind::Const) {
                 _diag
                     .Report (
                         DiagCode::ECannotInitRuntimeVal,
@@ -82,7 +106,6 @@ Sema::analyzeVarDef (VarDef *vd) {
                         "global variables can only be initialized with compile-time "
                         "constants or other global variables");
                 return;
-            }
             }
         }
         if (vd->IsConst ()) {
@@ -456,6 +479,8 @@ Sema::analyzeExpr (Expr *expr, Type *expectedType) {
         variant (VarExpr, analyzeVarExpr, VarExpr);
         variant (FuncCall, analyzeFuncCall, FuncCall);
         variant (AsgnExpr, analyzeAsgnExpr, AsgnExpr);
+        variant (FieldExpr, analyzeFieldExpr, FieldExpr);
+        variant (StructInstance, analyzeStructInstance, StructInstance);
     default: return {};
     }
 #undef variant
@@ -873,6 +898,64 @@ Sema::analyzeAsgnExpr (AsgnExpr *ae, Type *expectedType) {
     }
     auto *node = _builder.CreateStoreVar (loadVar, expr.Node, ae->Start (), ae->End ());
     return { expr.Val, node };
+}
+
+Sema::SemanticResult
+Sema::analyzeFieldExpr (FieldExpr *fe, Type *expectedType) {
+    return {};
+}
+
+Sema::SemanticResult
+Sema::analyzeStructInstance (StructInstance *si, Type *expectedType) {
+    auto it = _mod->Structs.find (si->Path ().Val);
+    if (it == _mod->Structs.end ()) {
+        // TODO: report error
+        return {};
+    }
+    auto                                       *s = &it->second;
+    std::vector<std::pair<size_t, hir::Node *>> fields;
+    std::unordered_map<size_t, NameObj>         initializedFields;
+    ValueKind                                   valKind = ValueKind::Const;
+    for (const auto &[name, expr] : si->Fields ()) {
+        auto it = std::ranges::find_if (s->Fields, [&] (const symbols::Field &f) {
+            return f.Name.Val == name.Val; // NOLINT(modernize-type-traits)
+        });
+        if (it == s->Fields.end ()) {
+            // TODO: report error
+            return {};
+        }
+        const auto *field = it.base ();
+        size_t      index = it - s->Fields.begin ();
+        if (auto it = initializedFields.find (index); it != initializedFields.end ()) {
+            // TODO: report error
+            return {};
+        }
+        if (it->Access == AccessModifier::Priv) {
+            // TODO: report error
+            return {};
+        }
+        if (it->IsConst) {
+            // TODO: report error
+            return {};
+        }
+        if (it->IsStatic) {
+            // TODO: report error
+            return {};
+        }
+        initializedFields.emplace (index, name);
+        auto val = analyzeExpr (expr, field->Type);
+        if (!val.Val.has_value ()) {
+            continue;
+        }
+        if (val.Val->Kind == ValueKind::Unknown) {
+            valKind = ValueKind::Unknown;
+        }
+        fields.emplace_back (index, val.Node);
+    }
+    auto *node
+        = _builder.CreateStructInstance (std::move (fields), s, si->Start (), si->End ());
+    auto val = Value (valKind, new StructType (s));
+    return { val, node };
 }
 
 Type *

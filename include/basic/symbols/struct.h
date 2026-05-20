@@ -26,6 +26,18 @@ struct Field {
           IsStatic (isStatic),
           IsConst (isConst),
           Access (access) {}
+
+    bool
+    operator== (const Field &other) const {
+        return Name.Val == other.Name.Val && *Type == *other.Type
+               && IsStatic == other.IsStatic && IsConst == other.IsConst
+               && Access == other.Access;
+    }
+
+    bool
+    operator!= (const Field &other) const {
+        return !(*this == other);
+    }
 };
 
 struct Struct {
@@ -35,6 +47,14 @@ struct Struct {
 
     Struct (basic::NameObj name, std::vector<Field> fields, Module *parent)
         : Name (std::move (name)), Fields (std::move (fields)), Parent (parent) {}
+
+    bool
+    operator== (const Struct &other) const;
+
+    bool
+    operator!= (const Struct &other) const {
+        return !(*this == other);
+    }
 };
 
 }

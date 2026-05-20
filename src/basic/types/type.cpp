@@ -9,6 +9,7 @@ as (Integer);
 as (Floating);
 as (Bool);
 as (Char);
+as (Struct);
 
 #undef as
 
@@ -32,6 +33,11 @@ operator== (const Type &lhs, const Type &rhs) {
         const auto *flhs = lhs.AsFloating ();
         const auto *frhs = rhs.AsFloating ();
         return flhs->GetFloatingKind () == frhs->GetFloatingKind ();
+    }
+    case TypeKind::Struct: {
+        const auto *slhs = lhs.AsStruct ();
+        const auto *srhs = rhs.AsStruct ();
+        return *slhs->BaseSymbol () == *srhs->BaseSymbol ();
     }
     default: return true;
     }
