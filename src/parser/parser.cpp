@@ -566,6 +566,18 @@ Parser::consumeType () {
     case TokenKind::F64:
         return new basic::FloatingType (
             (basic::FloatingKind) ((unsigned) tok.Kind - (unsigned) TokenKind::F32));
+    case TokenKind::Id: {
+        std::vector<basic::NameObj> path;
+        path.emplace_back (tok);
+        while (match (TokenKind::Dot)) {
+            basic::NameObj name;
+            if (!expectName (name)) {
+                return nullptr;
+            }
+            path.emplace_back (name);
+        }
+        return new basic::NamedType (std::move (path));
+    }
     default:
         _diag
             .Report (

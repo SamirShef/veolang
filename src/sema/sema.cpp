@@ -61,36 +61,10 @@ Sema::analyzeVarDef (VarDef *vd) {
     }
     bool  isGlobal = _vars.size () == 1;
     Type *type     = vd->Type ();
-    resolveType (&vd->Type ());
+    resolveType (&type);
     auto val = analyzeExpr (vd->Init (), vd->Type ());
     if (val.Val.has_value ()) {
         if (isGlobal) {
-            //     switch (vd->Init ()->Kind ()) {
-            //     case ast::NodeKind::LitExpr:
-            //     case ast::NodeKind::BinExpr:
-            //     case ast::NodeKind::UnExpr:
-            //     case ast::NodeKind::VarExpr: break;
-            //     case ast::NodeKind::StructInstance: {
-            //         if (val.Val->Kind == ValueKind::Const) {
-            //             break;
-            //         }
-            //     }
-            //     default: {
-            //         _diag
-            //             .Report (
-            //                 DiagCode::ECannotInitRuntimeVal,
-            //                 "cannot initialize global variable with a runtime value",
-            //                 Severity::Error)
-            //             .AddSpan (
-            //                 vd->Init ()->Start (),
-            //                 vd->Init ()->End (),
-            //                 "evaluated at runtime")
-            //             .AddNote (
-            //                 "global variables can only be initialized with compile-time
-            //                 " "constants or other global variables");
-            //         return;
-            //     }
-            //     }
             if (val.Val->Kind != ValueKind::Const) {
                 _diag
                     .Report (
@@ -126,6 +100,12 @@ Sema::analyzeVarDef (VarDef *vd) {
         if (val.Val.has_value ()) {
             type = val.Val->Type;
         } else {
+            _diag
+                .Report (
+                    DiagCode::ECannotInferType,
+                    "cannot infer type for variable '" + vd->Name ().Val + "'",
+                    Severity::Error)
+                .AddSpan (vd->Name ().Start, vd->Name ().End);
             return;
         }
     }
@@ -846,6 +826,7 @@ Sema::analyzeFuncCall (FuncCall *fc, Type *expectedType) {
              _builder.CreateCall (func, std::move (hirArgs), fc->Start (), fc->End ()) };
 }
 
+// NOLINTBEGIN(readability-function-cognitive-complexity)
 Sema::SemanticResult
 Sema::analyzeAsgnExpr (AsgnExpr *ae, Type *expectedType) {
     if (ae->Ptr () == nullptr) {
@@ -975,6 +956,7 @@ Sema::analyzeAsgnExpr (AsgnExpr *ae, Type *expectedType) {
     auto *node = _builder.CreateStore (ptr.Node, expr.Node, ae->Start (), ae->End ());
     return { expr.Val, node };
 }
+// NOLINTEND(readability-function-cognitive-complexity)
 
 Sema::SemanticResult
 Sema::analyzeFieldExpr (FieldExpr *fe, Type *expectedType) {
@@ -1149,7 +1131,43 @@ Sema::resolveType (Type **type) {
     if (*type == nullptr) {
         return *type;
     }
-    // TODO: implement resolving logic (after structs)
+    if (!(*type)->IsNamed ()) {
+        return *type;
+    }
+
+    const auto *named  = (*type)->AsNamed ();
+    Module     *curMod = _mod;
+    const auto &path   = named->Path ();
+    for (size_t i = 0; i < path.size () - 1; ++i) {
+        const auto &name = path[i];
+        if (auto it = curMod->Submods.find (name.Val); it != curMod->Submods.end ()) {
+            curMod = it->second;
+        } else if (auto it = curMod->Imports.find (name.Val);
+                   it != curMod->Imports.end ()) {
+            curMod = it->second;
+        } else {
+            _diag
+                .Report (
+                    DiagCode::ECannotFindMod,
+                    "cannot find module '" + name.Val + "'",
+                    Severity::Error)
+                .AddSpan (name.Start, name.End, "no such module found");
+            return nullptr;
+        }
+    }
+    const auto &typeName = path.back ();
+    if (!curMod->Structs.contains (typeName.Val)) {
+        _diag
+            .Report (
+                DiagCode::ECannotFindType,
+                "cannot find type '" + typeName.Val + "' in "
+                    + (path.size () == 1 ? "this scope" : curMod->ToString ()),
+                Severity::Error)
+            .AddSpan (typeName.Start, typeName.End, "not found");
+        return nullptr;
+    }
+    // NOLINTNEXTLINE(cppcoreguidelines-owning-memory)
+    *type = new StructType (&curMod->Structs.at (typeName.Val));
     return *type;
 }
 // NOLINTEND(readability-convert-member-functions-to-static)
@@ -1417,15 +1435,15 @@ Sema::resolveBestOverload (
             continue;
         }
 
-        bool viable  = true;
-        int  costSum = 0;
-        for (int i = 0; i < argTypes.size (); ++i) {
+        bool   viable  = true;
+        size_t costSum = 0;
+        for (size_t i = 0; i < argTypes.size (); ++i) {
             CastCost cost = checkCastCost (argTypes[i], cand->Args[i].Type);
             if (cost == CastCost::Incompatible) {
                 viable = false;
                 break;
             }
-            costSum += static_cast<uint16_t> (cost);
+            costSum += static_cast<size_t> (cost);
         }
 
         if (viable) {
@@ -1461,10 +1479,10 @@ Sema::resolveBestOverload (
     }
 
     Function *bestCand    = viableCandidates[0].first;
-    int       minCost     = viableCandidates[0].second;
+    size_t    minCost     = viableCandidates[0].second;
     bool      isAmbiguous = false;
 
-    for (int i = 1; i < viableCandidates.size (); ++i) {
+    for (size_t i = 1; i < viableCandidates.size (); ++i) {
         if (viableCandidates[i].second < minCost) {
             minCost     = viableCandidates[i].second;
             bestCand    = viableCandidates[i].first;

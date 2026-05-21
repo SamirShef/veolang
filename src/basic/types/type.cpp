@@ -10,6 +10,7 @@ as (Floating);
 as (Bool);
 as (Char);
 as (Struct);
+as (Named);
 
 #undef as
 
@@ -38,6 +39,11 @@ operator== (const Type &lhs, const Type &rhs) {
         const auto *slhs = lhs.AsStruct ();
         const auto *srhs = rhs.AsStruct ();
         return *slhs->BaseSymbol () == *srhs->BaseSymbol ();
+    }
+    case TypeKind::Named: {
+        const auto *nlhs = lhs.AsNamed ();
+        const auto *nrhs = rhs.AsNamed ();
+        return nlhs->Path () == nrhs->Path ();
     }
     default: return true;
     }
