@@ -6,11 +6,12 @@
 #include <hir/branch.h>
 #include <hir/context.h>
 #include <hir/expr_stmt.h>
+#include <hir/field_expr.h>
 #include <hir/func_call.h>
 #include <hir/lit_expr.h>
 #include <hir/load_var.h>
 #include <hir/ret.h>
-#include <hir/store_var.h>
+#include <hir/store.h>
 #include <hir/struct_def.h>
 #include <hir/struct_instance.h>
 #include <hir/un_expr.h>
@@ -135,9 +136,9 @@ public:
         return _ctx.CreateNode<LoadVar> (id, type, isGlobal, start, end);
     }
 
-    StoreVar *
-    CreateStoreVar (Node *ptr, Node *expr, llvm::SMLoc start, llvm::SMLoc end) {
-        return _ctx.CreateNode<StoreVar> (ptr, expr, start, end);
+    Store *
+    CreateStore (Node *ptr, Node *expr, llvm::SMLoc start, llvm::SMLoc end) {
+        return _ctx.CreateNode<Store> (ptr, expr, start, end);
     }
 
     ExprStmt *
@@ -188,6 +189,11 @@ public:
             end);
         _ctx.AddStruct (node);
         return node;
+    }
+
+    FieldExpr *
+    CreateFieldExpr (Node *base, size_t index, llvm::SMLoc start, llvm::SMLoc end) {
+        return _ctx.CreateNode<FieldExpr> (base, index, start, end);
     }
 
     StructInstance *

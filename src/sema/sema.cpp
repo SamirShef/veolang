@@ -122,8 +122,12 @@ Sema::analyzeVarDef (VarDef *vd) {
             }
         }
     }
-    if (type == nullptr && val.Val.has_value ()) {
-        type = val.Val->Type;
+    if (type == nullptr) {
+        if (val.Val.has_value ()) {
+            type = val.Val->Type;
+        } else {
+            return;
+        }
     }
     auto var = Variable (
         vd->Name (),
@@ -849,11 +853,15 @@ Sema::analyzeAsgnExpr (AsgnExpr *ae, Type *expectedType) {
     }
     if (ae->Ptr ()->Kind () != NodeKind::VarExpr
         && ae->Ptr ()->Kind () != NodeKind::FieldExpr) {
-        // TODO: report error
+        _diag
+            .Report (
+                DiagCode::ELHSIsNotAssignable,
+                "left-hand side of assignment is not assignable",
+                Severity::Error)
+            .AddSpan (ae->Ptr ()->Start (), ae->Ptr ()->End ());
         return {};
     }
 
-    // TODO: variable or field
     auto ptr = analyzeExpr (ae->Ptr (), nullptr);
     if (!ptr.Val.has_value ()) {
         return {};
@@ -872,23 +880,28 @@ Sema::analyzeAsgnExpr (AsgnExpr *ae, Type *expectedType) {
             .AddSpan (ae->Ptr ()->Start (), ae->Ptr ()->End ());
         return {};
     }
-    auto  var     = getVariable (llvm::cast<VarExpr> (ae->Ptr ())->Name ().Val);
-    auto *loadVar = _builder.CreateLoadVar (
-        var->Index,
-        var->Type,
-        var->IsGlobal,
-        ae->Ptr ()->Start (),
-        ae->Ptr ()->End ());
-    if (ae->Op () != AsgnOp::Eq) {
-        auto op   = AsgnOpToBinOp (ae->Op ());
-        expr.Node = _builder.CreateBinary (
-            op,
-            expr.Val->Type,
-            loadVar,
-            expr.Node,
-            ae->Init ()->Start (),
-            ae->Init ()->End ());
+    if (ae->Ptr ()->Kind () == NodeKind::VarExpr) {
+        auto var = getVariable (llvm::cast<VarExpr> (ae->Ptr ())->Name ().Val);
+        auto op  = AsgnOpToBinOp (ae->Op ());
+        if (ae->Op () != AsgnOp::Eq) {
+            expr.Node = _builder.CreateBinary (
+                op,
+                expr.Val->Type,
+                ptr.Node,
+                expr.Node,
+                ae->Init ()->Start (),
+                ae->Init ()->End ());
+        }
         if (var->IsConst) {
+            _diag
+                .Report (
+                    DiagCode::ECannotModifyConst,
+                    "cannot assign to a constant variable '" + var->Name.Val + "'",
+                    Severity::Error)
+                .AddSpan (ae->Ptr ()->Start (), ae->Ptr ()->End ());
+            return {};
+        }
+        if (expr.Val->Kind == ValueKind::Const) {
             expr.Val = foldBinary (
                 op,
                 *var->Val,
@@ -899,14 +912,143 @@ Sema::analyzeAsgnExpr (AsgnExpr *ae, Type *expectedType) {
         } else {
             expr.Val = Value (ValueKind::Unknown, expr.Val->Type);
         }
+    } else { // only field
+        auto *fieldExpr = llvm::cast<FieldExpr> (ae->Ptr ());
+        auto  base      = analyzeExpr (fieldExpr->Base (), nullptr);
+        if (!base.Val.has_value ()) {
+            return {};
+        }
+        if (!base.Val->Type->IsStruct ()) {
+            _diag
+                .Report (
+                    DiagCode::ECannotAccessFromNonStruct,
+                    "attempted to access a field on a non-structure type '"
+                        + base.Val->Type->ToString () + "'",
+                    Severity::Error)
+                .AddSpan (fieldExpr->Name ().Start, fieldExpr->Name ().End);
+            return {};
+        }
+        auto *sym = base.Val->Type->AsStruct ()->BaseSymbol ();
+        auto  field
+            = std::ranges::find_if (sym->Fields, [&] (const symbols::Field &field) {
+                  return field.Name.Val == fieldExpr->Name ().Val;
+              });
+        if (field == sym->Fields.end ()) {
+            return {};
+        }
+        if (field->IsStatic) {
+            _diag
+                .Report (
+                    DiagCode::ECannotAccessStaticMemberFromInstance,
+                    "static field '" + fieldExpr->Name ().Val
+                        + "' cannot be accessed through an instance",
+                    Severity::Error)
+                .AddSpan (fieldExpr->Name ().Start, fieldExpr->Name ().End)
+                .AddNote (
+                    "use the type name instead to access this field: '" + sym->Name.Val
+                    + "." + fieldExpr->Name ().Val + "'");
+            return {};
+        }
+        if (field->IsConst) {
+            _diag
+                .Report (
+                    DiagCode::ECannotModifyConst,
+                    "cannot assign to a constant field '" + field->Name.Val
+                        + "' in struct '" + sym->Name.Val + "'",
+                    Severity::Error)
+                .AddSpan (ae->Ptr ()->Start (), ae->Ptr ()->End ());
+            return {};
+        }
+        auto op = AsgnOpToBinOp (ae->Op ());
+        if (ae->Op () != AsgnOp::Eq) {
+            expr.Node = _builder.CreateBinary (
+                op,
+                expr.Val->Type,
+                ptr.Node,
+                expr.Node,
+                ae->Init ()->Start (),
+                ae->Init ()->End ());
+        }
+        expr.Val = Value (ValueKind::Unknown, expr.Val->Type);
     }
-    auto *node = _builder.CreateStoreVar (loadVar, expr.Node, ae->Start (), ae->End ());
+    expr       = implicitlyCast (expr, &expectedType, ae->Start (), ae->End ());
+    auto *node = _builder.CreateStore (ptr.Node, expr.Node, ae->Start (), ae->End ());
     return { expr.Val, node };
 }
 
 Sema::SemanticResult
 Sema::analyzeFieldExpr (FieldExpr *fe, Type *expectedType) {
-    return {};
+    auto base = analyzeExpr (fe->Base (), nullptr);
+    if (!base.Val.has_value ()) {
+        return {};
+    }
+    if (!base.Val->Type->IsStruct ()) {
+        _diag
+            .Report (
+                DiagCode::ECannotAccessFromNonStruct,
+                "attempted to access a field on a non-structure type '"
+                    + base.Val->Type->ToString () + "'",
+                Severity::Error)
+            .AddSpan (fe->Name ().Start, fe->Name ().End);
+        return {};
+    }
+    auto *s  = base.Val->Type->AsStruct ()->BaseSymbol ();
+    auto  it = std::ranges::find_if (s->Fields, [&] (const symbols::Field &field) {
+        return field.Name.Val == fe->Name ().Val;
+    });
+    if (it == s->Fields.end ()) {
+        std::ostringstream availableFields;
+        size_t             index = 0;
+        for (const auto &field : s->Fields) {
+            if (!field.IsStatic && field.Access == AccessModifier::Pub) {
+                if (index != 0) {
+                    availableFields << ", ";
+                }
+                availableFields << field.Name.Val;
+                ++index;
+            }
+        }
+        auto &err = _diag
+                        .Report (
+                            DiagCode::EUndefined,
+                            "type '" + s->Name.Val + "' has no field named '"
+                                + fe->Name ().Val + "'",
+                            Severity::Error)
+                        .AddSpan (fe->Name ().Start, fe->Name ().End);
+        if (!availableFields.str ().empty ()) {
+            err.AddNote ("available fields: " + availableFields.str ());
+        }
+        return {};
+    }
+    if (it->IsStatic) {
+        _diag
+            .Report (
+                DiagCode::ECannotAccessStaticMemberFromInstance,
+                "static field '" + fe->Name ().Val
+                    + "' cannot be accessed through an instance",
+                Severity::Error)
+            .AddSpan (fe->Name ().Start, fe->Name ().End)
+            .AddNote (
+                "use the type name instead to access this field: '" + s->Name.Val + "."
+                + fe->Name ().Val + "'");
+        return {};
+    }
+    if (it->Access != AccessModifier::Pub) {
+        _diag
+            .Report (
+                DiagCode::ECannotAccessToPrivMember,
+                "field '" + fe->Name ().Val + "' of struct '" + s->Name.Val
+                    + "' is private",
+                Severity::Error)
+            .AddSpan (fe->Name ().Start, fe->Name ().End);
+        return {};
+    }
+    auto *node
+        = _builder.CreateFieldExpr (base.Node, it->Index, fe->Start (), fe->End ());
+    auto val = Value (ValueKind::Unknown, it->Type);
+    auto res = SemanticResult (val, node);
+    res      = implicitlyCast (res, &expectedType, fe->Start (), fe->End ());
+    return res;
 }
 
 Sema::SemanticResult
@@ -926,7 +1068,7 @@ Sema::analyzeStructInstance (StructInstance *si, Type *expectedType) {
     std::unordered_map<size_t, NameObj>         initializedFields;
     ValueKind                                   valKind = ValueKind::Const;
     for (const auto &field : s->Fields) {
-        if (field.Access == AccessModifier::Priv) {
+        if (field.Access != AccessModifier::Pub) {
             _diag
                 .Report (
                     DiagCode::ECannotInitStructWithPrivFields,
@@ -997,7 +1139,9 @@ Sema::analyzeStructInstance (StructInstance *si, Type *expectedType) {
     auto *node
         = _builder.CreateStructInstance (std::move (fields), s, si->Start (), si->End ());
     auto val = Value (valKind, new StructType (s));
-    return { val, node };
+    auto res = SemanticResult (val, node);
+    res      = implicitlyCast (res, &expectedType, si->Start (), si->End ());
+    return res;
 }
 
 Type *
@@ -1208,7 +1352,7 @@ Sema::SemanticResult
 Sema::implicitlyCast (
     SemanticResult val, Type **expectedType, llvm::SMLoc start, llvm::SMLoc end) {
     if (!val.Val.has_value () || *expectedType == nullptr) {
-        return {};
+        return val;
     }
     resolveType (&val.Val->Type);
     resolveType (expectedType);

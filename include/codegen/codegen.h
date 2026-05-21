@@ -2,12 +2,13 @@
 #include <hir/bin_expr.h>
 #include <hir/branch.h>
 #include <hir/expr_stmt.h>
+#include <hir/field_expr.h>
 #include <hir/func.h>
 #include <hir/func_call.h>
 #include <hir/lit_expr.h>
 #include <hir/load_var.h>
 #include <hir/ret.h>
-#include <hir/store_var.h>
+#include <hir/store.h>
 #include <hir/struct_def.h>
 #include <hir/struct_instance.h>
 #include <hir/un_expr.h>
@@ -125,7 +126,10 @@ private:
     generateFuncCall (hir::FuncCall *fc);
 
     llvm::Value *
-    generateStoreVar (hir::StoreVar *sv);
+    generateStore (hir::Store *store);
+
+    llvm::Value *
+    generateFieldExpr (hir::FieldExpr *fe);
 
     llvm::Value *
     generateStructInstance (hir::StructInstance *si);

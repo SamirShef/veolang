@@ -164,7 +164,8 @@ CodeGen::generateExpr (Node *node) {
         variant (UnExpr, generateUnaryExpr, UnaryExpr);
         variant (LoadVar, generateLoadVar, LoadVar);
         variant (FuncCall, generateFuncCall, FuncCall);
-        variant (StoreVar, generateStoreVar, StoreVar);
+        variant (Store, generateStore, Store);
+        variant (FieldExpr, generateFieldExpr, FieldExpr);
         variant (StructInstance, generateStructInstance, StructInstance);
     default: return nullptr;
     }
@@ -319,11 +320,17 @@ CodeGen::generateFuncCall (FuncCall *fc) {
 }
 
 llvm::Value *
-CodeGen::generateStoreVar (StoreVar *sv) {
-    auto *lvalue = generateLValue (sv->Ptr ());
-    auto *val    = generateExpr (sv->Expr ());
+CodeGen::generateStore (Store *store) {
+    auto *lvalue = generateLValue (store->Ptr ());
+    auto *val    = generateExpr (store->Expr ());
     _builder.CreateStore (val, lvalue);
     return val;
+}
+
+llvm::Value *
+CodeGen::generateFieldExpr (hir::FieldExpr *fe) {
+    auto *base = generateExpr (fe->Base ());
+    return _builder.CreateExtractValue (base, fe->Index ());
 }
 
 llvm::Value *
@@ -372,6 +379,12 @@ CodeGen::generateLValue (Node *node) {
             return _globals[lv->Id ()];
         }
         return _curFunc->Locals[lv->Id ()];
+    }
+    case NodeKind::FieldExpr: {
+        auto *fe   = llvm::cast<FieldExpr> (node);
+        auto *base = generateExpr (fe->Base ());   // LOADED struct
+        auto *ptr  = generateLValue (fe->Base ()); // POINTER to struct
+        return _builder.CreateStructGEP (base->getType (), ptr, fe->Index ());
     }
     default: return nullptr;
     }

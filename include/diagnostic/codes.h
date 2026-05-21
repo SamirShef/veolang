@@ -32,6 +32,11 @@ enum class DiagCode : uint8_t {
     ECannotInitStructWithPrivFields,
     ECannotInitConstField,
     ECannotInitStaticField,
+    ELHSIsNotAssignable,
+    ECannotModifyConst,
+    ECannotAccessFromNonStruct,
+    ECannotAccessToPrivMember,
+    ECannotAccessStaticMemberFromInstance,
 
     WUnusedVar,
     WLossPrecision,

@@ -3,15 +3,15 @@
 
 namespace veo::hir {
 
-class StoreVar : public Node {
+class Store : public Node {
     Node *_ptr;
     Node *_expr;
 
 public:
-    StoreVar (Node *ptr, Node *expr, llvm::SMLoc start, llvm::SMLoc end)
-        : _ptr (ptr), _expr (expr), Node (NodeKind::StoreVar, start, end) {}
+    Store (Node *ptr, Node *expr, llvm::SMLoc start, llvm::SMLoc end)
+        : _ptr (ptr), _expr (expr), Node (NodeKind::Store, start, end) {}
 
-    hir_classof (StoreVar);
+    hir_classof (Store);
 
     Node *
     Ptr () const {
