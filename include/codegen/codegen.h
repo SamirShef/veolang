@@ -152,6 +152,9 @@ private:
     mangleFunction (hir::Function *func);
 
     static std::string
+    mangleMethod (symbols::Struct *sym, hir::Function *func);
+
+    static std::string
     mangleGlobalVar (hir::VarDef *var);
 
     static std::string

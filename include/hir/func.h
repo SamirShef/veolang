@@ -14,6 +14,8 @@ class Function : public Node {
     std::vector<ast::Argument> _args;
     std::vector<BasicBlock *>  _body;
     symbols::Function         *_base;
+    basic::Type               *_methodBaseType;
+    bool                       _isStatic;
 
 public:
     Function (
@@ -22,11 +24,15 @@ public:
         std::vector<ast::Argument> args,
         llvm::SMLoc                start,
         llvm::SMLoc                end,
-        symbols::Function         *base)
+        symbols::Function         *base,
+        basic::Type               *methodBaseType = nullptr,
+        bool                       isStatic       = false)
         : _name (std::move (name)),
           _retType (retType),
           _args (std::move (args)),
           _base (base),
+          _methodBaseType (methodBaseType),
+          _isStatic (isStatic),
           Node (NodeKind::Func, start, end) {}
 
     hir_classof (Func);
@@ -54,6 +60,16 @@ public:
     symbols::Function *
     BaseSymbol () const {
         return _base;
+    }
+
+    basic::Type *
+    MethodBaseType () const {
+        return _methodBaseType;
+    }
+
+    bool
+    IsStatic () const {
+        return _isStatic;
     }
 };
 

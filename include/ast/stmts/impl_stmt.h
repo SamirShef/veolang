@@ -32,13 +32,13 @@ public:
 
     ast_classof (ImplStmt);
 
-    basic::Type *
-    StructType () const {
+    basic::Type *&
+    StructType () {
         return _structType;
     }
 
-    basic::Type *
-    TraitType () const {
+    basic::Type *&
+    TraitType () {
         return _traitType;
     }
 

@@ -10,7 +10,7 @@ Struct::operator== (const Struct &other) const {
     }
 
     return Name.Val == other.Name.Val && Fields == other.Fields
-           && *Parent == *other.Parent;
+           && Methods == other.Methods && *Parent == *other.Parent;
 }
 
 }

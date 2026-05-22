@@ -1,9 +1,8 @@
-#include "codegen/codegen.h"
-
 #include <algorithm>
 #include <ast/exprs/struct_instance.h>
 #include <basic/types/all.h>
 #include <basic/value.h>
+#include <codegen/codegen.h>
 #include <cstdint>
 #include <diagnostic/codes.h>
 #include <lexer/token_kind.h>
@@ -42,6 +41,7 @@ Sema::analyzeStmt (Stmt *stmt) {
         variant (IfElse, analyzeIfElseStmt, IfElseStmt);
         variant (ForLoop, analyzeForLoop, ForLoopStmt);
         variant (BreakContinue, analyzeBreakContinue, BreakContinue);
+        variant (ImplStmt, analyzeImplStmt, ImplStmt);
     default: break;
     }
 #undef variant
@@ -446,13 +446,135 @@ Sema::analyzeStructDef (StructDef *sd) {
         }
     }
     auto s = Struct (sd->Name (), fields, _mod);
-    _mod->Structs.emplace (sd->Name ().Val, s);
+    _mod->Structs.emplace (sd->Name ().Val, std::move (s));
     _builder.CreateStruct (
         sd->Name (),
         hirFields,
         &_mod->Structs.at (sd->Name ().Val),
         sd->Start (),
         sd->End ());
+}
+
+void
+Sema::declareImplMethods (ast::ImplStmt *is) {
+    resolveType (&is->StructType ());
+    if (is->StructType () == nullptr) {
+        return;
+    }
+    if (!is->StructType ()->IsStruct ()) {
+        _diag
+            .Report (
+                DiagCode::ECannotImplForNonStructType,
+                "cannot implement methods for non-structure type '"
+                    + is->StructType ()->ToString () + "'",
+                Severity::Error)
+            .AddSpan (is->Start (), is->End ());
+        return;
+    }
+    auto *sym = is->StructType ()->AsStruct ()->BaseSymbol ();
+    for (const auto &method : is->Methods ()) {
+        auto *fd = method.Func;
+        if (auto *m = getMethod (sym, fd->Name ().Val, fd->Args ()); m != nullptr) {
+            _diag
+                .Report (
+                    DiagCode::ERedefinition,
+                    "method '" + fd->Name ().Val + "' is already defined in struct '"
+                        + sym->Name.Val + "'",
+                    Severity::Error)
+                .AddSpan (
+                    m->Func->Name.Start,
+                    m->Func->Name.End,
+                    "previous definition was here",
+                    false)
+                .AddSpan (fd->Name ().Start, fd->Name ().End, "redefined here");
+            return;
+        }
+        resolveType (&fd->RetType ());
+        for (auto &arg : fd->Args ()) {
+            resolveType (&arg.Type);
+        }
+        auto func = Function (fd->Name (), fd->RetType (), fd->Args (), _mod);
+        auto m    = symbols::Method (
+            std::make_unique<Function> (std::move (func)),
+            fd->Access (),
+            method.IsStatic);
+        auto it = sym->Methods.find (m.Func->Name.Val);
+        if (it == sym->Methods.end ()) {
+            sym->Methods.emplace (m.Func->Name.Val, MethodCandidates ());
+        }
+        sym->Methods.at (m.Func->Name.Val)
+            .Candidates.emplace_back (std::make_unique<symbols::Method> (std::move (m)));
+    }
+}
+
+void
+Sema::analyzeImplStmt (ImplStmt *is) {
+    if (!inGlobalScope ()) {
+        _diag
+            .Report (
+                DiagCode::ENotAllowedInThisScope,
+                "statement not allowed in this scope",
+                Severity::Error)
+            .AddSpan (is->Start (), is->End (), "statement found inside of a function");
+        return;
+    }
+
+    if (!is->StructType ()->IsStruct ()) {
+        return;
+    }
+    auto *sym = is->StructType ()->AsStruct ()->BaseSymbol ();
+    for (const auto &method : is->Methods ()) {
+        auto            *fd         = method.Func;
+        auto            *candidates = &sym->Methods.at (fd->Name ().Val);
+        symbols::Method *m          = nullptr;
+        for (auto &f : candidates->Candidates) {
+            if (f->Func->Args == fd->Args ()) {
+                m = f.get ();
+            }
+        }
+
+        std::vector<Argument> args;
+        args.reserve (fd->Args ().size () + (method.IsStatic ? 1 : 0));
+        if (!method.IsStatic) {
+            args.emplace_back (
+                basic::NameObj ("this", fd->Name ().Start, fd->Name ().End),
+                is->StructType ());
+        }
+        for (const auto &arg : fd->Args ()) {
+            args.emplace_back (arg);
+        }
+        auto *methodNode = _builder.CreateMethod (
+            m->Func->Name,
+            fd->RetType (),
+            args,
+            fd->Start (),
+            fd->End (),
+            m,
+            new StructType (sym), // NOLINT(cppcoreguidelines-owning-memory)
+            method.IsStatic);
+        auto *entry = _builder.CreateBasicBlock (methodNode, "entry");
+        _builder.SetInsertionPoint (entry);
+
+        _insideMethod = { m, sym };
+        _funcRetTypes.push (fd->RetType ());
+        _vars.emplace ();
+
+        _localsCount = 0;
+
+        for (const auto &arg : args) {
+            _vars.top ().Vars.emplace (
+                arg.Name.Val,
+                Variable (arg.Name, arg.Type, false, false, _localsCount++, nullptr));
+        }
+
+        for (const auto &stmt : fd->Body ()) {
+            analyzeStmt (stmt);
+        }
+
+        _vars.pop ();
+        _funcRetTypes.pop ();
+        _insideMethod = std::nullopt;
+    }
 }
 
 Sema::SemanticResult
@@ -471,6 +593,7 @@ Sema::analyzeExpr (Expr *expr, Type *expectedType) {
         variant (AsgnExpr, analyzeAsgnExpr, AsgnExpr);
         variant (FieldExpr, analyzeFieldExpr, FieldExpr);
         variant (StructInstance, analyzeStructInstance, StructInstance);
+        variant (MethodCall, analyzeMethodCall, MethodCall);
     default: return {};
     }
 #undef variant
@@ -959,6 +1082,9 @@ Sema::analyzeAsgnExpr (AsgnExpr *ae, Type *expectedType) {
                 .AddSpan (ae->Ptr ()->Start (), ae->Ptr ()->End ());
             return {};
         }
+        if (_insideMethod.has_value () && *_insideMethod->second == *sym) {
+            _insideMethod->first->IsConst = false;
+        }
         auto op = AsgnOpToBinOp (ae->Op ());
         if (ae->Op () != AsgnOp::Eq) {
             expr.Node = _builder.CreateBinary (
@@ -1164,6 +1290,11 @@ Sema::analyzeStructInstance (StructInstance *si, Type *expectedType) {
     return res;
 }
 
+Sema::SemanticResult
+Sema::analyzeMethodCall (MethodCall *mc, Type *expectedType) {
+    return {};
+}
+
 Type *
 Sema::resolveType (Type **type) {
     if (*type == nullptr) {
@@ -1257,6 +1388,34 @@ Sema::getFunction (const std::string &name, const std::vector<Argument> &args) {
         }
     }
     return std::nullopt;
+}
+
+symbols::Method *
+Sema::getMethod (
+    symbols::Struct                  *sym,
+    const std::string                &name,
+    const std::vector<ast::Argument> &args) {
+    if (!sym->Methods.contains (name)) {
+        return nullptr;
+    }
+    const auto &candidates = sym->Methods.at (name);
+    for (const auto &f : candidates.Candidates) {
+        unsigned coincidences = 0;
+        if (f->Func->Args.size () == args.size ()) {
+            for (size_t i = 0; i < args.size (); ++i) {
+                if (*f->Func->Args[i].Type == *args[i].Type) {
+                    ++coincidences;
+                }
+            }
+        } else {
+            continue;
+        }
+
+        if (coincidences == args.size ()) {
+            return f.get ();
+        }
+    }
+    return nullptr;
 }
 
 // NOLINTBEGIN(readability-function-cognitive-complexity)

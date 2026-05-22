@@ -72,6 +72,29 @@ public:
         return node;
     }
 
+    Function *
+    CreateMethod (
+        basic::NameObj             name,
+        basic::Type               *retType,
+        std::vector<ast::Argument> args,
+        llvm::SMLoc                start,
+        llvm::SMLoc                end,
+        symbols::Method           *base,
+        basic::Type               *methodBaseType,
+        bool                       isStatic) {
+        auto *node = _ctx.CreateNode<Function> (
+            std::move (name),
+            retType,
+            std::move (args),
+            start,
+            end,
+            base->Func.get (),
+            methodBaseType,
+            isStatic);
+        _ctx.AddFunction (node);
+        return node;
+    }
+
     Return *
     CreateRet (Node *expr, llvm::SMLoc start, llvm::SMLoc end) {
         auto *node = _ctx.CreateNode<Return> (expr, start, end);

@@ -1,9 +1,12 @@
 #pragma once
+#include "basic/types/type.h"
+
 #include <ast/exprs/asgn_expr.h>
 #include <ast/exprs/bin_expr.h>
 #include <ast/exprs/field_expr.h>
 #include <ast/exprs/func_call.h>
 #include <ast/exprs/lit_expr.h>
+#include <ast/exprs/method_call.h>
 #include <ast/exprs/struct_instance.h>
 #include <ast/exprs/un_expr.h>
 #include <ast/exprs/var_expr.h>
@@ -11,6 +14,7 @@
 #include <ast/stmts/expr_stmt.h>
 #include <ast/stmts/for_loop.h>
 #include <ast/stmts/if_else.h>
+#include <ast/stmts/impl_stmt.h>
 #include <ast/stmts/ret.h>
 #include <ast/stmts/var_def.h>
 #include <basic/symbols/module.h>
@@ -52,6 +56,8 @@ class Sema {
     };
     std::stack<Loop> _loops;
 
+    std::optional<std::pair<symbols::Method *, symbols::Struct *>> _insideMethod;
+
 public:
     Sema (DiagnosticEngine &diag, hir::Context &ctx, symbols::Module *mod)
         : _diag (diag), _builder (ctx), _mod (mod) {
@@ -65,10 +71,19 @@ public:
                 continue;
             }
             auto *stmt = llvm::cast<ast::Stmt> (res.Nodes[i]);
+            if (stmt->Kind () == ast::NodeKind::StructDef) {
+                analyzeStructDef (llvm::cast<ast::StructDef> (stmt));
+            }
+        }
+        for (size_t i = 0; i < res.Count; ++i) {
+            if (res.Nodes[i] == nullptr) {
+                continue;
+            }
+            auto *stmt = llvm::cast<ast::Stmt> (res.Nodes[i]);
             if (stmt->Kind () == ast::NodeKind::FuncDef) {
                 declareFunc (llvm::cast<ast::FuncDef> (stmt));
-            } else if (stmt->Kind () == ast::NodeKind::StructDef) {
-                analyzeStructDef (llvm::cast<ast::StructDef> (stmt));
+            } else if (stmt->Kind () == ast::NodeKind::ImplStmt) {
+                declareImplMethods (llvm::cast<ast::ImplStmt> (stmt));
             }
         }
 
@@ -112,6 +127,12 @@ private:
     void
     analyzeStructDef (ast::StructDef *sd);
 
+    void
+    declareImplMethods (ast::ImplStmt *is);
+
+    void
+    analyzeImplStmt (ast::ImplStmt *is);
+
     SemanticResult
     analyzeExpr (ast::Expr *expr, Type *expectedType);
 
@@ -139,6 +160,9 @@ private:
     SemanticResult
     analyzeStructInstance (ast::StructInstance *si, Type *expectedType);
 
+    SemanticResult
+    analyzeMethodCall (ast::MethodCall *mc, Type *expectedType);
+
     Type *
     resolveType (Type **type);
 
@@ -150,6 +174,12 @@ private:
 
     std::optional<symbols::Function>
     getFunction (const std::string &name, const std::vector<ast::Argument> &args);
+
+    static symbols::Method *
+    getMethod (
+        symbols::Struct                  *sym,
+        const std::string                &name,
+        const std::vector<ast::Argument> &args);
 
     Type *
     getCommonType (Type *lhs, Type *rhs, llvm::SMLoc start, llvm::SMLoc end);

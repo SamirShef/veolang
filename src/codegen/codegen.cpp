@@ -68,7 +68,10 @@ CodeGen::generateVarDef (VarDef *vd) {
 
 void
 CodeGen::declareFunc (Function *fd) {
-    std::string               name = mangleFunction (fd);
+    const std::string &name
+        = fd->MethodBaseType () == nullptr
+              ? mangleFunction (fd)
+              : mangleMethod (fd->MethodBaseType ()->AsStruct ()->BaseSymbol (), fd);
     std::vector<llvm::Type *> args;
     for (auto &a : fd->Args ()) {
         args.emplace_back (getType (a.Type));
@@ -85,8 +88,12 @@ CodeGen::declareFunc (Function *fd) {
 
 void
 CodeGen::generateFuncDef (Function *fd) {
-    _curFunc    = CurrentFunction ();
-    auto  *func = _mod->getFunction (mangleFunction (fd));
+    _curFunc = CurrentFunction ();
+    const std::string &name
+        = fd->MethodBaseType () == nullptr
+              ? mangleFunction (fd)
+              : mangleMethod (fd->MethodBaseType ()->AsStruct ()->BaseSymbol (), fd);
+    auto  *func = _mod->getFunction (name);
     size_t i    = 0;
     for (auto &a : func->args ()) {
         a.setName (fd->Args ()[i].Name.Val);
@@ -440,6 +447,20 @@ CodeGen::mangleFunction (Function *func) {
     oss << mangleModule (sym->Parent);
     oss << "E" << sym->Name.Val.size () << sym->Name.Val << "I";
     for (auto &a : sym->Args) {
+        oss << mangleType (a.Type);
+    }
+    oss << "E";
+    return oss.str ();
+}
+
+std::string
+CodeGen::mangleMethod (symbols::Struct *sym, hir::Function *func) {
+    std::ostringstream oss;
+    oss << "_VM";
+    oss << mangleModule (sym->Parent);
+    oss << "E" << sym->Name.Val.size () << sym->Name.Val;
+    oss << "E" << func->Name ().Val.size () << func->Name ().Val << "I";
+    for (auto &a : func->Args ()) {
         oss << mangleType (a.Type);
     }
     oss << "E";
