@@ -16,6 +16,10 @@ struct Argument {
 
     bool
     operator== (const Argument &other) const {
+        if (this == &other) {
+            return true;
+        }
+
         return Name.Val == other.Name.Val && *Type == *other.Type;
     }
 

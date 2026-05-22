@@ -38,6 +38,10 @@ struct FunctionCandidates {
 
     bool
     operator== (const FunctionCandidates &other) const {
+        if (this == &other) {
+            return true;
+        }
+
         return Candidates == other.Candidates;
     }
 

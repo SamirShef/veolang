@@ -22,6 +22,10 @@ struct Value {
 
     bool
     operator== (const Value &other) const {
+        if (this == &other) {
+            return true;
+        }
+
         return Kind == other.Kind && Data == other.Data && *Type == *other.Type;
     }
 

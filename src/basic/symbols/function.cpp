@@ -4,6 +4,10 @@ namespace veo::symbols {
 
 bool
 Function::operator== (const Function &other) const {
+    if (this == &other) {
+        return true;
+    }
+
     return Name.Val == other.Name.Val && *RetType == *other.RetType && Args == other.Args
            && *Parent == *other.Parent;
 }

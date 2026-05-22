@@ -21,8 +21,13 @@ struct Module {
 
     bool
     operator== (const Module &other) const {
+        if (this == &other) {
+            return true;
+        }
+
         bool isParentsEquals
-            = Parent != nullptr && other.Parent != nullptr && *Parent == *other.Parent;
+            = Parent == nullptr && other.Parent == nullptr
+              || Parent != nullptr && other.Parent != nullptr && *Parent == *other.Parent;
         return Name == other.Name && isParentsEquals && Vars == other.Vars
                && Funcs == other.Funcs && Structs == other.Structs
                && Imports == other.Imports && Submods == other.Submods;

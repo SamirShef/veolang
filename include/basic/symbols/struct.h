@@ -32,6 +32,10 @@ struct Field {
 
     bool
     operator== (const Field &other) const {
+        if (this == &other) {
+            return true;
+        }
+
         return Name.Val == other.Name.Val && *Type == *other.Type
                && IsStatic == other.IsStatic && IsConst == other.IsConst
                && Access == other.Access && Index == other.Index;

@@ -18,6 +18,10 @@ struct NameObj {
 
     bool
     operator== (const NameObj &other) const {
+        if (this == &other) {
+            return true;
+        }
+
         return Val == other.Val && Start == other.Start && End == other.End;
     }
 
