@@ -215,6 +215,13 @@ private:
         llvm::SMLoc                  start,
         llvm::SMLoc                  end);
 
+    symbols::Method *
+    resolveBestOverload (
+        symbols::MethodCandidates *candidates,
+        const std::vector<Type *> &argTypes,
+        llvm::SMLoc                start,
+        llvm::SMLoc                end);
+
     static CastCost
     checkCastCost (Type *src, Type *dst);
 

@@ -187,6 +187,15 @@ public:
         return _ctx.CreateNode<FuncCall> (func, std::move (args), start, end);
     }
 
+    FuncCall *
+    CreateCallMethod (
+        symbols::Function  *func,
+        std::vector<Node *> args,
+        llvm::SMLoc         start,
+        llvm::SMLoc         end) {
+        return _ctx.CreateNode<FuncCall> (func, std::move (args), start, end, true);
+    }
+
     Branch *
     CreateBr (
         Node       *cond,

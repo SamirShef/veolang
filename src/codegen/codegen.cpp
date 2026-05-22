@@ -83,7 +83,11 @@ CodeGen::declareFunc (Function *fd) {
         name,
         *_mod);
     _funcs.emplace_back (func);
-    _funcsMap.emplace (fd->BaseSymbol (), func);
+    if (fd->MethodBaseType () == nullptr) {
+        _funcsMap.emplace (fd->BaseSymbol (), func);
+    } else {
+        _methodsMap.emplace (fd->BaseSymbol (), func);
+    }
 }
 
 void
@@ -329,7 +333,8 @@ CodeGen::generateLoadVar (LoadVar *lv) {
 
 llvm::Value *
 CodeGen::generateFuncCall (FuncCall *fc) {
-    auto                      *func = _funcsMap.at (fc->Function ());
+    auto                      *func = fc->IsMethod () ? _methodsMap.at (fc->Function ())
+                                                      : _funcsMap.at (fc->Function ());
     std::vector<llvm::Value *> args;
     args.reserve (fc->Args ().size ());
     for (const auto &a : fc->Args ()) {
