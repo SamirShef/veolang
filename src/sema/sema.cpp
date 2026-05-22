@@ -621,6 +621,9 @@ Sema::SemanticResult
 Sema::analyzeBinaryExpr (BinaryExpr *be, Type *expectedType) {
     auto lhs = analyzeExpr (be->Lhs (), nullptr);
     auto rhs = analyzeExpr (be->Rhs (), nullptr);
+    if (!lhs.Val.has_value () || !rhs.Val.has_value ()) {
+        return {};
+    }
     resolveType (&lhs.Val->Type);
     resolveType (&rhs.Val->Type);
     BinOp op         = be->Op ();

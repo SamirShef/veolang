@@ -165,6 +165,13 @@ Dumper::dumpForLoop (ForLoopStmt *fls) {
 }
 
 void
+Dumper::dumpBreakContinue (BreakContinue *bc) {
+    indent ();
+    _os << "BreakContinue: "
+        << (bc->GetKind () == BreakContinue::Kind::Break ? "Break\n" : "Continue\n");
+}
+
+void
 Dumper::dumpStructDef (StructDef *sd) {
     indent ();
     _os << "StructDef: " << AccessToString (sd->Access ()) << ' ' << sd->Name ().Val
@@ -181,10 +188,45 @@ Dumper::dumpStructDef (StructDef *sd) {
 }
 
 void
-Dumper::dumpBreakContinue (BreakContinue *bc) {
+Dumper::dumpImplStmt (ImplStmt *is) {
     indent ();
-    _os << "BreakContinue: "
-        << (bc->GetKind () == BreakContinue::Kind::Break ? "Break\n" : "Continue\n");
+    _os << "ImplStmt: "
+        << (is->TraitType () != nullptr ? is->TraitType ()->ToString () + " for " : "")
+        << is->StructType ()->ToString () << '\n';
+    ++_indentLvl;
+
+    indent ();
+    _os << "Methods:\n";
+    ++_indentLvl;
+    for (const auto &method : is->Methods ()) {
+        auto *func = method.Func;
+        indent ();
+        _os << AccessToString (func->Access ()) << ' '
+            << (method.IsStatic ? "static " : "") << func->Name ().Val << " (";
+
+        size_t i = 0;
+        for (const auto &arg : func->Args ()) {
+            if (arg.IsValid ()) {
+                _os << arg.Name.Val << ": " << arg.Type->ToString ();
+            }
+            if (i < func->Args ().size () - 1) {
+                _os << ", ";
+            }
+            ++i;
+        }
+        _os << ')';
+        if (func->RetType () != nullptr) {
+            _os << ": " << func->RetType ()->ToString ();
+        }
+        _os << '\n';
+        ++_indentLvl;
+        for (const auto &stmt : func->Body ()) {
+            dumpStmt (stmt);
+        }
+        --_indentLvl;
+    }
+    --_indentLvl;
+    --_indentLvl;
 }
 
 void
@@ -270,6 +312,24 @@ Dumper::dumpStructInstance (StructInstance *si) {
         dumpExpr (expr);
         --_indentLvl;
     }
+    --_indentLvl;
+
+    --_indentLvl;
+}
+
+void
+Dumper::dumpMethodCall (MethodCall *mc) {
+    indent ();
+    _os << "MethodCall: " << mc->Name ().Val << '\n';
+    ++_indentLvl;
+    for (auto &a : mc->Args ()) {
+        dumpExpr (a);
+    }
+
+    indent ();
+    _os << "From:\n";
+    ++_indentLvl;
+    dumpExpr (mc->Base ());
     --_indentLvl;
 
     --_indentLvl;

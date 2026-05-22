@@ -13,6 +13,7 @@ enum class NodeKind : uint8_t {
     ForLoop,
     BreakContinue,
     StructDef,
+    ImplStmt,
     StmtEnd,
 
     ExprStart,
@@ -21,6 +22,7 @@ enum class NodeKind : uint8_t {
     UnExpr,
     VarExpr,
     FuncCall,
+    MethodCall,
     AsgnExpr,
     FieldExpr,
     StructInstance,

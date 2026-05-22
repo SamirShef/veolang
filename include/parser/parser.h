@@ -93,6 +93,9 @@ private:
     ast::Stmt *
     parseStructDef ();
 
+    ast::Stmt *
+    parseImplStmt ();
+
     std::vector<ast::Argument>
     parseArguments ();
 
