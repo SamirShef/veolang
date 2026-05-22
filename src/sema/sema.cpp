@@ -1,3 +1,5 @@
+#include "codegen/codegen.h"
+
 #include <algorithm>
 #include <ast/exprs/struct_instance.h>
 #include <basic/types/all.h>
@@ -757,8 +759,11 @@ Sema::analyzeUnaryExpr (UnaryExpr *ue, Type *expectedType) {
 // NOLINTBEGIN(readability-convert-member-functions-to-static)
 Sema::SemanticResult
 Sema::analyzeVarExpr (VarExpr *ve, Type *expectedType) {
-    std::optional<Variable> var = getVariable (ve->Name ().Val);
+    auto var = getVariable (ve->Name ().Val);
     if (!var.has_value ()) {
+        if (auto *s = getStruct (ve->Name ().Val)) {
+            return { Value (ValueKind::Type, new StructType (s)), nullptr };
+        }
         _diag
             .Report (
                 DiagCode::EUndefined,
@@ -909,7 +914,8 @@ Sema::analyzeAsgnExpr (AsgnExpr *ae, Type *expectedType) {
                 .AddSpan (fieldExpr->Name ().Start, fieldExpr->Name ().End);
             return {};
         }
-        auto *sym = base.Val->Type->AsStruct ()->BaseSymbol ();
+        auto *sym          = base.Val->Type->AsStruct ()->BaseSymbol ();
+        bool  baseIsStatic = base.Val->Kind == ValueKind::Type;
         auto  field
             = std::ranges::find_if (sym->Fields, [&] (const symbols::Field &field) {
                   return field.Name.Val == fieldExpr->Name ().Val;
@@ -917,7 +923,7 @@ Sema::analyzeAsgnExpr (AsgnExpr *ae, Type *expectedType) {
         if (field == sym->Fields.end ()) {
             return {};
         }
-        if (field->IsStatic) {
+        if (field->IsStatic && !baseIsStatic) {
             _diag
                 .Report (
                     DiagCode::ECannotAccessStaticMemberFromInstance,
@@ -928,6 +934,16 @@ Sema::analyzeAsgnExpr (AsgnExpr *ae, Type *expectedType) {
                 .AddNote (
                     "use the type name instead to access this field: '" + sym->Name.Val
                     + "." + fieldExpr->Name ().Val + "'");
+            return {};
+        }
+        if (!field->IsStatic && baseIsStatic) {
+            _diag
+                .Report (
+                    DiagCode::ECannotAccessNonStaticMemberFromType,
+                    "instance field '" + fieldExpr->Name ().Val
+                        + "' cannot be accessed through a type",
+                    Severity::Error)
+                .AddSpan (fieldExpr->Name ().Start, fieldExpr->Name ().End);
             return {};
         }
         if (field->IsConst) {
@@ -974,7 +990,8 @@ Sema::analyzeFieldExpr (FieldExpr *fe, Type *expectedType) {
             .AddSpan (fe->Name ().Start, fe->Name ().End);
         return {};
     }
-    auto *s  = base.Val->Type->AsStruct ()->BaseSymbol ();
+    auto *s            = base.Val->Type->AsStruct ()->BaseSymbol ();
+    bool  baseIsStatic = base.Val->Kind == ValueKind::Type;
     auto  it = std::ranges::find_if (s->Fields, [&] (const symbols::Field &field) {
         return field.Name.Val == fe->Name ().Val;
     });
@@ -1002,7 +1019,7 @@ Sema::analyzeFieldExpr (FieldExpr *fe, Type *expectedType) {
         }
         return {};
     }
-    if (it->IsStatic) {
+    if (it->IsStatic && !baseIsStatic) {
         _diag
             .Report (
                 DiagCode::ECannotAccessStaticMemberFromInstance,
@@ -1015,6 +1032,16 @@ Sema::analyzeFieldExpr (FieldExpr *fe, Type *expectedType) {
                 + fe->Name ().Val + "'");
         return {};
     }
+    if (!it->IsStatic && baseIsStatic) {
+        _diag
+            .Report (
+                DiagCode::ECannotAccessNonStaticMemberFromType,
+                "instance field '" + fe->Name ().Val
+                    + "' cannot be accessed through a type",
+                Severity::Error)
+            .AddSpan (fe->Name ().Start, fe->Name ().End);
+        return {};
+    }
     if (it->Access != AccessModifier::Pub) {
         _diag
             .Report (
@@ -1025,8 +1052,16 @@ Sema::analyzeFieldExpr (FieldExpr *fe, Type *expectedType) {
             .AddSpan (fe->Name ().Start, fe->Name ().End);
         return {};
     }
-    auto *node
-        = _builder.CreateFieldExpr (base.Node, it->Index, fe->Start (), fe->End ());
+    hir::Node *node = nullptr;
+    if (it->IsStatic) {
+        node = _builder.CreateLoadGlobalVarByName (
+            CodeGen::MangleStaticField (s, it->Name.Val),
+            it->Type,
+            fe->Start (),
+            fe->End ());
+    } else {
+        node = _builder.CreateFieldExpr (base.Node, it->Index, fe->Start (), fe->End ());
+    }
     auto val = Value (ValueKind::Unknown, it->Type);
     auto res = SemanticResult (val, node);
     res      = implicitlyCast (res, &expectedType, fe->Start (), fe->End ());
@@ -1182,6 +1217,18 @@ Sema::getVariable (const std::string &name) {
         vars.pop ();
     }
     return std::nullopt;
+}
+
+symbols::Struct *
+Sema::getStruct (const std::string &name, symbols::Module *mod) {
+    if (mod == nullptr) {
+        mod = _mod;
+    }
+
+    if (auto it = mod->Structs.find (name); it != mod->Structs.end ()) {
+        return &it->second;
+    }
+    return nullptr;
 }
 
 std::optional<Function>

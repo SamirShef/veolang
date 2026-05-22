@@ -9,6 +9,7 @@
 #include <hir/field_expr.h>
 #include <hir/func_call.h>
 #include <hir/lit_expr.h>
+#include <hir/load_glob_var_by_name.h>
 #include <hir/load_var.h>
 #include <hir/ret.h>
 #include <hir/store.h>
@@ -134,6 +135,12 @@ public:
     CreateLoadVar (
         size_t id, basic::Type *type, bool isGlobal, llvm::SMLoc start, llvm::SMLoc end) {
         return _ctx.CreateNode<LoadVar> (id, type, isGlobal, start, end);
+    }
+
+    LoadGlobalVarByName *
+    CreateLoadGlobalVarByName (
+        std::string name, basic::Type *type, llvm::SMLoc start, llvm::SMLoc end) {
+        return _ctx.CreateNode<LoadGlobalVarByName> (std::move (name), type, start, end);
     }
 
     Store *

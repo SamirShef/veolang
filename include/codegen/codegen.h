@@ -1,4 +1,6 @@
 #pragma once
+#include "hir/load_glob_var_by_name.h"
+
 #include <hir/bin_expr.h>
 #include <hir/branch.h>
 #include <hir/expr_stmt.h>
@@ -79,6 +81,9 @@ public:
         return std::move (_mod);
     }
 
+    static std::string
+    MangleStaticField (symbols::Struct *sym, const std::string &fieldName);
+
 private:
     void
     generate (hir::Node *node);
@@ -135,31 +140,31 @@ private:
     generateStructInstance (hir::StructInstance *si);
 
     llvm::Value *
+    generateLoadGlobalVarByName (hir::LoadGlobalVarByName *load);
+
+    llvm::Value *
     generateLValue (hir::Node *node);
 
     llvm::Type *
     getType (basic::Type *type);
 
-    std::string
-    mangleFunction (hir::Function *func) const;
+    static std::string
+    mangleFunction (hir::Function *func);
 
-    std::string
-    mangleGlobalVar (hir::VarDef *var) const;
+    static std::string
+    mangleGlobalVar (hir::VarDef *var);
 
-    std::string
-    mangleStruct (hir::StructDef *sd) const;
+    static std::string
+    mangleStruct (hir::StructDef *sd);
 
-    std::string
-    mangleStructSymbol (symbols::Struct *sym) const;
+    static std::string
+    mangleStructSymbol (symbols::Struct *sym);
 
-    std::string
-    mangleStaticField (symbols::Struct *sym, const std::string &fieldName) const;
+    static std::string
+    mangleModule (symbols::Module *mod);
 
-    std::string
-    mangleModule (symbols::Module *mod) const;
-
-    std::string
-    mangleType (basic::Type *type) const;
+    static std::string
+    mangleType (basic::Type *type);
 
     void
     generateImplicitMain ();

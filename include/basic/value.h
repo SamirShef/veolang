@@ -9,7 +9,7 @@ using ValueData = std::variant<int64_t, double>;
 struct Value;
 using OptValue = std::optional<Value>;
 
-enum class ValueKind : uint8_t { Unknown, Const };
+enum class ValueKind : uint8_t { Unknown, Const, Type };
 
 struct Value {
     ValueKind   Kind;

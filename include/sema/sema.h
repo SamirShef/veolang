@@ -15,6 +15,7 @@
 #include <ast/stmts/var_def.h>
 #include <basic/symbols/module.h>
 #include <basic/symbols/scope.h>
+#include <basic/symbols/struct.h>
 #include <basic/value.h>
 #include <cstddef>
 #include <diagnostic/engine.h>
@@ -143,6 +144,9 @@ private:
 
     std::optional<symbols::Variable>
     getVariable (const std::string &name);
+
+    symbols::Struct *
+    getStruct (const std::string &name, symbols::Module *mod = nullptr);
 
     std::optional<symbols::Function>
     getFunction (const std::string &name, const std::vector<ast::Argument> &args);

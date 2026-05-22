@@ -37,6 +37,7 @@ enum class DiagCode : uint8_t {
     ECannotAccessFromNonStruct,
     ECannotAccessToPrivMember,
     ECannotAccessStaticMemberFromInstance,
+    ECannotAccessNonStaticMemberFromType,
     ECannotFindMod,
     ECannotFindType,
     ECannotInferType,
