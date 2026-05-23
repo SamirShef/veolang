@@ -1,5 +1,3 @@
-#include "lexer/keywords.h"
-
 #include <ast/access_modifier.h>
 #include <ast/exprs/asgn_expr.h>
 #include <ast/exprs/bin_expr.h>
@@ -23,6 +21,7 @@
 #include <basic/types/all.h>
 #include <basic/types/type.h>
 #include <diagnostic/codes.h>
+#include <lexer/keywords.h>
 #include <parser/parser.h>
 
 namespace veo {
@@ -35,12 +34,16 @@ static AccessModifier Access = AccessModifier::Priv;
 
 Stmt *
 Parser::parseStmt (bool expectSemi) {
+    if (isAtEnd ()) {
+        return nullptr;
+    }
+
     Access = match (TokenKind::Pub) ? AccessModifier::Pub : AccessModifier::Priv;
     switch (_curTok.Kind) {
     case TokenKind::Let:
     case TokenKind::Const: {
         auto *vds = parseVarDef ();
-        if (expectSemi) {
+        if (vds != nullptr && expectSemi) {
             if (!this->expectSemi ()) {
                 return nullptr;
             }
@@ -52,7 +55,7 @@ Parser::parseStmt (bool expectSemi) {
     }
     case TokenKind::Ret: {
         auto *ret = parseRet ();
-        if (expectSemi) {
+        if (ret != nullptr && expectSemi) {
             if (!this->expectSemi ()) {
                 return nullptr;
             }
@@ -68,7 +71,7 @@ Parser::parseStmt (bool expectSemi) {
     case TokenKind::Break:
     case TokenKind::Continue: {
         auto *bc = parseBreakContinue ();
-        if (expectSemi) {
+        if (bc != nullptr && expectSemi) {
             if (!this->expectSemi ()) {
                 return nullptr;
             }
@@ -83,21 +86,20 @@ Parser::parseStmt (bool expectSemi) {
     }
     case TokenKind::Id: {
         Expr *expr = parseExpr ();
+        if (expr == nullptr) {
+            return nullptr;
+        }
         if (expectSemi) {
             if (!this->expectSemi ()) {
                 return nullptr;
             }
         }
-        if (expr == nullptr) {
-            return nullptr;
-        }
         auto *stmt   = createNode<ExprStmt> (expr);
         stmt->End () = _curTok.End;
         return stmt;
     }
-        // clang-format off
-    default: {}
-        // clang-format on
+    default: {
+    }
     }
     _diag
         .Report (
@@ -163,7 +165,7 @@ Parser::parseFuncDef () {
         return nullptr;
     }
     std::vector<Stmt *> body;
-    while (!match (TokenKind::RBrace)) {
+    while (!isAtEnd () && !match (TokenKind::RBrace)) {
         Stmt *stmt = parseStmt ();
         if (stmt != nullptr) {
             body.push_back (stmt);
@@ -185,6 +187,9 @@ Parser::parseRet () {
     Expr       *expr     = nullptr;
     if (!check (TokenKind::Semi)) {
         expr = parseExpr ();
+        if (expr == nullptr) {
+            return nullptr;
+        }
     }
     return createNode<Return> (expr, firstTok.Start, _curTok.End);
 }
@@ -197,7 +202,7 @@ Parser::parseIfElse () {
         return nullptr;
     }
     std::vector<Stmt *> thenBranch;
-    while (!match (TokenKind::RBrace)) {
+    while (!isAtEnd () && !match (TokenKind::RBrace)) {
         Stmt *stmt = parseStmt ();
         if (stmt != nullptr) {
             thenBranch.push_back (stmt);
@@ -206,7 +211,7 @@ Parser::parseIfElse () {
     std::vector<Stmt *> elseBranch;
     if (match (TokenKind::Else)) {
         if (match (TokenKind::LBrace)) {
-            while (!match (TokenKind::RBrace)) {
+            while (!isAtEnd () && !match (TokenKind::RBrace)) {
                 Stmt *stmt = parseStmt ();
                 if (stmt != nullptr) {
                     elseBranch.push_back (stmt);
@@ -253,7 +258,7 @@ Parser::parseForLoop () {
         return nullptr;
     }
     std::vector<Stmt *> body;
-    while (!match (TokenKind::RBrace)) {
+    while (!isAtEnd () && !match (TokenKind::RBrace)) {
         Stmt *stmt = parseStmt ();
         if (stmt != nullptr) {
             body.push_back (stmt);
@@ -316,7 +321,7 @@ Parser::parseImplStmt () {
         return nullptr;
     }
     std::vector<Method> methods;
-    while (!match (TokenKind::RBrace)) {
+    while (!isAtEnd () && !match (TokenKind::RBrace)) {
         Access = match (TokenKind::Pub) ? AccessModifier::Pub : AccessModifier::Priv;
         bool  isStatic = match (TokenKind::Static);
         auto *method   = llvm::cast<FuncDef> (parseFuncDef ());
@@ -337,10 +342,12 @@ Parser::parseImplStmt () {
 std::vector<Argument>
 Parser::parseArguments () {
     std::vector<Argument> args;
-    while (!match (TokenKind::RParen)) {
+    while (!isAtEnd () && !match (TokenKind::RParen)) {
         const Argument arg = parseArgument ();
         if (arg.IsValid ()) {
             args.push_back (arg);
+        } else {
+            break;
         }
         if (!check (TokenKind::RParen)) {
             expectTok (TokenKind::Comma, ",");
@@ -368,7 +375,7 @@ Parser::parseArgument () {
 std::vector<Field>
 Parser::parseFields () {
     std::vector<Field> fields;
-    while (!match (TokenKind::RBrace)) {
+    while (!isAtEnd () && !match (TokenKind::RBrace)) {
         const Field field = parseField ();
         if (field.IsValid ()) {
             fields.push_back (field);
@@ -403,7 +410,7 @@ Parser::parseField () {
 std::vector<std::tuple<basic::NameObj, Expr *>>
 Parser::parseFieldsForInstance () {
     std::vector<std::tuple<basic::NameObj, Expr *>> fields;
-    while (!match (TokenKind::RBrace)) {
+    while (!isAtEnd () && !match (TokenKind::RBrace)) {
         auto field         = parseFieldForInstance ();
         auto &[name, expr] = field;
         if (name != basic::NameObj () && expr != nullptr) {
@@ -440,7 +447,7 @@ Parser::parseExpr (int minPrec, bool allowStruct) {
     }
 
     int prec = 0;
-    while (minPrec < (prec = GetTokPrecedence (_curTok.Kind))) {
+    while (!isAtEnd () && minPrec < (prec = GetTokPrecedence (_curTok.Kind))) {
         const Token op = advance ();
 
         Expr *rhs = parseExpr (prec, allowStruct);
@@ -504,7 +511,7 @@ Parser::parsePrimaryExpr (bool allowStruct) {
         }
         if (match (TokenKind::LParen)) { // FuncCall
             std::vector<Expr *> args;
-            while (!match (TokenKind::RParen)) {
+            while (!isAtEnd () && !match (TokenKind::RParen)) {
                 Expr *expr = parseExpr ();
                 if (expr != nullptr) {
                     args.emplace_back (expr);
@@ -547,6 +554,7 @@ Parser::parsePrimaryExpr (bool allowStruct) {
             "expected expression, found '" + tok.Val + "'",
             Severity::Error)
         .AddSpan (tok.Start, tok.End, "expected expression here");
+    synchronize ();
     return nullptr;
 }
 
@@ -557,15 +565,6 @@ Parser::parseChain (Expr *base, bool allowStruct) {
             const Token    tok = _curTok;
             basic::NameObj name;
             if (!expectName (name)) {
-                _diag
-                    .Report (
-                        DiagCode::EExpectedIdOrMemberName,
-                        "expected identifier or member name after '.'",
-                        Severity::Error)
-                    .AddSpan (
-                        tok.Start,
-                        tok.End,
-                        "expected member, found '" + tok.Val + "'");
                 return nullptr;
             }
 
@@ -580,7 +579,7 @@ Parser::parseChain (Expr *base, bool allowStruct) {
 
             if (match (TokenKind::LParen)) {
                 std::vector<Expr *> args;
-                while (!match (TokenKind::RParen)) {
+                while (!isAtEnd () && !match (TokenKind::RParen)) {
                     Expr *expr = parseExpr ();
                     if (expr != nullptr) {
                         args.emplace_back (expr);
@@ -596,7 +595,8 @@ Parser::parseChain (Expr *base, bool allowStruct) {
                     tok.Start,
                     _lastTok.End);
             }
-            base = createNode<FieldExpr> (base, std::move (name), tok.Start, tok.End);
+            base
+                = createNode<FieldExpr> (base, std::move (name), base->Start (), tok.End);
         } else {
             break;
         }
@@ -647,6 +647,7 @@ Parser::consumeType () {
                 "expected type, found '" + tok.Val + "'",
                 Severity::Error)
             .AddSpan (tok.Start, tok.End, "expected a type name");
+        synchronize ();
         return nullptr;
     }
 }
@@ -654,12 +655,16 @@ Parser::consumeType () {
 
 void
 Parser::synchronize () {
+    if (isStmtStart (_curTok.Kind)) {
+        return;
+    }
     advance ();
     while (!isAtEnd ()) {
-        if (check (_lastTok, TokenKind::Semi) || check (_lastTok, TokenKind::RBrace)) {
+        if (check (_lastTok, TokenKind::Semi) || check (_lastTok, TokenKind::RBrace)
+            || check (_lastTok, TokenKind::RParen)) {
             return;
         }
-        if (isKeyword (_curTok)) {
+        if (isStmtStart (_curTok.Kind)) {
             return;
         }
         advance ();
@@ -692,6 +697,20 @@ Parser::advance () {
 bool
 Parser::isKeyword (const Token &tok) {
     return keywords.contains (tok.Val);
+}
+
+bool
+Parser::isStmtStart (TokenKind kind) {
+#define variant(kind) case TokenKind::kind:
+    switch (kind) {
+        variant (Let) variant (Const) variant (Func) variant (Ret) variant (If)
+            variant (Else) variant (For) variant (Break) variant (Continue)
+                variant (Struct) variant (Pub) variant (Impl) variant (Trait)
+                    variant (Del) variant (Mod) variant (Import)
+                        variant (Static) return true;
+    default: return false;
+    }
+#undef variant
 }
 
 bool
@@ -729,6 +748,7 @@ Parser::expectTok (TokenKind kind, const std::string &val) {
                 "expected '" + val + "', found '" + _curTok.Val + "'",
                 Severity::Error)
             .AddSpan (_curTok.Start, _curTok.End, "expected '" + val + "'");
+        synchronize ();
         return false;
     }
     return true;
@@ -737,7 +757,6 @@ Parser::expectTok (TokenKind kind, const std::string &val) {
 bool
 Parser::expectName (basic::NameObj &res) {
     const Token tok = advance ();
-    res             = basic::NameObj (tok);
     if (tok.Kind != TokenKind::Id) {
         auto &err = _diag
                         .Report (
@@ -750,8 +769,10 @@ Parser::expectName (basic::NameObj &res) {
         } else {
             err.AddNote ("'" + tok.Val + "' is a operator");
         }
+        synchronize ();
         return false;
     }
+    res = basic::NameObj (tok);
     return true;
 }
 

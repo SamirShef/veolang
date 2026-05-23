@@ -43,7 +43,6 @@ public:
             if (node != nullptr) {
                 nodes.push_back (node);
             } else {
-                synchronize ();
                 hasErrors = true;
             }
         }
@@ -145,6 +144,9 @@ private:
 
     static bool
     isKeyword (const Token &tok);
+
+    static bool
+    isStmtStart (TokenKind kind);
 
     static bool
     isAsgnOp (TokenKind kind);

@@ -426,6 +426,10 @@ CodeGen::generateLValue (Node *node) {
 
 llvm::Type *
 CodeGen::getType (basic::Type *type) {
+    if (type == nullptr) {
+        return _builder.getVoidTy ();
+    }
+
     switch (type->Kind ()) {
     case basic::TypeKind::Integer:
         return _builder.getIntNTy (type->AsInteger ()->BitWidth ());
