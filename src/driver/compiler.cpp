@@ -1,4 +1,5 @@
 #include <ast/dumper.h>
+#include <basic/types/pool.h>
 #include <codegen/codegen.h>
 #include <diagnostic/engine.h>
 #include <driver/cli_options.h>
@@ -136,8 +137,9 @@ Compile (
     }
     unsigned bufferId = mgr.AddNewSourceBuffer (std::move (*bufferOrErr), llvm::SMLoc ());
 
+    TypePool    pool;
     Lexer       lex (diag, mgr, bufferId);
-    Parser      parser (diag, lex);
+    Parser      parser (diag, lex, pool);
     ParseResult parseRes = parser.Parse ();
 
     if (DumpASTOpt == DumpASTInto::Terminal) {

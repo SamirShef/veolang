@@ -3,6 +3,7 @@
 #include <ast/stmts/func_def.h>
 #include <ast/stmts/struct_def.h>
 #include <basic/name.h>
+#include <basic/types/pool.h>
 #include <basic/types/type.h>
 #include <cstddef>
 #include <diagnostic/engine.h>
@@ -23,13 +24,15 @@ class Parser {
     Token                         _lastTok;
     Token                         _curTok;
     Token                         _nextTok;
-    diagnostic::DiagnosticEngine &_diag; // NOLINT
-    Lexer                         _lex;  // NOLINT
+    diagnostic::DiagnosticEngine &_diag;     // NOLINT
+    basic::TypePool              &_typePool; // NOLINT
+    Lexer                         _lex;
     llvm::BumpPtrAllocator        _allocator;
 
 public:
-    explicit Parser (diagnostic::DiagnosticEngine &diag, Lexer &lex)
-        : _diag (diag), _lex (lex) {
+    explicit Parser (
+        diagnostic::DiagnosticEngine &diag, Lexer &lex, basic::TypePool &typePool)
+        : _diag (diag), _lex (lex), _typePool (typePool) {
         advance ();
         advance ();
     }
@@ -68,8 +71,23 @@ private:
         return obj;
     }
 
+    template <typename T, typename... Args>
+    basic::Type *
+    createType (Args &&...args) {
+        return _typePool.GetOrCreate<T> (std::forward<Args> (args)...);
+    }
+
     ast::Stmt *
     parseStmt (bool expectSemi = true);
+
+    ast::Stmt *
+    checkTrailingSemi (ast::Stmt *stmt, bool expect);
+
+    bool
+    parseBlock (std::vector<ast::Stmt *> &body);
+
+    void
+    parseStmtsIntoBlock (std::vector<ast::Stmt *> &body);
 
     ast::Stmt *
     parseVarDef ();
@@ -100,6 +118,9 @@ private:
 
     ast::Argument
     parseArgument ();
+
+    void
+    parseArgumentsForCall (std::vector<ast::Expr *> &args);
 
     std::vector<ast::Field>
     parseFields ();
