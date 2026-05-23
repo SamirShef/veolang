@@ -305,11 +305,14 @@ Parser::parseImplStmt () {
     while (!isAtEnd () && !match (TokenKind::RBrace)) {
         auto access = match (TokenKind::Pub) ? AccessModifier::Pub : AccessModifier::Priv;
         bool isStatic = match (TokenKind::Static);
-        auto *method  = llvm::cast<FuncDef> (parseFuncDef (access));
-        if (method != nullptr) {
-            methods.emplace_back (method, isStatic);
-        } else {
-            synchronize ();
+        auto *fd      = parseFuncDef (access);
+        if (fd != nullptr) {
+            auto *method = llvm::cast<FuncDef> (fd);
+            if (method != nullptr) {
+                methods.emplace_back (method, isStatic);
+            } else {
+                synchronize ();
+            }
         }
     }
     return createNode<ImplStmt> (
