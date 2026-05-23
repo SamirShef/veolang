@@ -1,6 +1,8 @@
 #pragma once
 #include "../boilerplate.h"
 
+#include <basic/types/pool.h>
+
 using namespace veo;
 namespace fs = std::filesystem;
 
@@ -9,9 +11,10 @@ namespace fs = std::filesystem;
 inline void
 TestVarDef (const fs::path &root) {
     init (root, "var_def.veo");
-    Lexer  lexer (diag, mgr, bufferId);
-    Parser parser (diag, lexer);
-    auto   res = parser.Parse ();
+    basic::TypePool pool;
+    Lexer           lexer (diag, mgr, bufferId);
+    Parser          parser (diag, lexer, pool);
+    auto            res = parser.Parse ();
     assert_eq (res.HasErrors, false);
     assert_eq (res.Count, 6);
     assert_var_def_with_type (res.Nodes[0], "a", false, true);

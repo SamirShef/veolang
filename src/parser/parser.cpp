@@ -21,6 +21,7 @@
 #include <basic/types/all.h>
 #include <basic/types/type.h>
 #include <diagnostic/codes.h>
+#include <lexer/keywords.h>
 #include <parser/parser.h>
 
 namespace veo {
@@ -28,34 +29,23 @@ namespace veo {
 using namespace diagnostic;
 using namespace ast;
 
-// NOLINTNEXTLINE(cppcoreguidelines-avoid-non-const-global-variables)
-static AccessModifier Access = AccessModifier::Priv;
-
 Stmt *
 Parser::parseStmt (bool expectSemi) {
-    Access = match (TokenKind::Pub) ? AccessModifier::Pub : AccessModifier::Priv;
+    if (isAtEnd ()) {
+        return nullptr;
+    }
+
+    auto access = match (TokenKind::Pub) ? AccessModifier::Pub : AccessModifier::Priv;
     switch (_curTok.Kind) {
     case TokenKind::Let:
     case TokenKind::Const: {
-        auto *vds = parseVarDef ();
-        if (expectSemi) {
-            if (!this->expectSemi ()) {
-                return nullptr;
-            }
-        }
-        return vds;
+        return checkTrailingSemi (parseVarDef (access), expectSemi);
     }
     case TokenKind::Func: {
-        return parseFuncDef ();
+        return parseFuncDef (access);
     }
     case TokenKind::Ret: {
-        auto *ret = parseRet ();
-        if (expectSemi) {
-            if (!this->expectSemi ()) {
-                return nullptr;
-            }
-        }
-        return ret;
+        return checkTrailingSemi (parseRet (), expectSemi);
     }
     case TokenKind::If: {
         return parseIfElse ();
@@ -65,37 +55,28 @@ Parser::parseStmt (bool expectSemi) {
     }
     case TokenKind::Break:
     case TokenKind::Continue: {
-        auto *bc = parseBreakContinue ();
-        if (expectSemi) {
-            if (!this->expectSemi ()) {
-                return nullptr;
-            }
-        }
-        return bc;
+        return checkTrailingSemi (parseBreakContinue (), expectSemi);
     }
     case TokenKind::Struct: {
-        return parseStructDef ();
+        return parseStructDef (access);
     }
     case TokenKind::Impl: {
         return parseImplStmt ();
     }
     case TokenKind::Id: {
         Expr *expr = parseExpr ();
-        if (expectSemi) {
-            if (!this->expectSemi ()) {
-                return nullptr;
-            }
-        }
         if (expr == nullptr) {
+            return nullptr;
+        }
+        if (expectSemi && !this->expectSemi ()) {
             return nullptr;
         }
         auto *stmt   = createNode<ExprStmt> (expr);
         stmt->End () = _curTok.End;
         return stmt;
     }
-        // clang-format off
-    default: {}
-        // clang-format on
+    default: {
+    }
     }
     _diag
         .Report (
@@ -107,9 +88,38 @@ Parser::parseStmt (bool expectSemi) {
     return nullptr;
 }
 
+ast::Stmt *
+Parser::checkTrailingSemi (ast::Stmt *stmt, bool expect) {
+    if (stmt == nullptr) {
+        return nullptr;
+    }
+    if (expect && !this->expectSemi ()) {
+        return nullptr;
+    }
+    return stmt;
+}
+
+bool
+Parser::parseBlock (std::vector<Stmt *> &body) {
+    if (!expectTok (TokenKind::LBrace, "{")) {
+        return false;
+    }
+    parseStmtsIntoBlock (body);
+    return true;
+}
+
+void
+Parser::parseStmtsIntoBlock (std::vector<Stmt *> &body) {
+    while (!isAtEnd () && !match (TokenKind::RBrace)) {
+        Stmt *stmt = parseStmt ();
+        if (stmt != nullptr) {
+            body.push_back (stmt);
+        }
+    }
+}
+
 Stmt *
-Parser::parseVarDef () {
-    AccessModifier access   = Access;
+Parser::parseVarDef (ast::AccessModifier access) {
     const Token    firstTok = advance ();
     bool           isConst  = firstTok.Kind == TokenKind::Const;
     basic::NameObj name;
@@ -142,8 +152,7 @@ Parser::parseVarDef () {
 }
 
 Stmt *
-Parser::parseFuncDef () {
-    AccessModifier access   = Access;
+Parser::parseFuncDef (ast::AccessModifier access) {
     const Token    firstTok = advance ();
     basic::NameObj name;
     if (!expectName (name)) {
@@ -157,15 +166,9 @@ Parser::parseFuncDef () {
     if (match (TokenKind::Colon)) {
         retType = consumeType ();
     }
-    if (!expectTok (TokenKind::LBrace, "{")) {
-        return nullptr;
-    }
     std::vector<Stmt *> body;
-    while (!match (TokenKind::RBrace)) {
-        Stmt *stmt = parseStmt ();
-        if (stmt != nullptr) {
-            body.push_back (stmt);
-        }
+    if (!parseBlock (body)) {
+        return nullptr;
     }
     return createNode<FuncDef> (
         std::move (name),
@@ -183,33 +186,25 @@ Parser::parseRet () {
     Expr       *expr     = nullptr;
     if (!check (TokenKind::Semi)) {
         expr = parseExpr ();
+        if (expr == nullptr) {
+            return nullptr;
+        }
     }
     return createNode<Return> (expr, firstTok.Start, _curTok.End);
 }
 
 Stmt *
 Parser::parseIfElse () {
-    const Token firstTok = advance ();
-    Expr       *cond     = parseExpr ((int) Precedence::Unary, false);
-    if (!expectTok (TokenKind::LBrace, "{")) {
-        return nullptr;
-    }
+    const Token         firstTok = advance ();
+    Expr               *cond     = parseExpr ((int) Precedence::Unary, false);
     std::vector<Stmt *> thenBranch;
-    while (!match (TokenKind::RBrace)) {
-        Stmt *stmt = parseStmt ();
-        if (stmt != nullptr) {
-            thenBranch.push_back (stmt);
-        }
+    if (!parseBlock (thenBranch)) {
+        return nullptr;
     }
     std::vector<Stmt *> elseBranch;
     if (match (TokenKind::Else)) {
         if (match (TokenKind::LBrace)) {
-            while (!match (TokenKind::RBrace)) {
-                Stmt *stmt = parseStmt ();
-                if (stmt != nullptr) {
-                    elseBranch.push_back (stmt);
-                }
-            }
+            parseStmtsIntoBlock (elseBranch);
         } else {
             Stmt *stmt = parseStmt ();
             if (stmt != nullptr) {
@@ -247,15 +242,9 @@ Parser::parseForLoop () {
         }
     }
 
-    if (!expectTok (TokenKind::LBrace, "{")) {
-        return nullptr;
-    }
     std::vector<Stmt *> body;
-    while (!match (TokenKind::RBrace)) {
-        Stmt *stmt = parseStmt ();
-        if (stmt != nullptr) {
-            body.push_back (stmt);
-        }
+    if (!parseBlock (body)) {
+        return nullptr;
     }
     return createNode<ForLoopStmt> (
         cond,
@@ -275,8 +264,7 @@ Parser::parseBreakContinue () {
 }
 
 Stmt *
-Parser::parseStructDef () {
-    auto           access   = Access;
+Parser::parseStructDef (ast::AccessModifier access) {
     const Token    firstTok = advance ();
     basic::NameObj name;
     if (!expectName (name)) {
@@ -314,10 +302,10 @@ Parser::parseImplStmt () {
         return nullptr;
     }
     std::vector<Method> methods;
-    while (!match (TokenKind::RBrace)) {
-        Access = match (TokenKind::Pub) ? AccessModifier::Pub : AccessModifier::Priv;
-        bool  isStatic = match (TokenKind::Static);
-        auto *method   = llvm::cast<FuncDef> (parseFuncDef ());
+    while (!isAtEnd () && !match (TokenKind::RBrace)) {
+        auto access = match (TokenKind::Pub) ? AccessModifier::Pub : AccessModifier::Priv;
+        bool isStatic = match (TokenKind::Static);
+        auto *method  = llvm::cast<FuncDef> (parseFuncDef (access));
         if (method != nullptr) {
             methods.emplace_back (method, isStatic);
         } else {
@@ -335,10 +323,12 @@ Parser::parseImplStmt () {
 std::vector<Argument>
 Parser::parseArguments () {
     std::vector<Argument> args;
-    while (!match (TokenKind::RParen)) {
+    while (!isAtEnd () && !match (TokenKind::RParen)) {
         const Argument arg = parseArgument ();
         if (arg.IsValid ()) {
             args.push_back (arg);
+        } else {
+            break;
         }
         if (!check (TokenKind::RParen)) {
             expectTok (TokenKind::Comma, ",");
@@ -363,10 +353,23 @@ Parser::parseArgument () {
     return { name, type };
 }
 
+void
+Parser::parseArgumentsForCall (std::vector<ast::Expr *> &args) {
+    while (!isAtEnd () && !match (TokenKind::RParen)) {
+        Expr *expr = parseExpr ();
+        if (expr != nullptr) {
+            args.emplace_back (expr);
+        }
+        if (!check (TokenKind::RParen)) {
+            expectTok (TokenKind::Comma, ",");
+        }
+    }
+}
+
 std::vector<Field>
 Parser::parseFields () {
     std::vector<Field> fields;
-    while (!match (TokenKind::RBrace)) {
+    while (!isAtEnd () && !match (TokenKind::RBrace)) {
         const Field field = parseField ();
         if (field.IsValid ()) {
             fields.push_back (field);
@@ -401,7 +404,7 @@ Parser::parseField () {
 std::vector<std::tuple<basic::NameObj, Expr *>>
 Parser::parseFieldsForInstance () {
     std::vector<std::tuple<basic::NameObj, Expr *>> fields;
-    while (!match (TokenKind::RBrace)) {
+    while (!isAtEnd () && !match (TokenKind::RBrace)) {
         auto field         = parseFieldForInstance ();
         auto &[name, expr] = field;
         if (name != basic::NameObj () && expr != nullptr) {
@@ -438,7 +441,7 @@ Parser::parseExpr (int minPrec, bool allowStruct) {
     }
 
     int prec = 0;
-    while (minPrec < (prec = GetTokPrecedence (_curTok.Kind))) {
+    while (!isAtEnd () && minPrec < (prec = GetTokPrecedence (_curTok.Kind))) {
         const Token op = advance ();
 
         Expr *rhs = parseExpr (prec, allowStruct);
@@ -502,15 +505,7 @@ Parser::parsePrimaryExpr (bool allowStruct) {
         }
         if (match (TokenKind::LParen)) { // FuncCall
             std::vector<Expr *> args;
-            while (!match (TokenKind::RParen)) {
-                Expr *expr = parseExpr ();
-                if (expr != nullptr) {
-                    args.emplace_back (expr);
-                }
-                if (!check (TokenKind::RParen)) {
-                    expectTok (TokenKind::Comma, ",");
-                }
-            }
+            parseArgumentsForCall (args);
             return createNode<FuncCall> (
                 basic::NameObj (tok),
                 std::move (args),
@@ -545,6 +540,7 @@ Parser::parsePrimaryExpr (bool allowStruct) {
             "expected expression, found '" + tok.Val + "'",
             Severity::Error)
         .AddSpan (tok.Start, tok.End, "expected expression here");
+    synchronize ();
     return nullptr;
 }
 
@@ -555,15 +551,6 @@ Parser::parseChain (Expr *base, bool allowStruct) {
             const Token    tok = _curTok;
             basic::NameObj name;
             if (!expectName (name)) {
-                _diag
-                    .Report (
-                        DiagCode::EExpectedIdOrMemberName,
-                        "expected identifier or member name after '.'",
-                        Severity::Error)
-                    .AddSpan (
-                        tok.Start,
-                        tok.End,
-                        "expected member, found '" + tok.Val + "'");
                 return nullptr;
             }
 
@@ -578,15 +565,7 @@ Parser::parseChain (Expr *base, bool allowStruct) {
 
             if (match (TokenKind::LParen)) {
                 std::vector<Expr *> args;
-                while (!match (TokenKind::RParen)) {
-                    Expr *expr = parseExpr ();
-                    if (expr != nullptr) {
-                        args.emplace_back (expr);
-                    }
-                    if (!check (TokenKind::RParen)) {
-                        expectTok (TokenKind::Comma, ",");
-                    }
-                }
+                parseArgumentsForCall (args);
                 return createNode<MethodCall> (
                     base,
                     basic::NameObj (tok),
@@ -594,7 +573,8 @@ Parser::parseChain (Expr *base, bool allowStruct) {
                     tok.Start,
                     _lastTok.End);
             }
-            base = createNode<FieldExpr> (base, std::move (name), tok.Start, tok.End);
+            base
+                = createNode<FieldExpr> (base, std::move (name), base->Start (), tok.End);
         } else {
             break;
         }
@@ -602,42 +582,36 @@ Parser::parseChain (Expr *base, bool allowStruct) {
     return base;
 }
 
-// NOLINTBEGIN(cppcoreguidelines-owning-memory)
 basic::Type *
 Parser::consumeType () {
+#define kind(kind) case TokenKind::kind:
+#define int_type(prefix, is_unsigned)                                                    \
+    return createType<basic::IntegerType> (                                              \
+        1U << ((unsigned) tok.Kind - (unsigned) TokenKind::prefix##8 + 3),               \
+        is_unsigned);
+#define float_type()                                                                     \
+    return createType<basic::FloatingType> (                                             \
+        (basic::FloatingKind) ((unsigned) tok.Kind - (unsigned) TokenKind::F32));
+
     const Token tok = advance ();
     switch (tok.Kind) {
-    case TokenKind::Bool: return new basic::BoolType ();
-    case TokenKind::Char: return new basic::CharType ();
-    case TokenKind::I8:
-    case TokenKind::I16:
-    case TokenKind::I32:
-    case TokenKind::I64:
-        return new basic::IntegerType (
-            1U << ((unsigned) tok.Kind - (unsigned) TokenKind::I8 + 3));
-    case TokenKind::U8:
-    case TokenKind::U16:
-    case TokenKind::U32:
-    case TokenKind::U64:
-        return new basic::IntegerType (
-            1U << ((unsigned) tok.Kind - (unsigned) TokenKind::U8 + 3),
-            true);
-    case TokenKind::F32:
-    case TokenKind::F64:
-        return new basic::FloatingType (
-            (basic::FloatingKind) ((unsigned) tok.Kind - (unsigned) TokenKind::F32));
-    case TokenKind::Id: {
-        std::vector<basic::NameObj> path;
-        path.emplace_back (tok);
-        while (match (TokenKind::Dot)) {
-            basic::NameObj name;
-            if (!expectName (name)) {
-                return nullptr;
+        kind (Bool) return createType<basic::BoolType> ();
+        kind (Char) return createType<basic::CharType> ();
+        kind (I8) kind (I16) kind (I32) kind (I64) int_type (I, false);
+        kind (U8) kind (U16) kind (U32) kind (U64) int_type (U, true);
+        kind (F32) kind (F64) float_type ();
+        kind (Id) {
+            std::vector<basic::NameObj> path;
+            path.emplace_back (tok);
+            while (match (TokenKind::Dot)) {
+                basic::NameObj name;
+                if (!expectName (name)) {
+                    return nullptr;
+                }
+                path.emplace_back (name);
             }
-            path.emplace_back (name);
+            return createType<basic::NamedType> (std::move (path));
         }
-        return new basic::NamedType (std::move (path));
-    }
     default:
         _diag
             .Report (
@@ -645,19 +619,26 @@ Parser::consumeType () {
                 "expected type, found '" + tok.Val + "'",
                 Severity::Error)
             .AddSpan (tok.Start, tok.End, "expected a type name");
+        synchronize ();
         return nullptr;
     }
+#undef float_type
+#undef int_type
+#undef kind
 }
-// NOLINTEND(cppcoreguidelines-owning-memory)
 
 void
 Parser::synchronize () {
+    if (isStmtStart (_curTok.Kind)) {
+        return;
+    }
     advance ();
     while (!isAtEnd ()) {
-        if (check (_lastTok, TokenKind::Semi) || check (_lastTok, TokenKind::RBrace)) {
+        if (check (_lastTok, TokenKind::Semi) || check (_lastTok, TokenKind::RBrace)
+            || check (_lastTok, TokenKind::RParen)) {
             return;
         }
-        if (isKeyword (_curTok.Kind)) {
+        if (isStmtStart (_curTok.Kind)) {
             return;
         }
         advance ();
@@ -688,7 +669,12 @@ Parser::advance () {
 }
 
 bool
-Parser::isKeyword (TokenKind kind) {
+Parser::isKeyword (const Token &tok) {
+    return keywords.contains (tok.Val);
+}
+
+bool
+Parser::isStmtStart (TokenKind kind) {
 #define variant(kind) case TokenKind::kind:
     switch (kind) {
         variant (Let) variant (Const) variant (Func) variant (Ret) variant (If)
@@ -736,6 +722,7 @@ Parser::expectTok (TokenKind kind, const std::string &val) {
                 "expected '" + val + "', found '" + _curTok.Val + "'",
                 Severity::Error)
             .AddSpan (_curTok.Start, _curTok.End, "expected '" + val + "'");
+        synchronize ();
         return false;
     }
     return true;
@@ -744,7 +731,6 @@ Parser::expectTok (TokenKind kind, const std::string &val) {
 bool
 Parser::expectName (basic::NameObj &res) {
     const Token tok = advance ();
-    res             = basic::NameObj (tok);
     if (tok.Kind != TokenKind::Id) {
         auto &err = _diag
                         .Report (
@@ -752,13 +738,15 @@ Parser::expectName (basic::NameObj &res) {
                             "expected identifier, found '" + tok.Val + "'",
                             Severity::Error)
                         .AddSpan (tok.Start, tok.End, "expected identifier");
-        if (isKeyword (tok.Kind)) {
+        if (isKeyword (tok)) {
             err.AddNote ("'" + tok.Val + "' is a reserved keyword");
         } else {
             err.AddNote ("'" + tok.Val + "' is a operator");
         }
+        synchronize ();
         return false;
     }
+    res = basic::NameObj (tok);
     return true;
 }
 
@@ -766,4 +754,5 @@ bool
 Parser::isAtEnd () const {
     return check (TokenKind::Eof);
 }
+
 }
