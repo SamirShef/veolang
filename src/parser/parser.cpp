@@ -1,3 +1,5 @@
+#include "lexer/keywords.h"
+
 #include <ast/access_modifier.h>
 #include <ast/exprs/asgn_expr.h>
 #include <ast/exprs/bin_expr.h>
@@ -657,7 +659,7 @@ Parser::synchronize () {
         if (check (_lastTok, TokenKind::Semi) || check (_lastTok, TokenKind::RBrace)) {
             return;
         }
-        if (isKeyword (_curTok.Kind)) {
+        if (isKeyword (_curTok)) {
             return;
         }
         advance ();
@@ -688,17 +690,8 @@ Parser::advance () {
 }
 
 bool
-Parser::isKeyword (TokenKind kind) {
-#define variant(kind) case TokenKind::kind:
-    switch (kind) {
-        variant (Let) variant (Const) variant (Func) variant (Ret) variant (If)
-            variant (Else) variant (For) variant (Break) variant (Continue)
-                variant (Struct) variant (Pub) variant (Impl) variant (Trait)
-                    variant (Del) variant (Mod) variant (Import)
-                        variant (Static) return true;
-    default: return false;
-    }
-#undef variant
+Parser::isKeyword (const Token &tok) {
+    return keywords.contains (tok.Val);
 }
 
 bool
@@ -752,7 +745,7 @@ Parser::expectName (basic::NameObj &res) {
                             "expected identifier, found '" + tok.Val + "'",
                             Severity::Error)
                         .AddSpan (tok.Start, tok.End, "expected identifier");
-        if (isKeyword (tok.Kind)) {
+        if (isKeyword (tok)) {
             err.AddNote ("'" + tok.Val + "' is a reserved keyword");
         } else {
             err.AddNote ("'" + tok.Val + "' is a operator");

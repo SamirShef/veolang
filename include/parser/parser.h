@@ -144,7 +144,7 @@ private:
     advance ();
 
     static bool
-    isKeyword (TokenKind kind);
+    isKeyword (const Token &tok);
 
     static bool
     isAsgnOp (TokenKind kind);
