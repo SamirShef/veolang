@@ -1060,10 +1060,13 @@ Sema::analyzeAsgnExpr (AsgnExpr *ae, Type *expectedType) {
                 .AddSpan (fieldExpr->Name ().Start, fieldExpr->Name ().End);
             return {};
         }
-        auto *sym          = base.Val->Type->AsStruct ()->BaseSymbol ();
-        bool  baseIsStatic = base.Val->Kind == ValueKind::Type;
-        bool  baseIsThis   = !baseIsStatic && _insideMethod.has_value ()
-                             && *_insideMethod->second == *sym;
+        auto *sym              = base.Val->Type->AsStruct ()->BaseSymbol ();
+        bool  baseIsStatic     = base.Val->Kind == ValueKind::Type;
+        bool  baseIsThis       = !baseIsStatic && _insideMethod.has_value ()
+                                 && *_insideMethod->second == *sym;
+        bool  canAccessPrivate = baseIsThis
+                                 || baseIsStatic && _insideMethod.has_value ()
+                                        && *_insideMethod->second == *sym;
         auto  field
             = std::ranges::find_if (sym->Fields, [&] (const symbols::Field &field) {
                   return field.Name.Val == fieldExpr->Name ().Val;
@@ -1094,7 +1097,7 @@ Sema::analyzeAsgnExpr (AsgnExpr *ae, Type *expectedType) {
                 .AddSpan (fieldExpr->Name ().Start, fieldExpr->Name ().End);
             return {};
         }
-        if (field->Access != AccessModifier::Pub && !baseIsThis) {
+        if (field->Access != AccessModifier::Pub && !canAccessPrivate) {
             _diag
                 .Report (
                     DiagCode::ECannotAccessToPrivMember,
@@ -1155,6 +1158,9 @@ Sema::analyzeFieldExpr (FieldExpr *fe, Type *expectedType) {
     bool  baseIsStatic = base.Val->Kind == ValueKind::Type;
     bool  baseIsThis
         = !baseIsStatic && _insideMethod.has_value () && *_insideMethod->second == *s;
+    bool canAccessPrivate
+        = baseIsThis
+          || baseIsStatic && _insideMethod.has_value () && *_insideMethod->second == *s;
     auto it = std::ranges::find_if (s->Fields, [&] (const symbols::Field &field) {
         return field.Name.Val == fe->Name ().Val;
     });
@@ -1205,7 +1211,7 @@ Sema::analyzeFieldExpr (FieldExpr *fe, Type *expectedType) {
             .AddSpan (fe->Name ().Start, fe->Name ().End);
         return {};
     }
-    if (it->Access != AccessModifier::Pub && !baseIsThis) {
+    if (it->Access != AccessModifier::Pub && !canAccessPrivate) {
         _diag
             .Report (
                 DiagCode::ECannotAccessToPrivMember,
