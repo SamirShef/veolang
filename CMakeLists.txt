@@ -29,8 +29,6 @@ if(NOT LLVM_ENABLE_EH)
     endif()
 endif()
 
-add_compile_options(-fno-rtti -fno-exceptions -g)
-
 if(TARGET LLVM)
     set(LLVM_LINK_LIBS LLVM)
     message(STATUS "Using shared LLVM target")
@@ -63,6 +61,7 @@ file(GLOB_RECURSE SOURCES "src/*.cpp")
 list(FILTER SOURCES EXCLUDE REGEX ".*/main\\.cpp$|main\\.cpp$")
 
 add_library(veoc-core STATIC ${SOURCES})
+target_compile_options(veoc-core PRIVATE -fno-rtti -fno-exceptions -g)
 target_link_libraries(veoc-core PRIVATE
     tomlplusplus::tomlplusplus
     ${LLVM_LINK_LIBS}
@@ -78,24 +77,4 @@ target_link_libraries(${PROJECT_NAME} PRIVATE veoc-core)
 
 enable_testing()
 
-add_executable(
-    test_lexer
-    ${CMAKE_CURRENT_SOURCE_DIR}/tests/unit/lexer/main.cpp
-)
-add_test(
-    NAME TestLexer
-    COMMAND test_lexer ${CMAKE_CURRENT_SOURCE_DIR}/tests/unit/lexer
-)
-target_compile_options(test_lexer PRIVATE -O0 -g)
-target_link_libraries(test_lexer PRIVATE veoc-core)
-
-add_executable(
-    test_parser
-    ${CMAKE_CURRENT_SOURCE_DIR}/tests/unit/parser/main.cpp
-)
-add_test(
-    NAME TestParser
-    COMMAND test_parser ${CMAKE_CURRENT_SOURCE_DIR}/tests/unit/parser
-)
-target_compile_options(test_parser PRIVATE -O0 -g)
-target_link_libraries(test_parser PRIVATE veoc-core)
+add_subdirectory(tests)
