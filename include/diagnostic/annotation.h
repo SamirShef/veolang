@@ -15,6 +15,10 @@ struct Annotation {
 
     bool
     operator== (const Annotation &other) const {
+        if (this == &other) {
+            return true;
+        }
+
         return Span == other.Span && Label == other.Label && IsPrimary == other.IsPrimary;
     }
 };

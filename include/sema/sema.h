@@ -1,18 +1,25 @@
 #pragma once
+#include "basic/types/type.h"
+
 #include <ast/exprs/asgn_expr.h>
 #include <ast/exprs/bin_expr.h>
+#include <ast/exprs/field_expr.h>
 #include <ast/exprs/func_call.h>
 #include <ast/exprs/lit_expr.h>
+#include <ast/exprs/method_call.h>
+#include <ast/exprs/struct_instance.h>
 #include <ast/exprs/un_expr.h>
 #include <ast/exprs/var_expr.h>
 #include <ast/stmts/break_continue.h>
 #include <ast/stmts/expr_stmt.h>
 #include <ast/stmts/for_loop.h>
 #include <ast/stmts/if_else.h>
+#include <ast/stmts/impl_stmt.h>
 #include <ast/stmts/ret.h>
 #include <ast/stmts/var_def.h>
 #include <basic/symbols/module.h>
 #include <basic/symbols/scope.h>
+#include <basic/symbols/struct.h>
 #include <basic/value.h>
 #include <cstddef>
 #include <diagnostic/engine.h>
@@ -49,6 +56,8 @@ class Sema {
     };
     std::stack<Loop> _loops;
 
+    std::optional<std::pair<symbols::Method *, symbols::Struct *>> _insideMethod;
+
 public:
     Sema (DiagnosticEngine &diag, hir::Context &ctx, symbols::Module *mod)
         : _diag (diag), _builder (ctx), _mod (mod) {
@@ -58,14 +67,32 @@ public:
     void
     Analyze (ParseResult &res) {
         for (size_t i = 0; i < res.Count; ++i) {
+            if (res.Nodes[i] == nullptr) {
+                continue;
+            }
+            auto *stmt = llvm::cast<ast::Stmt> (res.Nodes[i]);
+            if (stmt->Kind () == ast::NodeKind::StructDef) {
+                analyzeStructDef (llvm::cast<ast::StructDef> (stmt));
+            }
+        }
+        for (size_t i = 0; i < res.Count; ++i) {
+            if (res.Nodes[i] == nullptr) {
+                continue;
+            }
             auto *stmt = llvm::cast<ast::Stmt> (res.Nodes[i]);
             if (stmt->Kind () == ast::NodeKind::FuncDef) {
                 declareFunc (llvm::cast<ast::FuncDef> (stmt));
+            } else if (stmt->Kind () == ast::NodeKind::ImplStmt) {
+                declareImplMethods (llvm::cast<ast::ImplStmt> (stmt));
             }
         }
 
         for (size_t i = 0; i < res.Count; ++i) {
-            analyzeStmt (llvm::cast<ast::Stmt> (res.Nodes[i]));
+            auto *stmt = llvm::cast<ast::Stmt> (res.Nodes[i]);
+            if (stmt->Kind () == ast::NodeKind::StructDef) {
+                continue;
+            }
+            analyzeStmt (stmt);
         }
     }
 
@@ -97,6 +124,15 @@ private:
     void
     analyzeBreakContinue (ast::BreakContinue *bc);
 
+    void
+    analyzeStructDef (ast::StructDef *sd);
+
+    void
+    declareImplMethods (ast::ImplStmt *is);
+
+    void
+    analyzeImplStmt (ast::ImplStmt *is);
+
     SemanticResult
     analyzeExpr (ast::Expr *expr, Type *expectedType);
 
@@ -118,14 +154,32 @@ private:
     SemanticResult
     analyzeAsgnExpr (ast::AsgnExpr *ae, Type *expectedType);
 
+    SemanticResult
+    analyzeFieldExpr (ast::FieldExpr *fe, Type *expectedType);
+
+    SemanticResult
+    analyzeStructInstance (ast::StructInstance *si, Type *expectedType);
+
+    SemanticResult
+    analyzeMethodCall (ast::MethodCall *mc, Type *expectedType);
+
     Type *
     resolveType (Type **type);
 
     std::optional<symbols::Variable>
     getVariable (const std::string &name);
 
+    symbols::Struct *
+    getStruct (const std::string &name, symbols::Module *mod = nullptr);
+
     std::optional<symbols::Function>
     getFunction (const std::string &name, const std::vector<ast::Argument> &args);
+
+    static symbols::Method *
+    getMethod (
+        symbols::Struct                  *sym,
+        const std::string                &name,
+        const std::vector<ast::Argument> &args);
 
     Type *
     getCommonType (Type *lhs, Type *rhs, llvm::SMLoc start, llvm::SMLoc end);
@@ -160,6 +214,13 @@ private:
         const std::vector<Type *>   &argTypes,
         llvm::SMLoc                  start,
         llvm::SMLoc                  end);
+
+    symbols::Method *
+    resolveBestOverload (
+        symbols::MethodCandidates *candidates,
+        const std::vector<Type *> &argTypes,
+        llvm::SMLoc                start,
+        llvm::SMLoc                end);
 
     static CastCost
     checkCastCost (Type *src, Type *dst);

@@ -22,8 +22,8 @@ struct Variable {
         bool            isConst,
         bool            isGlobal,
         size_t          index,
-        basic::OptValue val    = std::nullopt,
-        Module         *parent = nullptr)
+        Module         *parent,
+        basic::OptValue val = std::nullopt)
         : Name (std::move (name)),
           Type (type),
           IsConst (isConst),
@@ -31,6 +31,14 @@ struct Variable {
           Index (index),
           Val (val),
           Parent (parent) {}
+
+    bool
+    operator== (const Variable &other) const;
+
+    bool
+    operator!= (const Variable &other) const {
+        return !(*this == other);
+    }
 };
 
 }

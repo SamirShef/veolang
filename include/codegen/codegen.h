@@ -1,13 +1,18 @@
 #pragma once
+#include "hir/load_glob_var_by_name.h"
+
 #include <hir/bin_expr.h>
 #include <hir/branch.h>
 #include <hir/expr_stmt.h>
+#include <hir/field_expr.h>
 #include <hir/func.h>
 #include <hir/func_call.h>
 #include <hir/lit_expr.h>
 #include <hir/load_var.h>
 #include <hir/ret.h>
-#include <hir/store_var.h>
+#include <hir/store.h>
+#include <hir/struct_def.h>
+#include <hir/struct_instance.h>
 #include <hir/un_expr.h>
 #include <hir/var_def.h>
 #include <llvm/IR/Function.h>
@@ -24,8 +29,10 @@ namespace veo {
 class CodeGen {
     std::vector<hir::VarDef *>                               &_hirGlobals;
     std::vector<hir::Function *>                             &_hirFuncs;
+    std::vector<hir::StructDef *>                            &_hirStructs;
     std::vector<llvm::GlobalVariable *>                       _globals;
     std::unordered_map<symbols::Function *, llvm::Function *> _funcsMap;
+    std::unordered_map<symbols::Function *, llvm::Function *> _methodsMap;
     std::vector<llvm::Function *>                             _funcs;
     llvm::LLVMContext                                         _ctx;
     llvm::IRBuilder<>                                         _builder;
@@ -45,16 +52,21 @@ class CodeGen {
 
 public:
     CodeGen (
-        const std::string            &name,
-        std::vector<hir::VarDef *>   &globals,
-        std::vector<hir::Function *> &funcs)
+        const std::string             &name,
+        std::vector<hir::VarDef *>    &globals,
+        std::vector<hir::Function *>  &funcs,
+        std::vector<hir::StructDef *> &structs)
         : _hirGlobals (globals),
           _hirFuncs (funcs),
+          _hirStructs (structs),
           _builder (_ctx),
           _mod (std::make_unique<llvm::Module> (name, _ctx)) {}
 
     std::unique_ptr<llvm::Module>
     Generate () {
+        for (auto &s : _hirStructs) {
+            generateStruct (s);
+        }
         for (auto &f : _hirFuncs) {
             declareFunc (f);
         }
@@ -69,6 +81,9 @@ public:
         }
         return std::move (_mod);
     }
+
+    static std::string
+    MangleStaticField (symbols::Struct *sym, const std::string &fieldName);
 
 private:
     void
@@ -95,6 +110,9 @@ private:
     void
     generateBranch (hir::Branch *br);
 
+    void
+    generateStruct (hir::StructDef *sd);
+
     llvm::Value *
     generateExpr (hir::Node *node);
 
@@ -114,7 +132,16 @@ private:
     generateFuncCall (hir::FuncCall *fc);
 
     llvm::Value *
-    generateStoreVar (hir::StoreVar *sv);
+    generateStore (hir::Store *store);
+
+    llvm::Value *
+    generateFieldExpr (hir::FieldExpr *fe);
+
+    llvm::Value *
+    generateStructInstance (hir::StructInstance *si);
+
+    llvm::Value *
+    generateLoadGlobalVarByName (hir::LoadGlobalVarByName *load);
 
     llvm::Value *
     generateLValue (hir::Node *node);
@@ -122,17 +149,26 @@ private:
     llvm::Type *
     getType (basic::Type *type);
 
-    std::string
-    mangleFunction (hir::Function *func) const;
+    static std::string
+    mangleFunction (hir::Function *func);
 
-    std::string
-    mangleGlobalVar (hir::VarDef *var) const;
+    static std::string
+    mangleMethod (symbols::Struct *sym, hir::Function *func);
 
-    std::string
-    mangleModule (symbols::Module *mod) const;
+    static std::string
+    mangleGlobalVar (hir::VarDef *var);
 
-    std::string
-    mangleType (basic::Type *type) const;
+    static std::string
+    mangleStruct (hir::StructDef *sd);
+
+    static std::string
+    mangleStructSymbol (symbols::Struct *sym);
+
+    static std::string
+    mangleModule (symbols::Module *mod);
+
+    static std::string
+    mangleType (basic::Type *type);
 
     void
     generateImplicitMain ();

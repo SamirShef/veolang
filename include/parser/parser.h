@@ -1,6 +1,7 @@
 #pragma once
 #include <ast/expr.h>
 #include <ast/stmts/func_def.h>
+#include <ast/stmts/struct_def.h>
 #include <basic/name.h>
 #include <basic/types/type.h>
 #include <cstddef>
@@ -89,17 +90,38 @@ private:
     ast::Stmt *
     parseBreakContinue ();
 
+    ast::Stmt *
+    parseStructDef ();
+
+    ast::Stmt *
+    parseImplStmt ();
+
     std::vector<ast::Argument>
     parseArguments ();
 
     ast::Argument
     parseArgument ();
 
+    std::vector<ast::Field>
+    parseFields ();
+
+    ast::Field
+    parseField ();
+
+    std::vector<std::tuple<basic::NameObj, ast::Expr *>>
+    parseFieldsForInstance ();
+
+    std::tuple<basic::NameObj, ast::Expr *>
+    parseFieldForInstance ();
+
     ast::Expr *
     parseExpr (int minPrec = (int) Precedence::Unary, bool allowStruct = true);
 
     ast::Expr *
     parsePrimaryExpr (bool allowStruct = true);
+
+    ast::Expr *
+    parseChain (ast::Expr *base, bool allowStruct = true);
 
     basic::Type *
     consumeType ();

@@ -172,6 +172,64 @@ Dumper::dumpBreakContinue (BreakContinue *bc) {
 }
 
 void
+Dumper::dumpStructDef (StructDef *sd) {
+    indent ();
+    _os << "StructDef: " << AccessToString (sd->Access ()) << ' ' << sd->Name ().Val
+        << '\n';
+
+    ++_indentLvl;
+    for (const auto &field : sd->Fields ()) {
+        indent ();
+        _os << "Field: " << AccessToString (field.Access) << ' '
+            << (field.IsStatic ? "static " : "") << (field.IsConst ? "const " : "")
+            << field.Name.Val << ": " << field.Type->ToString () << "\n";
+    }
+    --_indentLvl;
+}
+
+void
+Dumper::dumpImplStmt (ImplStmt *is) {
+    indent ();
+    _os << "ImplStmt: "
+        << (is->TraitType () != nullptr ? is->TraitType ()->ToString () + " for " : "")
+        << is->StructType ()->ToString () << '\n';
+    ++_indentLvl;
+
+    indent ();
+    _os << "Methods:\n";
+    ++_indentLvl;
+    for (const auto &method : is->Methods ()) {
+        auto *func = method.Func;
+        indent ();
+        _os << AccessToString (func->Access ()) << ' '
+            << (method.IsStatic ? "static " : "") << func->Name ().Val << " (";
+
+        size_t i = 0;
+        for (const auto &arg : func->Args ()) {
+            if (arg.IsValid ()) {
+                _os << arg.Name.Val << ": " << arg.Type->ToString ();
+            }
+            if (i < func->Args ().size () - 1) {
+                _os << ", ";
+            }
+            ++i;
+        }
+        _os << ')';
+        if (func->RetType () != nullptr) {
+            _os << ": " << func->RetType ()->ToString ();
+        }
+        _os << '\n';
+        ++_indentLvl;
+        for (const auto &stmt : func->Body ()) {
+            dumpStmt (stmt);
+        }
+        --_indentLvl;
+    }
+    --_indentLvl;
+    --_indentLvl;
+}
+
+void
 Dumper::dumpLiteralExpr (LiteralExpr *le) {
     indent ();
     _os << "LiteralExpr: " << le->Value () << '\n';
@@ -220,6 +278,60 @@ Dumper::dumpAsgnExpr (AsgnExpr *ae) {
     ++_indentLvl;
     dumpExpr (ae->Ptr ());
     dumpExpr (ae->Init ());
+    --_indentLvl;
+}
+
+void
+Dumper::dumpFieldExpr (FieldExpr *fe) {
+    indent ();
+    _os << "FieldExpr: " << fe->Name ().Val << '\n';
+    ++_indentLvl;
+
+    indent ();
+    _os << "From:\n";
+    ++_indentLvl;
+    dumpExpr (fe->Base ());
+    --_indentLvl;
+
+    --_indentLvl;
+}
+
+void
+Dumper::dumpStructInstance (StructInstance *si) {
+    indent ();
+    _os << "StructInstance: " << si->Path ().Val << '\n';
+    ++_indentLvl;
+
+    indent ();
+    _os << "Fields:\n";
+    ++_indentLvl;
+    for (const auto &[name, expr] : si->Fields ()) {
+        indent ();
+        _os << name.Val << ":\n";
+        ++_indentLvl;
+        dumpExpr (expr);
+        --_indentLvl;
+    }
+    --_indentLvl;
+
+    --_indentLvl;
+}
+
+void
+Dumper::dumpMethodCall (MethodCall *mc) {
+    indent ();
+    _os << "MethodCall: " << mc->Name ().Val << '\n';
+    ++_indentLvl;
+    for (auto &a : mc->Args ()) {
+        dumpExpr (a);
+    }
+
+    indent ();
+    _os << "From:\n";
+    ++_indentLvl;
+    dumpExpr (mc->Base ());
+    --_indentLvl;
+
     --_indentLvl;
 }
 

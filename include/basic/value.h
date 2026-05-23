@@ -9,7 +9,7 @@ using ValueData = std::variant<int64_t, double>;
 struct Value;
 using OptValue = std::optional<Value>;
 
-enum class ValueKind : uint8_t { Unknown, Const };
+enum class ValueKind : uint8_t { Unknown, Const, Type };
 
 struct Value {
     ValueKind   Kind;
@@ -19,6 +19,20 @@ struct Value {
     Value (ValueKind kind, ValueData data, class Type *type)
         : Kind (kind), Data (data), Type (type) {}
     Value (ValueKind kind, class Type *type) : Kind (kind), Type (type) {}
+
+    bool
+    operator== (const Value &other) const {
+        if (this == &other) {
+            return true;
+        }
+
+        return Kind == other.Kind && Data == other.Data && *Type == *other.Type;
+    }
+
+    bool
+    operator!= (const Value &other) const {
+        return !(*this == other);
+    }
 
     bool
     IsUnknown () const {

@@ -11,6 +11,10 @@ struct Span {
 
     bool
     operator== (const Span &other) const {
+        if (this == &other) {
+            return true;
+        }
+
         return Start == other.Start && End == other.End;
     }
 };

@@ -1,14 +1,18 @@
 #pragma once
 #include <ast/exprs/asgn_expr.h>
 #include <ast/exprs/bin_expr.h>
+#include <ast/exprs/field_expr.h>
 #include <ast/exprs/func_call.h>
 #include <ast/exprs/lit_expr.h>
+#include <ast/exprs/method_call.h>
+#include <ast/exprs/struct_instance.h>
 #include <ast/exprs/un_expr.h>
 #include <ast/exprs/var_expr.h>
 #include <ast/stmts/break_continue.h>
 #include <ast/stmts/expr_stmt.h>
 #include <ast/stmts/for_loop.h>
 #include <ast/stmts/if_else.h>
+#include <ast/stmts/impl_stmt.h>
 #include <ast/stmts/ret.h>
 #include <ast/stmts/var_def.h>
 #include <llvm/Support/raw_ostream.h>
@@ -42,6 +46,8 @@ private:
             variant (IfElse, dumpIfElse, IfElseStmt);
             variant (ForLoop, dumpForLoop, ForLoopStmt);
             variant (BreakContinue, dumpBreakContinue, BreakContinue);
+            variant (StructDef, dumpStructDef, StructDef);
+            variant (ImplStmt, dumpImplStmt, ImplStmt);
         default: {
         }
         }
@@ -70,6 +76,12 @@ private:
     dumpBreakContinue (BreakContinue *bc);
 
     void
+    dumpStructDef (StructDef *sd);
+
+    void
+    dumpImplStmt (ImplStmt *is);
+
+    void
     dumpExpr (Expr *expr) {
         if (!checkNull (expr)) {
             return;
@@ -83,6 +95,9 @@ private:
             variant (VarExpr, dumpVarExpr, VarExpr);
             variant (FuncCall, dumpFuncCall, FuncCall);
             variant (AsgnExpr, dumpAsgnExpr, AsgnExpr);
+            variant (FieldExpr, dumpFieldExpr, FieldExpr);
+            variant (StructInstance, dumpStructInstance, StructInstance);
+            variant (MethodCall, dumpMethodCall, MethodCall);
         default: {
         }
         }
@@ -106,6 +121,15 @@ private:
 
     void
     dumpAsgnExpr (AsgnExpr *ae);
+
+    void
+    dumpFieldExpr (FieldExpr *fe);
+
+    void
+    dumpStructInstance (StructInstance *si);
+
+    void
+    dumpMethodCall (MethodCall *mc);
 
     void
     indent () {

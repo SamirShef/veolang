@@ -1,12 +1,21 @@
 #include <basic/symbols/module.h>
-#include <basic/types/floating.h>
-#include <basic/types/integer.h>
+#include <basic/types/all.h>
 #include <codegen/codegen.h>
 #include <sstream>
 
 namespace veo {
 
 using namespace hir;
+
+std::string
+CodeGen::MangleStaticField (symbols::Struct *sym, const std::string &fieldName) {
+    std::ostringstream oss;
+    oss << "_VF";
+    oss << mangleModule (sym->Parent);
+    oss << "E" << sym->Name.Val.size () << sym->Name.Val;
+    oss << "E" << fieldName.size () << fieldName;
+    return oss.str ();
+}
 
 void
 CodeGen::generate (Node *node) {
@@ -18,6 +27,7 @@ CodeGen::generate (Node *node) {
         variant (Ret, generateRet, Return);
         variant (ExprStmt, generateExprStmt, ExprStmt);
         variant (Branch, generateBranch, Branch);
+        variant (StructDef, generateStruct, StructDef);
     default: return;
     }
 #undef variant
@@ -58,7 +68,10 @@ CodeGen::generateVarDef (VarDef *vd) {
 
 void
 CodeGen::declareFunc (Function *fd) {
-    std::string               name = mangleFunction (fd);
+    const std::string &name
+        = fd->MethodBaseType () == nullptr
+              ? mangleFunction (fd)
+              : mangleMethod (fd->MethodBaseType ()->AsStruct ()->BaseSymbol (), fd);
     std::vector<llvm::Type *> args;
     for (auto &a : fd->Args ()) {
         args.emplace_back (getType (a.Type));
@@ -70,13 +83,21 @@ CodeGen::declareFunc (Function *fd) {
         name,
         *_mod);
     _funcs.emplace_back (func);
-    _funcsMap.emplace (fd->BaseSymbol (), func);
+    if (fd->MethodBaseType () == nullptr) {
+        _funcsMap.emplace (fd->BaseSymbol (), func);
+    } else {
+        _methodsMap.emplace (fd->BaseSymbol (), func);
+    }
 }
 
 void
 CodeGen::generateFuncDef (Function *fd) {
-    _curFunc    = CurrentFunction ();
-    auto  *func = _mod->getFunction (mangleFunction (fd));
+    _curFunc = CurrentFunction ();
+    const std::string &name
+        = fd->MethodBaseType () == nullptr
+              ? mangleFunction (fd)
+              : mangleMethod (fd->MethodBaseType ()->AsStruct ()->BaseSymbol (), fd);
+    auto  *func = _mod->getFunction (name);
     size_t i    = 0;
     for (auto &a : func->args ()) {
         a.setName (fd->Args ()[i].Name.Val);
@@ -128,6 +149,30 @@ CodeGen::generateBranch (Branch *br) {
     }
 }
 
+void
+CodeGen::generateStruct (hir::StructDef *sd) {
+    const auto               &name = mangleStruct (sd);
+    std::vector<llvm::Type *> fields;
+    fields.reserve (sd->Fields ().size ());
+    for (const auto &field : sd->Fields ()) {
+        auto *type = getType (field.Type);
+        if (!field.IsStatic) {
+            fields.emplace_back (type);
+        } else {
+            const auto &fieldName = MangleStaticField (sd->BaseSymbol (), field.Name.Val);
+            auto       *gv        = new llvm::GlobalVariable (
+                *_mod,
+                type,
+                field.IsConst,
+                llvm::GlobalValue::ExternalLinkage,
+                llvm::ConstantExpr::getNullValue (type),
+                fieldName);
+            _globals.emplace_back (gv);
+        }
+    }
+    llvm::StructType::create (_ctx, fields, name);
+}
+
 llvm::Value *
 CodeGen::generateExpr (Node *node) {
 #define variant(kind, func, type)                                                        \
@@ -141,7 +186,10 @@ CodeGen::generateExpr (Node *node) {
         variant (UnExpr, generateUnaryExpr, UnaryExpr);
         variant (LoadVar, generateLoadVar, LoadVar);
         variant (FuncCall, generateFuncCall, FuncCall);
-        variant (StoreVar, generateStoreVar, StoreVar);
+        variant (Store, generateStore, Store);
+        variant (FieldExpr, generateFieldExpr, FieldExpr);
+        variant (StructInstance, generateStructInstance, StructInstance);
+        variant (LoadGlobalVarByName, generateLoadGlobalVarByName, LoadGlobalVarByName);
     default: return nullptr;
     }
 #undef variant
@@ -162,6 +210,8 @@ CodeGen::generateLiteralExpr (LiteralExpr *le) {
             std::get<1> (val.Data));
     case basic::TypeKind::Bool: return _builder.getInt1 (std::get<0> (val.Data) != 0);
     case basic::TypeKind::Char: return _builder.getInt32 (std::get<0> (val.Data));
+    default: {
+    }
     }
     return nullptr;
 }
@@ -283,7 +333,8 @@ CodeGen::generateLoadVar (LoadVar *lv) {
 
 llvm::Value *
 CodeGen::generateFuncCall (FuncCall *fc) {
-    auto                      *func = _funcsMap.at (fc->Function ());
+    auto                      *func = fc->IsMethod () ? _methodsMap.at (fc->Function ())
+                                                      : _funcsMap.at (fc->Function ());
     std::vector<llvm::Value *> args;
     args.reserve (fc->Args ().size ());
     for (const auto &a : fc->Args ()) {
@@ -293,11 +344,57 @@ CodeGen::generateFuncCall (FuncCall *fc) {
 }
 
 llvm::Value *
-CodeGen::generateStoreVar (StoreVar *sv) {
-    auto *lvalue = generateLValue (sv->Ptr ());
-    auto *val    = generateExpr (sv->Expr ());
+CodeGen::generateStore (Store *store) {
+    auto *lvalue = generateLValue (store->Ptr ());
+    auto *val    = generateExpr (store->Expr ());
     _builder.CreateStore (val, lvalue);
     return val;
+}
+
+llvm::Value *
+CodeGen::generateFieldExpr (hir::FieldExpr *fe) {
+    auto *base = generateExpr (fe->Base ());
+    return _builder.CreateExtractValue (base, fe->Index ());
+}
+
+llvm::Value *
+CodeGen::generateStructInstance (hir::StructInstance *si) {
+    const auto       *sym = si->BaseSymbol ();
+    llvm::StructType *type
+        = llvm::StructType::getTypeByName (_ctx, mangleStructSymbol (si->BaseSymbol ()));
+    if (_curFunc.has_value ()) {
+        // local scope
+        auto                      *structAlloca = _builder.CreateAlloca (type);
+        std::vector<llvm::Value *> fields (sym->Fields.size ());
+        llvm::Value               *indices[2] = {
+            _builder.getInt64 (0) // get the pointer to the struct
+        };
+        for (const auto &[index, expr] : si->Fields ()) {
+            indices[1] = _builder.getInt64 (index); // fields index
+            auto *val  = generateExpr (expr);
+            auto *gep  = _builder.CreateInBoundsGEP (type, structAlloca, indices);
+            _builder.CreateStore (val, gep);
+        }
+        return _builder.CreateLoad (type, structAlloca);
+    }
+    // global scope
+    std::vector<llvm::Constant *> fields (sym->Fields.size ());
+    for (const auto &[index, expr] : si->Fields ()) {
+        auto *val     = generateExpr (expr);
+        fields[index] = llvm::cast<llvm::Constant> (val);
+    }
+    for (size_t i = 0; i < fields.size (); ++i) {
+        if (fields[i] == nullptr) {
+            fields[i] = llvm::Constant::getNullValue (getType (sym->Fields[i].Type));
+        }
+    }
+    return llvm::ConstantStruct::get (type, fields);
+}
+
+llvm::Value *
+CodeGen::generateLoadGlobalVarByName (hir::LoadGlobalVarByName *load) {
+    auto *lvalue = generateLValue (load);
+    return _builder.CreateLoad (getType (load->Type ()), lvalue);
 }
 
 llvm::Value *
@@ -313,6 +410,16 @@ CodeGen::generateLValue (Node *node) {
         }
         return _curFunc->Locals[lv->Id ()];
     }
+    case NodeKind::FieldExpr: {
+        auto *fe   = llvm::cast<FieldExpr> (node);
+        auto *base = generateExpr (fe->Base ());   // LOADED struct
+        auto *ptr  = generateLValue (fe->Base ()); // POINTER to struct
+        return _builder.CreateStructGEP (base->getType (), ptr, fe->Index ());
+    }
+    case NodeKind::LoadGlobalVarByName: {
+        auto *load = llvm::cast<LoadGlobalVarByName> (node);
+        return _mod->getNamedGlobal (load->Name ());
+    }
     default: return nullptr;
     }
 }
@@ -327,11 +434,18 @@ CodeGen::getType (basic::Type *type) {
                                                : _builder.getDoubleTy ();
     case basic::TypeKind::Bool: return _builder.getInt1Ty ();
     case basic::TypeKind::Char: return _builder.getInt32Ty ();
+    case basic::TypeKind::Struct:
+        return llvm::StructType::getTypeByName (
+            _ctx,
+            mangleStructSymbol (type->AsStruct ()->BaseSymbol ()));
+    default: {
     }
+    }
+    return nullptr;
 }
 
 std::string
-CodeGen::mangleFunction (Function *func) const {
+CodeGen::mangleFunction (Function *func) {
     auto              *sym = func->BaseSymbol ();
     std::ostringstream oss;
     oss << "_VF";
@@ -345,7 +459,21 @@ CodeGen::mangleFunction (Function *func) const {
 }
 
 std::string
-CodeGen::mangleGlobalVar (VarDef *var) const {
+CodeGen::mangleMethod (symbols::Struct *sym, hir::Function *func) {
+    std::ostringstream oss;
+    oss << "_VM";
+    oss << mangleModule (sym->Parent);
+    oss << "E" << sym->Name.Val.size () << sym->Name.Val;
+    oss << "E" << func->Name ().Val.size () << func->Name ().Val << "I";
+    for (auto &a : func->Args ()) {
+        oss << mangleType (a.Type);
+    }
+    oss << "E";
+    return oss.str ();
+}
+
+std::string
+CodeGen::mangleGlobalVar (VarDef *var) {
     auto              *sym = var->BaseSymbol ();
     std::ostringstream oss;
     oss << "_VG";
@@ -355,7 +483,21 @@ CodeGen::mangleGlobalVar (VarDef *var) const {
 }
 
 std::string
-CodeGen::mangleModule (symbols::Module *mod) const {
+CodeGen::mangleStruct (hir::StructDef *sd) {
+    return mangleStructSymbol (sd->BaseSymbol ());
+}
+
+std::string
+CodeGen::mangleStructSymbol (symbols::Struct *sym) {
+    std::ostringstream oss;
+    oss << "_VS";
+    oss << mangleModule (sym->Parent);
+    oss << "E" << sym->Name.Val.size () << sym->Name.Val;
+    return oss.str ();
+}
+
+std::string
+CodeGen::mangleModule (symbols::Module *mod) {
     if (mod == nullptr) {
         return "";
     }
@@ -367,7 +509,7 @@ CodeGen::mangleModule (symbols::Module *mod) const {
 
 // NOLINTBEGIN(cppcoreguidelines-avoid-magic-numbers)
 std::string
-CodeGen::mangleType (basic::Type *type) const {
+CodeGen::mangleType (basic::Type *type) {
     switch (type->Kind ()) {
     case basic::TypeKind::Integer: {
         auto *it = llvm::cast<basic::IntegerType> (type);
@@ -382,6 +524,12 @@ CodeGen::mangleType (basic::Type *type) const {
         return llvm::cast<basic::FloatingType> (type)->IsFloat () ? "f" : "d";
     case basic::TypeKind::Bool: return "b";
     case basic::TypeKind::Char: return "c";
+    case basic::TypeKind::Struct: {
+        auto *sym = type->AsStruct ()->BaseSymbol ();
+        return "S" + std::to_string (sym->Name.Val.size ()) + sym->Name.Val;
+    }
+    default: {
+    }
     }
     return "";
 }

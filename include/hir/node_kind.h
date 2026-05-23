@@ -6,6 +6,7 @@ namespace veo::hir {
 enum class NodeKind : uint8_t {
     VarDef,
     LoadVar,
+    LoadGlobalVarByName,
     Func,
     FuncCall,
     Ret,
@@ -13,8 +14,11 @@ enum class NodeKind : uint8_t {
     BinExpr,
     UnExpr,
     ExprStmt,
-    StoreVar,
-    Branch
+    Store,
+    Branch,
+    StructDef,
+    StructInstance,
+    FieldExpr,
 };
 
 }

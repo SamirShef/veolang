@@ -1,5 +1,8 @@
+#include <algorithm>
+#include <ast/exprs/struct_instance.h>
 #include <basic/types/all.h>
 #include <basic/value.h>
+#include <codegen/codegen.h>
 #include <cstdint>
 #include <diagnostic/codes.h>
 #include <lexer/token_kind.h>
@@ -38,6 +41,7 @@ Sema::analyzeStmt (Stmt *stmt) {
         variant (IfElse, analyzeIfElseStmt, IfElseStmt);
         variant (ForLoop, analyzeForLoop, ForLoopStmt);
         variant (BreakContinue, analyzeBreakContinue, BreakContinue);
+        variant (ImplStmt, analyzeImplStmt, ImplStmt);
     default: break;
     }
 #undef variant
@@ -59,16 +63,11 @@ Sema::analyzeVarDef (VarDef *vd) {
     }
     bool  isGlobal = _vars.size () == 1;
     Type *type     = vd->Type ();
-    resolveType (&vd->Type ());
+    resolveType (&type);
     auto val = analyzeExpr (vd->Init (), vd->Type ());
     if (val.Val.has_value ()) {
         if (isGlobal) {
-            switch (vd->Init ()->Kind ()) {
-            case ast::NodeKind::LitExpr:
-            case ast::NodeKind::BinExpr:
-            case ast::NodeKind::UnExpr:
-            case ast::NodeKind::VarExpr: break;
-            default: {
+            if (val.Val->Kind != ValueKind::Const) {
                 _diag
                     .Report (
                         DiagCode::ECannotInitRuntimeVal,
@@ -82,7 +81,6 @@ Sema::analyzeVarDef (VarDef *vd) {
                         "global variables can only be initialized with compile-time "
                         "constants or other global variables");
                 return;
-            }
             }
         }
         if (vd->IsConst ()) {
@@ -100,8 +98,18 @@ Sema::analyzeVarDef (VarDef *vd) {
             }
         }
     }
-    if (type == nullptr && val.Val.has_value ()) {
-        type = val.Val->Type;
+    if (type == nullptr) {
+        if (val.Val.has_value ()) {
+            type = val.Val->Type;
+        } else {
+            _diag
+                .Report (
+                    DiagCode::ECannotInferType,
+                    "cannot infer type for variable '" + vd->Name ().Val + "'",
+                    Severity::Error)
+                .AddSpan (vd->Name ().Start, vd->Name ().End);
+            return;
+        }
     }
     auto var = Variable (
         vd->Name (),
@@ -109,6 +117,7 @@ Sema::analyzeVarDef (VarDef *vd) {
         vd->IsConst (),
         isGlobal,
         isGlobal ? _vars.top ().Vars.size () : _localsCount++,
+        _mod,
         val.Val);
     _vars.top ().Vars.emplace (var.Name.Val, var);
     if (isGlobal) {
@@ -192,7 +201,7 @@ Sema::analyzeFuncDef (FuncDef *fd) {
     for (const auto &arg : fd->Args ()) {
         _vars.top ().Vars.emplace (
             arg.Name.Val,
-            Variable (arg.Name, arg.Type, false, false, _localsCount++));
+            Variable (arg.Name, arg.Type, false, false, _localsCount++, nullptr));
     }
 
     for (const auto &stmt : fd->Body ()) {
@@ -403,6 +412,188 @@ Sema::analyzeBreakContinue (BreakContinue *bc) {
     }
 }
 
+void
+Sema::analyzeStructDef (StructDef *sd) {
+    if (auto it = _mod->Structs.find (sd->Name ().Val); it != _mod->Structs.end ()) {
+        auto &s = it->second; // struct
+        _diag
+            .Report (
+                DiagCode::ERedefinition,
+                "struct '" + sd->Name ().Val + "' is already defined",
+                Severity::Error)
+            .AddSpan (s.Name.Start, s.Name.End, "previous definition was here", false)
+            .AddSpan (sd->Name ().Start, sd->Name ().End, "redefined here");
+        return;
+    }
+
+    std::vector<symbols::Field> fields;
+    fields.reserve (sd->Fields ().size ());
+    std::vector<hir::Field> hirFields;
+    hirFields.reserve (sd->Fields ().size ());
+    size_t index = 0;
+    for (auto &field : sd->Fields ()) {
+        auto it = std::ranges::find_if (fields, [&] (const symbols::Field &f) {
+            return field.Name.Val == f.Name.Val;
+        });
+        if (it != fields.end ()) {
+            _diag
+                .Report (
+                    DiagCode::ERedefinition,
+                    "field '" + field.Name.Val + "' is already defined",
+                    Severity::Error)
+                .AddSpan (
+                    it->Name.Start,
+                    it->Name.End,
+                    "previous definition was here",
+                    false)
+                .AddSpan (field.Name.Start, field.Name.End, "redefined here");
+            continue;
+        }
+        resolveType (&field.Type);
+        fields.emplace_back (
+            field.Name,
+            field.Type,
+            field.IsStatic,
+            field.IsConst,
+            field.Access,
+            index);
+        hirFields.emplace_back (field.Name, field.Type, field.IsStatic, field.IsConst);
+        if (!field.IsStatic) {
+            ++index;
+        }
+    }
+    auto s = Struct (sd->Name (), fields, _mod);
+    _mod->Structs.emplace (sd->Name ().Val, std::move (s));
+    _builder.CreateStruct (
+        sd->Name (),
+        hirFields,
+        &_mod->Structs.at (sd->Name ().Val),
+        sd->Start (),
+        sd->End ());
+}
+
+void
+Sema::declareImplMethods (ast::ImplStmt *is) {
+    resolveType (&is->StructType ());
+    if (is->StructType () == nullptr) {
+        return;
+    }
+    if (!is->StructType ()->IsStruct ()) {
+        _diag
+            .Report (
+                DiagCode::ECannotImplForNonStructType,
+                "cannot implement methods for non-structure type '"
+                    + is->StructType ()->ToString () + "'",
+                Severity::Error)
+            .AddSpan (is->Start (), is->End ());
+        return;
+    }
+    auto *sym = is->StructType ()->AsStruct ()->BaseSymbol ();
+    for (const auto &method : is->Methods ()) {
+        auto *fd = method.Func;
+        if (auto *m = getMethod (sym, fd->Name ().Val, fd->Args ()); m != nullptr) {
+            _diag
+                .Report (
+                    DiagCode::ERedefinition,
+                    "method '" + fd->Name ().Val + "' is already defined in struct '"
+                        + sym->Name.Val + "'",
+                    Severity::Error)
+                .AddSpan (
+                    m->Func->Name.Start,
+                    m->Func->Name.End,
+                    "previous definition was here",
+                    false)
+                .AddSpan (fd->Name ().Start, fd->Name ().End, "redefined here");
+            return;
+        }
+        resolveType (&fd->RetType ());
+        for (auto &arg : fd->Args ()) {
+            resolveType (&arg.Type);
+        }
+        auto func = Function (fd->Name (), fd->RetType (), fd->Args (), _mod);
+        auto m    = symbols::Method (
+            std::make_unique<Function> (std::move (func)),
+            fd->Access (),
+            method.IsStatic);
+        auto it = sym->Methods.find (m.Func->Name.Val);
+        if (it == sym->Methods.end ()) {
+            sym->Methods.emplace (m.Func->Name.Val, MethodCandidates ());
+        }
+        sym->Methods.at (m.Func->Name.Val)
+            .Candidates.emplace_back (std::make_unique<symbols::Method> (std::move (m)));
+    }
+}
+
+void
+Sema::analyzeImplStmt (ImplStmt *is) {
+    if (!inGlobalScope ()) {
+        _diag
+            .Report (
+                DiagCode::ENotAllowedInThisScope,
+                "statement not allowed in this scope",
+                Severity::Error)
+            .AddSpan (is->Start (), is->End (), "statement found inside of a function");
+        return;
+    }
+
+    if (!is->StructType ()->IsStruct ()) {
+        return;
+    }
+    auto *sym = is->StructType ()->AsStruct ()->BaseSymbol ();
+    for (const auto &method : is->Methods ()) {
+        auto            *fd         = method.Func;
+        auto            *candidates = &sym->Methods.at (fd->Name ().Val);
+        symbols::Method *m          = nullptr;
+        for (auto &f : candidates->Candidates) {
+            if (f->Func->Args == fd->Args ()) {
+                m = f.get ();
+            }
+        }
+
+        std::vector<Argument> args;
+        args.reserve (fd->Args ().size () + (method.IsStatic ? 1 : 0));
+        if (!method.IsStatic) {
+            args.emplace_back (
+                basic::NameObj ("this", fd->Name ().Start, fd->Name ().End),
+                is->StructType ());
+        }
+        for (const auto &arg : fd->Args ()) {
+            args.emplace_back (arg);
+        }
+        auto *methodNode = _builder.CreateMethod (
+            m->Func->Name,
+            fd->RetType (),
+            args,
+            fd->Start (),
+            fd->End (),
+            m,
+            new StructType (sym), // NOLINT(cppcoreguidelines-owning-memory)
+            method.IsStatic);
+        auto *entry = _builder.CreateBasicBlock (methodNode, "entry");
+        _builder.SetInsertionPoint (entry);
+
+        _insideMethod = { m, sym };
+        _funcRetTypes.push (fd->RetType ());
+        _vars.emplace ();
+
+        _localsCount = 0;
+
+        for (const auto &arg : args) {
+            _vars.top ().Vars.emplace (
+                arg.Name.Val,
+                Variable (arg.Name, arg.Type, false, false, _localsCount++, nullptr));
+        }
+
+        for (const auto &stmt : fd->Body ()) {
+            analyzeStmt (stmt);
+        }
+
+        _vars.pop ();
+        _funcRetTypes.pop ();
+        _insideMethod = std::nullopt;
+    }
+}
+
 Sema::SemanticResult
 Sema::analyzeExpr (Expr *expr, Type *expectedType) {
 #define variant(kind, func, type)                                                        \
@@ -417,6 +608,9 @@ Sema::analyzeExpr (Expr *expr, Type *expectedType) {
         variant (VarExpr, analyzeVarExpr, VarExpr);
         variant (FuncCall, analyzeFuncCall, FuncCall);
         variant (AsgnExpr, analyzeAsgnExpr, AsgnExpr);
+        variant (FieldExpr, analyzeFieldExpr, FieldExpr);
+        variant (StructInstance, analyzeStructInstance, StructInstance);
+        variant (MethodCall, analyzeMethodCall, MethodCall);
     default: return {};
     }
 #undef variant
@@ -567,6 +761,9 @@ Sema::SemanticResult
 Sema::analyzeBinaryExpr (BinaryExpr *be, Type *expectedType) {
     auto lhs = analyzeExpr (be->Lhs (), nullptr);
     auto rhs = analyzeExpr (be->Rhs (), nullptr);
+    if (!lhs.Val.has_value () || !rhs.Val.has_value ()) {
+        return {};
+    }
     resolveType (&lhs.Val->Type);
     resolveType (&rhs.Val->Type);
     BinOp op         = be->Op ();
@@ -705,8 +902,11 @@ Sema::analyzeUnaryExpr (UnaryExpr *ue, Type *expectedType) {
 // NOLINTBEGIN(readability-convert-member-functions-to-static)
 Sema::SemanticResult
 Sema::analyzeVarExpr (VarExpr *ve, Type *expectedType) {
-    std::optional<Variable> var = getVariable (ve->Name ().Val);
+    auto var = getVariable (ve->Name ().Val);
     if (!var.has_value ()) {
+        if (auto *s = getStruct (ve->Name ().Val)) {
+            return { Value (ValueKind::Type, new StructType (s)), nullptr };
+        }
         _diag
             .Report (
                 DiagCode::EUndefined,
@@ -770,13 +970,30 @@ Sema::analyzeFuncCall (FuncCall *fc, Type *expectedType) {
         hirArgs.emplace_back (res.Node);
     }
 
-    return { Value (ValueKind::Unknown, func->RetType),
-             _builder.CreateCall (func, std::move (hirArgs), fc->Start (), fc->End ()) };
+    auto res = SemanticResult (
+        Value (ValueKind::Unknown, func->RetType),
+        _builder.CreateCall (func, std::move (hirArgs), fc->Start (), fc->End ()));
+    res = implicitlyCast (res, &expectedType, fc->Start (), fc->End ());
+    return res;
 }
 
+// NOLINTBEGIN(readability-function-cognitive-complexity)
 Sema::SemanticResult
 Sema::analyzeAsgnExpr (AsgnExpr *ae, Type *expectedType) {
-    // always variable
+    if (ae->Ptr () == nullptr) {
+        return {};
+    }
+    if (ae->Ptr ()->Kind () != NodeKind::VarExpr
+        && ae->Ptr ()->Kind () != NodeKind::FieldExpr) {
+        _diag
+            .Report (
+                DiagCode::ELHSIsNotAssignable,
+                "left-hand side of assignment is not assignable",
+                Severity::Error)
+            .AddSpan (ae->Ptr ()->Start (), ae->Ptr ()->End ());
+        return {};
+    }
+
     auto ptr = analyzeExpr (ae->Ptr (), nullptr);
     if (!ptr.Val.has_value ()) {
         return {};
@@ -795,23 +1012,28 @@ Sema::analyzeAsgnExpr (AsgnExpr *ae, Type *expectedType) {
             .AddSpan (ae->Ptr ()->Start (), ae->Ptr ()->End ());
         return {};
     }
-    auto  var     = getVariable (llvm::cast<VarExpr> (ae->Ptr ())->Name ().Val);
-    auto *loadVar = _builder.CreateLoadVar (
-        var->Index,
-        var->Type,
-        var->IsGlobal,
-        ae->Ptr ()->Start (),
-        ae->Ptr ()->End ());
-    if (ae->Op () != AsgnOp::Eq) {
-        auto op   = AsgnOpToBinOp (ae->Op ());
-        expr.Node = _builder.CreateBinary (
-            op,
-            expr.Val->Type,
-            loadVar,
-            expr.Node,
-            ae->Init ()->Start (),
-            ae->Init ()->End ());
+    if (ae->Ptr ()->Kind () == NodeKind::VarExpr) {
+        auto var = getVariable (llvm::cast<VarExpr> (ae->Ptr ())->Name ().Val);
+        auto op  = AsgnOpToBinOp (ae->Op ());
+        if (ae->Op () != AsgnOp::Eq) {
+            expr.Node = _builder.CreateBinary (
+                op,
+                expr.Val->Type,
+                ptr.Node,
+                expr.Node,
+                ae->Init ()->Start (),
+                ae->Init ()->End ());
+        }
         if (var->IsConst) {
+            _diag
+                .Report (
+                    DiagCode::ECannotModifyConst,
+                    "cannot assign to a constant variable '" + var->Name.Val + "'",
+                    Severity::Error)
+                .AddSpan (ae->Ptr ()->Start (), ae->Ptr ()->End ());
+            return {};
+        }
+        if (expr.Val->Kind == ValueKind::Const) {
             expr.Val = foldBinary (
                 op,
                 *var->Val,
@@ -822,9 +1044,392 @@ Sema::analyzeAsgnExpr (AsgnExpr *ae, Type *expectedType) {
         } else {
             expr.Val = Value (ValueKind::Unknown, expr.Val->Type);
         }
+    } else { // only field
+        auto *fieldExpr = llvm::cast<FieldExpr> (ae->Ptr ());
+        auto  base      = analyzeExpr (fieldExpr->Base (), nullptr);
+        if (!base.Val.has_value ()) {
+            return {};
+        }
+        if (!base.Val->Type->IsStruct ()) {
+            _diag
+                .Report (
+                    DiagCode::ECannotAccessFromNonStruct,
+                    "attempted to access a field on a non-structure type '"
+                        + base.Val->Type->ToString () + "'",
+                    Severity::Error)
+                .AddSpan (fieldExpr->Name ().Start, fieldExpr->Name ().End);
+            return {};
+        }
+        auto *sym              = base.Val->Type->AsStruct ()->BaseSymbol ();
+        bool  baseIsStatic     = base.Val->Kind == ValueKind::Type;
+        bool  baseIsThis       = !baseIsStatic && _insideMethod.has_value ()
+                                 && *_insideMethod->second == *sym;
+        bool  canAccessPrivate = baseIsThis
+                                 || baseIsStatic && _insideMethod.has_value ()
+                                        && *_insideMethod->second == *sym;
+        auto  field
+            = std::ranges::find_if (sym->Fields, [&] (const symbols::Field &field) {
+                  return field.Name.Val == fieldExpr->Name ().Val;
+              });
+        if (field == sym->Fields.end ()) {
+            return {};
+        }
+        if (field->IsStatic && !baseIsStatic) {
+            _diag
+                .Report (
+                    DiagCode::ECannotAccessStaticMemberFromInstance,
+                    "static field '" + fieldExpr->Name ().Val
+                        + "' cannot be accessed through an instance",
+                    Severity::Error)
+                .AddSpan (fieldExpr->Name ().Start, fieldExpr->Name ().End)
+                .AddNote (
+                    "use the type name instead to access this field: '" + sym->Name.Val
+                    + "." + fieldExpr->Name ().Val + "'");
+            return {};
+        }
+        if (!field->IsStatic && baseIsStatic) {
+            _diag
+                .Report (
+                    DiagCode::ECannotAccessNonStaticMemberFromType,
+                    "instance field '" + fieldExpr->Name ().Val
+                        + "' cannot be accessed through a type",
+                    Severity::Error)
+                .AddSpan (fieldExpr->Name ().Start, fieldExpr->Name ().End);
+            return {};
+        }
+        if (field->Access != AccessModifier::Pub && !canAccessPrivate) {
+            _diag
+                .Report (
+                    DiagCode::ECannotAccessToPrivMember,
+                    "field '" + fieldExpr->Name ().Val + "' of struct '" + sym->Name.Val
+                        + "' is private",
+                    Severity::Error)
+                .AddSpan (fieldExpr->Name ().Start, fieldExpr->Name ().End);
+            return {};
+        }
+        if (field->IsConst) {
+            _diag
+                .Report (
+                    DiagCode::ECannotModifyConst,
+                    "cannot assign to a constant field '" + field->Name.Val
+                        + "' in struct '" + sym->Name.Val + "'",
+                    Severity::Error)
+                .AddSpan (ae->Ptr ()->Start (), ae->Ptr ()->End ());
+            return {};
+        }
+        if (_insideMethod.has_value () && *_insideMethod->second == *sym) {
+            _insideMethod->first->IsConst = false;
+        }
+        auto op = AsgnOpToBinOp (ae->Op ());
+        if (ae->Op () != AsgnOp::Eq) {
+            expr.Node = _builder.CreateBinary (
+                op,
+                expr.Val->Type,
+                ptr.Node,
+                expr.Node,
+                ae->Init ()->Start (),
+                ae->Init ()->End ());
+        }
+        expr.Val = Value (ValueKind::Unknown, expr.Val->Type);
     }
-    auto *node = _builder.CreateStoreVar (loadVar, expr.Node, ae->Start (), ae->End ());
+    expr       = implicitlyCast (expr, &expectedType, ae->Start (), ae->End ());
+    auto *node = _builder.CreateStore (ptr.Node, expr.Node, ae->Start (), ae->End ());
     return { expr.Val, node };
+}
+// NOLINTEND(readability-function-cognitive-complexity)
+
+Sema::SemanticResult
+Sema::analyzeFieldExpr (FieldExpr *fe, Type *expectedType) {
+    auto base = analyzeExpr (fe->Base (), nullptr);
+    if (!base.Val.has_value ()) {
+        return {};
+    }
+    if (!base.Val->Type->IsStruct ()) {
+        _diag
+            .Report (
+                DiagCode::ECannotAccessFromNonStruct,
+                "attempted to access a field on a non-structure type '"
+                    + base.Val->Type->ToString () + "'",
+                Severity::Error)
+            .AddSpan (fe->Name ().Start, fe->Name ().End);
+        return {};
+    }
+    auto *s            = base.Val->Type->AsStruct ()->BaseSymbol ();
+    bool  baseIsStatic = base.Val->Kind == ValueKind::Type;
+    bool  baseIsThis
+        = !baseIsStatic && _insideMethod.has_value () && *_insideMethod->second == *s;
+    bool canAccessPrivate
+        = baseIsThis
+          || baseIsStatic && _insideMethod.has_value () && *_insideMethod->second == *s;
+    auto it = std::ranges::find_if (s->Fields, [&] (const symbols::Field &field) {
+        return field.Name.Val == fe->Name ().Val;
+    });
+    if (it == s->Fields.end ()) {
+        std::ostringstream availableFields;
+        size_t             index = 0;
+        for (const auto &field : s->Fields) {
+            if (!field.IsStatic && field.Access == AccessModifier::Pub) {
+                if (index != 0) {
+                    availableFields << ", ";
+                }
+                availableFields << field.Name.Val;
+                ++index;
+            }
+        }
+        auto &err = _diag
+                        .Report (
+                            DiagCode::EUndefined,
+                            "type '" + s->Name.Val + "' has no field named '"
+                                + fe->Name ().Val + "'",
+                            Severity::Error)
+                        .AddSpan (fe->Name ().Start, fe->Name ().End);
+        if (!availableFields.str ().empty ()) {
+            err.AddNote ("available fields: " + availableFields.str ());
+        }
+        return {};
+    }
+    if (it->IsStatic && !baseIsStatic) {
+        _diag
+            .Report (
+                DiagCode::ECannotAccessStaticMemberFromInstance,
+                "static field '" + fe->Name ().Val
+                    + "' cannot be accessed through an instance",
+                Severity::Error)
+            .AddSpan (fe->Name ().Start, fe->Name ().End)
+            .AddNote (
+                "use the type name instead to access this field: '" + s->Name.Val + "."
+                + fe->Name ().Val + "'");
+        return {};
+    }
+    if (!it->IsStatic && baseIsStatic) {
+        _diag
+            .Report (
+                DiagCode::ECannotAccessNonStaticMemberFromType,
+                "instance field '" + fe->Name ().Val
+                    + "' cannot be accessed through a type",
+                Severity::Error)
+            .AddSpan (fe->Name ().Start, fe->Name ().End);
+        return {};
+    }
+    if (it->Access != AccessModifier::Pub && !canAccessPrivate) {
+        _diag
+            .Report (
+                DiagCode::ECannotAccessToPrivMember,
+                "field '" + fe->Name ().Val + "' of struct '" + s->Name.Val
+                    + "' is private",
+                Severity::Error)
+            .AddSpan (fe->Name ().Start, fe->Name ().End);
+        return {};
+    }
+    hir::Node *node = nullptr;
+    if (it->IsStatic) {
+        node = _builder.CreateLoadGlobalVarByName (
+            CodeGen::MangleStaticField (s, it->Name.Val),
+            it->Type,
+            fe->Start (),
+            fe->End ());
+    } else {
+        node = _builder.CreateFieldExpr (base.Node, it->Index, fe->Start (), fe->End ());
+    }
+    auto val = Value (ValueKind::Unknown, it->Type);
+    auto res = SemanticResult (val, node);
+    res      = implicitlyCast (res, &expectedType, fe->Start (), fe->End ());
+    return res;
+}
+
+Sema::SemanticResult
+Sema::analyzeStructInstance (StructInstance *si, Type *expectedType) {
+    auto it = _mod->Structs.find (si->Path ().Val);
+    if (it == _mod->Structs.end ()) {
+        _diag
+            .Report (
+                DiagCode::EUndefined,
+                "struct '" + si->Path ().Val + "' is not defined",
+                Severity::Error)
+            .AddSpan (si->Path ().Start, si->Path ().End);
+        return {};
+    }
+    auto                                       *s = &it->second;
+    std::vector<std::pair<size_t, hir::Node *>> fields;
+    std::unordered_map<size_t, NameObj>         initializedFields;
+    ValueKind                                   valKind = ValueKind::Const;
+    bool                                        checkAccessModifiers
+        = !_insideMethod.has_value () || *_insideMethod->second != *s;
+    if (checkAccessModifiers) {
+        for (const auto &field : s->Fields) {
+            if (field.Access != AccessModifier::Pub) {
+                _diag
+                    .Report (
+                        DiagCode::ECannotInitStructWithPrivFields,
+                        "cannot structurally initialize '" + s->Name.Val
+                            + "' outside of its implementation because it contains "
+                              "private fields",
+                        Severity::Error)
+                    .AddSpan (si->Path ().Start, si->Path ().End)
+                    .AddNote (
+                        "use the constructor function '" + s->Name.Val
+                        + ".New()' instead if available");
+                return {};
+            }
+        }
+    }
+    for (const auto &[name, expr] : si->Fields ()) {
+        auto it = std::ranges::find_if (s->Fields, [&] (const symbols::Field &f) {
+            return f.Name.Val == name.Val; // NOLINT(modernize-type-traits)
+        });
+        if (it == s->Fields.end ()) {
+            _diag
+                .Report (
+                    DiagCode::EUndefined,
+                    "stuct '" + s->Name.Val + "' has no field named '" + name.Val + "'",
+                    Severity::Error)
+                .AddSpan (name.Start, name.End);
+            continue;
+        }
+        const auto *field = it.base ();
+        size_t      index = field->Index;
+        if (auto it = initializedFields.find (index); it != initializedFields.end ()) {
+            _diag
+                .Report (
+                    DiagCode::EFieldSpecifiedMoreOnce,
+                    "field '" + name.Val + "' specified more than once",
+                    Severity::Error)
+                .AddSpan (it->second.Start, it->second.End, "first assignment", false)
+                .AddSpan (name.Start, name.End, "field already initialized here");
+            continue;
+        }
+        if (it->IsConst) {
+            _diag
+                .Report (
+                    DiagCode::ECannotInitConstField,
+                    "cannot initialize constant field '" + name.Val + "'",
+                    Severity::Error)
+                .AddSpan (name.Start, name.End);
+            continue;
+        }
+        if (it->IsStatic) {
+            _diag
+                .Report (
+                    DiagCode::ECannotInitStaticField,
+                    "cannot initialize static field '" + name.Val + "'",
+                    Severity::Error)
+                .AddSpan (name.Start, name.End);
+            continue;
+        }
+        initializedFields.emplace (index, name);
+        auto val = analyzeExpr (expr, field->Type);
+        if (!val.Val.has_value ()) {
+            continue;
+        }
+        if (val.Val->Kind == ValueKind::Unknown) {
+            valKind = ValueKind::Unknown;
+        }
+        fields.emplace_back (index, val.Node);
+    }
+    auto *node
+        = _builder.CreateStructInstance (std::move (fields), s, si->Start (), si->End ());
+    auto val = Value (valKind, new StructType (s));
+    auto res = SemanticResult (val, node);
+    res      = implicitlyCast (res, &expectedType, si->Start (), si->End ());
+    return res;
+}
+
+Sema::SemanticResult
+Sema::analyzeMethodCall (MethodCall *mc, Type *expectedType) {
+    auto base = analyzeExpr (mc->Base (), nullptr);
+    if (!base.Val.has_value ()) {
+        return {};
+    }
+    if (!base.Val->Type->IsStruct ()) {
+        _diag
+            .Report (
+                DiagCode::ECannotAccessFromNonStruct,
+                "attempted to access a method on a non-structure type '"
+                    + base.Val->Type->ToString () + "'",
+                Severity::Error)
+            .AddSpan (mc->Name ().Start, mc->Name ().End);
+        return {};
+    }
+    auto *s            = base.Val->Type->AsStruct ()->BaseSymbol ();
+    bool  baseIsStatic = base.Val->Kind == ValueKind::Type;
+    bool  baseIsThis
+        = !baseIsStatic && _insideMethod.has_value () && *_insideMethod->second == *s;
+    auto it = s->Methods.find (mc->Name ().Val);
+    if (it == s->Methods.end ()) {
+        _diag
+            .Report (
+                DiagCode::EUndefined,
+                "type '" + s->Name.Val + "' has no method named '" + mc->Name ().Val
+                    + "'",
+                Severity::Error)
+            .AddSpan (mc->Name ().Start, mc->Name ().End);
+        return {};
+    }
+    auto *candidates = &it->second;
+
+    std::vector<Type *>         argTypes;
+    std::vector<SemanticResult> argResults;
+    for (auto &a : mc->Args ()) {
+        auto argRes = analyzeExpr (a, nullptr);
+        argResults.emplace_back (argRes);
+        argTypes.emplace_back (argRes.Val->Type);
+    }
+
+    symbols::Method *method
+        = resolveBestOverload (candidates, argTypes, mc->Start (), mc->End ());
+    if (method == nullptr) {
+        return {};
+    }
+
+    if (method->IsStatic && !baseIsStatic) {
+        _diag
+            .Report (
+                DiagCode::ECannotAccessStaticMemberFromInstance,
+                "static method '" + mc->Name ().Val
+                    + "' cannot be accessed through an instance",
+                Severity::Error)
+            .AddSpan (mc->Name ().Start, mc->Name ().End);
+        return {};
+    }
+    if (!method->IsStatic && baseIsStatic) {
+        _diag
+            .Report (
+                DiagCode::ECannotAccessNonStaticMemberFromType,
+                "instance method '" + mc->Name ().Val
+                    + "' cannot be accessed through a type",
+                Severity::Error)
+            .AddSpan (mc->Name ().Start, mc->Name ().End);
+        return {};
+    }
+    if (method->Access != AccessModifier::Pub && !baseIsThis) {
+        _diag
+            .Report (
+                DiagCode::ECannotAccessToPrivMember,
+                "method '" + mc->Name ().Val + "' of struct '" + s->Name.Val
+                    + "' is private",
+                Severity::Error)
+            .AddSpan (mc->Name ().Start, mc->Name ().End);
+        return {};
+    }
+
+    std::vector<hir::Node *> hirArgs;
+    if (!method->IsStatic) {
+        hirArgs.emplace_back (base.Node);
+    }
+    for (size_t i = 0; i < argResults.size (); ++i) {
+        auto res = analyzeExpr (mc->Args ()[i], method->Func->Args[i].Type);
+        hirArgs.emplace_back (res.Node);
+    }
+
+    auto *node = _builder.CreateCallMethod (
+        method->Func.get (),
+        std::move (hirArgs),
+        mc->Start (),
+        mc->End ());
+    auto val = Value (ValueKind::Unknown, method->Func->RetType);
+    auto res = SemanticResult (val, node);
+    res      = implicitlyCast (res, &expectedType, mc->Start (), mc->End ());
+    return res;
 }
 
 Type *
@@ -832,7 +1437,43 @@ Sema::resolveType (Type **type) {
     if (*type == nullptr) {
         return *type;
     }
-    // TODO: implement resolving logic (after structs)
+    if (!(*type)->IsNamed ()) {
+        return *type;
+    }
+
+    const auto *named  = (*type)->AsNamed ();
+    Module     *curMod = _mod;
+    const auto &path   = named->Path ();
+    for (size_t i = 0; i < path.size () - 1; ++i) {
+        const auto &name = path[i];
+        if (auto it = curMod->Submods.find (name.Val); it != curMod->Submods.end ()) {
+            curMod = it->second;
+        } else if (auto it = curMod->Imports.find (name.Val);
+                   it != curMod->Imports.end ()) {
+            curMod = it->second;
+        } else {
+            _diag
+                .Report (
+                    DiagCode::ECannotFindMod,
+                    "cannot find module '" + name.Val + "'",
+                    Severity::Error)
+                .AddSpan (name.Start, name.End, "no such module found");
+            return nullptr;
+        }
+    }
+    const auto &typeName = path.back ();
+    if (!curMod->Structs.contains (typeName.Val)) {
+        _diag
+            .Report (
+                DiagCode::ECannotFindType,
+                "cannot find type '" + typeName.Val + "' in "
+                    + (path.size () == 1 ? "this scope" : curMod->ToString ()),
+                Severity::Error)
+            .AddSpan (typeName.Start, typeName.End, "not found");
+        return nullptr;
+    }
+    // NOLINTNEXTLINE(cppcoreguidelines-owning-memory)
+    *type = new StructType (&curMod->Structs.at (typeName.Val));
     return *type;
 }
 // NOLINTEND(readability-convert-member-functions-to-static)
@@ -847,6 +1488,18 @@ Sema::getVariable (const std::string &name) {
         vars.pop ();
     }
     return std::nullopt;
+}
+
+symbols::Struct *
+Sema::getStruct (const std::string &name, symbols::Module *mod) {
+    if (mod == nullptr) {
+        mod = _mod;
+    }
+
+    if (auto it = mod->Structs.find (name); it != mod->Structs.end ()) {
+        return &it->second;
+    }
+    return nullptr;
 }
 
 std::optional<Function>
@@ -872,6 +1525,34 @@ Sema::getFunction (const std::string &name, const std::vector<Argument> &args) {
         }
     }
     return std::nullopt;
+}
+
+symbols::Method *
+Sema::getMethod (
+    symbols::Struct                  *sym,
+    const std::string                &name,
+    const std::vector<ast::Argument> &args) {
+    if (!sym->Methods.contains (name)) {
+        return nullptr;
+    }
+    const auto &candidates = sym->Methods.at (name);
+    for (const auto &f : candidates.Candidates) {
+        unsigned coincidences = 0;
+        if (f->Func->Args.size () == args.size ()) {
+            for (size_t i = 0; i < args.size (); ++i) {
+                if (*f->Func->Args[i].Type == *args[i].Type) {
+                    ++coincidences;
+                }
+            }
+        } else {
+            continue;
+        }
+
+        if (coincidences == args.size ()) {
+            return f.get ();
+        }
+    }
+    return nullptr;
 }
 
 // NOLINTBEGIN(readability-function-cognitive-complexity)
@@ -1035,7 +1716,7 @@ Sema::SemanticResult
 Sema::implicitlyCast (
     SemanticResult val, Type **expectedType, llvm::SMLoc start, llvm::SMLoc end) {
     if (!val.Val.has_value () || *expectedType == nullptr) {
-        return {};
+        return val;
     }
     resolveType (&val.Val->Type);
     resolveType (expectedType);
@@ -1087,12 +1768,12 @@ Sema::canFit (Value &val, const Type *targetType) {
 }
 
 // NOLINTBEGIN(readability-function-cognitive-complexity)
-symbols::Function *
+Function *
 Sema::resolveBestOverload (
-    symbols::FunctionCandidates *candidates,
-    const std::vector<Type *>   &argTypes,
-    llvm::SMLoc                  start,
-    llvm::SMLoc                  end) {
+    FunctionCandidates        *candidates,
+    const std::vector<Type *> &argTypes,
+    llvm::SMLoc                start,
+    llvm::SMLoc                end) {
     std::vector<std::pair<Function *, int>> viableCandidates;
 
     for (auto &cand : candidates->Candidates) {
@@ -1100,15 +1781,15 @@ Sema::resolveBestOverload (
             continue;
         }
 
-        bool viable  = true;
-        int  costSum = 0;
-        for (int i = 0; i < argTypes.size (); ++i) {
+        bool   viable  = true;
+        size_t costSum = 0;
+        for (size_t i = 0; i < argTypes.size (); ++i) {
             CastCost cost = checkCastCost (argTypes[i], cand->Args[i].Type);
             if (cost == CastCost::Incompatible) {
                 viable = false;
                 break;
             }
-            costSum += static_cast<uint16_t> (cost);
+            costSum += static_cast<size_t> (cost);
         }
 
         if (viable) {
@@ -1144,10 +1825,10 @@ Sema::resolveBestOverload (
     }
 
     Function *bestCand    = viableCandidates[0].first;
-    int       minCost     = viableCandidates[0].second;
+    size_t    minCost     = viableCandidates[0].second;
     bool      isAmbiguous = false;
 
-    for (int i = 1; i < viableCandidates.size (); ++i) {
+    for (size_t i = 1; i < viableCandidates.size (); ++i) {
         if (viableCandidates[i].second < minCost) {
             minCost     = viableCandidates[i].second;
             bestCand    = viableCandidates[i].first;
@@ -1167,6 +1848,96 @@ Sema::resolveBestOverload (
             err.AddSpan (
                 c->Name.Start,
                 c->Name.End,
+                "candidate " + std::to_string (i),
+                false);
+            ++i;
+        }
+        return nullptr;
+    }
+
+    return bestCand;
+}
+
+symbols::Method *
+Sema::resolveBestOverload (
+    symbols::MethodCandidates *candidates,
+    const std::vector<Type *> &argTypes,
+    llvm::SMLoc                start,
+    llvm::SMLoc                end) {
+    std::vector<std::pair<symbols::Method *, int>> viableCandidates;
+
+    for (auto &cand : candidates->Candidates) {
+        if (cand->Func->Args.size () != argTypes.size ()) {
+            continue;
+        }
+
+        bool   viable  = true;
+        size_t costSum = 0;
+        for (size_t i = 0; i < argTypes.size (); ++i) {
+            CastCost cost = checkCastCost (argTypes[i], cand->Func->Args[i].Type);
+            if (cost == CastCost::Incompatible) {
+                viable = false;
+                break;
+            }
+            costSum += static_cast<size_t> (cost);
+        }
+
+        if (viable) {
+            viableCandidates.emplace_back (cand.get (), costSum);
+        }
+    }
+
+    if (viableCandidates.empty ()) {
+        std::vector<std::string> foundCandidates;
+        for (auto &method : candidates->Candidates) {
+            std::ostringstream oss;
+            oss << "func " << method->Func->Name.Val << "(";
+            size_t i = 0;
+            for (const auto &a : method->Func->Args) {
+                oss << a.Type->ToString ();
+                if (i < method->Func->Args.size () - 1) {
+                    oss << ", ";
+                }
+                ++i;
+            }
+            oss << "): " << method->Func->RetType->ToString ();
+            foundCandidates.emplace_back (oss.str ());
+        }
+        _diag
+            .Report (
+                DiagCode::ENoMatchingFunction,
+                "no matching function for call to '"
+                    + candidates->Candidates[0]->Func->Name.Val + "'",
+                Severity::Error)
+            .AddSpan (start, end)
+            .AddNote ("candidate functions found:", std::move (foundCandidates));
+        return nullptr;
+    }
+
+    symbols::Method *bestCand    = viableCandidates[0].first;
+    size_t           minCost     = viableCandidates[0].second;
+    bool             isAmbiguous = false;
+
+    for (size_t i = 1; i < viableCandidates.size (); ++i) {
+        if (viableCandidates[i].second < minCost) {
+            minCost     = viableCandidates[i].second;
+            bestCand    = viableCandidates[i].first;
+            isAmbiguous = false;
+        } else if (viableCandidates[i].second == minCost) {
+            isAmbiguous = true;
+        }
+    }
+
+    if (isAmbiguous) {
+        auto &err = _diag.Report (
+            DiagCode::ECallIsAmbiguous,
+            "call to '' is ambiguous",
+            Severity::Error);
+        size_t i = 0;
+        for (const auto &[c, _] : viableCandidates) {
+            err.AddSpan (
+                c->Func->Name.Start,
+                c->Func->Name.End,
                 "candidate " + std::to_string (i),
                 false);
             ++i;

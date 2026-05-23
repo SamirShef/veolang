@@ -1,17 +1,20 @@
 #pragma once
-#include "hir/branch.h"
-
 #include <basic/name.h>
 #include <basic/types/type.h>
 #include <hir/basic_block.h>
 #include <hir/bin_expr.h>
+#include <hir/branch.h>
 #include <hir/context.h>
 #include <hir/expr_stmt.h>
+#include <hir/field_expr.h>
 #include <hir/func_call.h>
 #include <hir/lit_expr.h>
+#include <hir/load_glob_var_by_name.h>
 #include <hir/load_var.h>
 #include <hir/ret.h>
-#include <hir/store_var.h>
+#include <hir/store.h>
+#include <hir/struct_def.h>
+#include <hir/struct_instance.h>
 #include <hir/un_expr.h>
 
 namespace veo::hir {
@@ -65,6 +68,29 @@ public:
             start,
             end,
             base);
+        _ctx.AddFunction (node);
+        return node;
+    }
+
+    Function *
+    CreateMethod (
+        basic::NameObj             name,
+        basic::Type               *retType,
+        std::vector<ast::Argument> args,
+        llvm::SMLoc                start,
+        llvm::SMLoc                end,
+        symbols::Method           *base,
+        basic::Type               *methodBaseType,
+        bool                       isStatic) {
+        auto *node = _ctx.CreateNode<Function> (
+            std::move (name),
+            retType,
+            std::move (args),
+            start,
+            end,
+            base->Func.get (),
+            methodBaseType,
+            isStatic);
         _ctx.AddFunction (node);
         return node;
     }
@@ -134,9 +160,15 @@ public:
         return _ctx.CreateNode<LoadVar> (id, type, isGlobal, start, end);
     }
 
-    StoreVar *
-    CreateStoreVar (Node *ptr, Node *expr, llvm::SMLoc start, llvm::SMLoc end) {
-        return _ctx.CreateNode<StoreVar> (ptr, expr, start, end);
+    LoadGlobalVarByName *
+    CreateLoadGlobalVarByName (
+        std::string name, basic::Type *type, llvm::SMLoc start, llvm::SMLoc end) {
+        return _ctx.CreateNode<LoadGlobalVarByName> (std::move (name), type, start, end);
+    }
+
+    Store *
+    CreateStore (Node *ptr, Node *expr, llvm::SMLoc start, llvm::SMLoc end) {
+        return _ctx.CreateNode<Store> (ptr, expr, start, end);
     }
 
     ExprStmt *
@@ -155,6 +187,15 @@ public:
         return _ctx.CreateNode<FuncCall> (func, std::move (args), start, end);
     }
 
+    FuncCall *
+    CreateCallMethod (
+        symbols::Function  *func,
+        std::vector<Node *> args,
+        llvm::SMLoc         start,
+        llvm::SMLoc         end) {
+        return _ctx.CreateNode<FuncCall> (func, std::move (args), start, end, true);
+    }
+
     Branch *
     CreateBr (
         Node       *cond,
@@ -170,6 +211,37 @@ public:
     Branch *
     CreateBr (BasicBlock *branch, llvm::SMLoc start, llvm::SMLoc end) {
         return CreateBr (nullptr, branch, nullptr, start, end);
+    }
+
+    StructDef *
+    CreateStruct (
+        basic::NameObj     name,
+        std::vector<Field> fields,
+        symbols::Struct   *base,
+        llvm::SMLoc        start,
+        llvm::SMLoc        end) {
+        auto *node = _ctx.CreateNode<StructDef> (
+            std::move (name),
+            std::move (fields),
+            base,
+            start,
+            end);
+        _ctx.AddStruct (node);
+        return node;
+    }
+
+    FieldExpr *
+    CreateFieldExpr (Node *base, size_t index, llvm::SMLoc start, llvm::SMLoc end) {
+        return _ctx.CreateNode<FieldExpr> (base, index, start, end);
+    }
+
+    StructInstance *
+    CreateStructInstance (
+        std::vector<std::pair<size_t, Node *>> fields,
+        symbols::Struct                       *base,
+        llvm::SMLoc                            start,
+        llvm::SMLoc                            end) {
+        return _ctx.CreateNode<StructInstance> (std::move (fields), base, start, end);
     }
 };
 

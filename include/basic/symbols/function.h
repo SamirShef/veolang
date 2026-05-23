@@ -18,15 +18,37 @@ struct Function {
         basic::NameObj             name,
         basic::Type               *retType,
         std::vector<ast::Argument> args,
-        Module                    *parent = nullptr)
+        Module                    *parent)
         : Name (std::move (name)),
           RetType (retType),
           Args (std::move (args)),
           Parent (parent) {}
+
+    bool
+    operator== (const Function &other) const;
+
+    bool
+    operator!= (const Function &other) const {
+        return !(*this == other);
+    }
 };
 
 struct FunctionCandidates {
     std::vector<std::unique_ptr<Function>> Candidates;
+
+    bool
+    operator== (const FunctionCandidates &other) const {
+        if (this == &other) {
+            return true;
+        }
+
+        return Candidates == other.Candidates;
+    }
+
+    bool
+    operator!= (const FunctionCandidates &other) const {
+        return !(*this == other);
+    }
 };
 
 }
