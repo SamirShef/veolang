@@ -432,6 +432,23 @@ Sema::analyzeStructDef (StructDef *sd) {
     hirFields.reserve (sd->Fields ().size ());
     size_t index = 0;
     for (auto &field : sd->Fields ()) {
+        auto it = std::ranges::find_if (fields, [&] (const symbols::Field &f) {
+            return field.Name.Val == f.Name.Val;
+        });
+        if (it != fields.end ()) {
+            _diag
+                .Report (
+                    DiagCode::ERedefinition,
+                    "field '" + field.Name.Val + "' is already defined",
+                    Severity::Error)
+                .AddSpan (
+                    it->Name.Start,
+                    it->Name.End,
+                    "previous definition was here",
+                    false)
+                .AddSpan (field.Name.Start, field.Name.End, "redefined here");
+            continue;
+        }
         resolveType (&field.Type);
         fields.emplace_back (
             field.Name,
