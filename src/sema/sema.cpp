@@ -1256,8 +1256,8 @@ Sema::analyzeStructInstance (StructInstance *si, Type *expectedType) {
                     .Report (
                         DiagCode::ECannotInitStructWithPrivFields,
                         "cannot structurally initialize '" + s->Name.Val
-                            + "' because it contains private "
-                              "fields",
+                            + "' outside of its implementation because it contains "
+                              "private fields",
                         Severity::Error)
                     .AddSpan (si->Path ().Start, si->Path ().End)
                     .AddNote (
@@ -1278,7 +1278,7 @@ Sema::analyzeStructInstance (StructInstance *si, Type *expectedType) {
                     "stuct '" + s->Name.Val + "' has no field named '" + name.Val + "'",
                     Severity::Error)
                 .AddSpan (name.Start, name.End);
-            return {};
+            continue;
         }
         const auto *field = it.base ();
         size_t      index = field->Index;
@@ -1290,7 +1290,7 @@ Sema::analyzeStructInstance (StructInstance *si, Type *expectedType) {
                     Severity::Error)
                 .AddSpan (it->second.Start, it->second.End, "first assignment", false)
                 .AddSpan (name.Start, name.End, "field already initialized here");
-            return {};
+            continue;
         }
         if (it->IsConst) {
             _diag
@@ -1299,7 +1299,7 @@ Sema::analyzeStructInstance (StructInstance *si, Type *expectedType) {
                     "cannot initialize constant field '" + name.Val + "'",
                     Severity::Error)
                 .AddSpan (name.Start, name.End);
-            return {};
+            continue;
         }
         if (it->IsStatic) {
             _diag
@@ -1308,7 +1308,7 @@ Sema::analyzeStructInstance (StructInstance *si, Type *expectedType) {
                     "cannot initialize static field '" + name.Val + "'",
                     Severity::Error)
                 .AddSpan (name.Start, name.End);
-            return {};
+            continue;
         }
         initializedFields.emplace (index, name);
         auto val = analyzeExpr (expr, field->Type);
