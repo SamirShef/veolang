@@ -90,10 +90,10 @@ private:
     parseStmtsIntoBlock (std::vector<ast::Stmt *> &body);
 
     ast::Stmt *
-    parseVarDef ();
+    parseVarDef (ast::AccessModifier access);
 
     ast::Stmt *
-    parseFuncDef ();
+    parseFuncDef (ast::AccessModifier access);
 
     ast::Stmt *
     parseRet ();
@@ -108,7 +108,7 @@ private:
     parseBreakContinue ();
 
     ast::Stmt *
-    parseStructDef ();
+    parseStructDef (ast::AccessModifier access);
 
     ast::Stmt *
     parseImplStmt ();

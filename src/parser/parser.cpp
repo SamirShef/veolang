@@ -29,23 +29,20 @@ namespace veo {
 using namespace diagnostic;
 using namespace ast;
 
-// NOLINTNEXTLINE(cppcoreguidelines-avoid-non-const-global-variables)
-static AccessModifier Access = AccessModifier::Priv;
-
 Stmt *
 Parser::parseStmt (bool expectSemi) {
     if (isAtEnd ()) {
         return nullptr;
     }
 
-    Access = match (TokenKind::Pub) ? AccessModifier::Pub : AccessModifier::Priv;
+    auto access = match (TokenKind::Pub) ? AccessModifier::Pub : AccessModifier::Priv;
     switch (_curTok.Kind) {
     case TokenKind::Let:
     case TokenKind::Const: {
-        return checkTrailingSemi (parseVarDef (), expectSemi);
+        return checkTrailingSemi (parseVarDef (access), expectSemi);
     }
     case TokenKind::Func: {
-        return parseFuncDef ();
+        return parseFuncDef (access);
     }
     case TokenKind::Ret: {
         return checkTrailingSemi (parseRet (), expectSemi);
@@ -61,7 +58,7 @@ Parser::parseStmt (bool expectSemi) {
         return checkTrailingSemi (parseBreakContinue (), expectSemi);
     }
     case TokenKind::Struct: {
-        return parseStructDef ();
+        return parseStructDef (access);
     }
     case TokenKind::Impl: {
         return parseImplStmt ();
@@ -122,8 +119,7 @@ Parser::parseStmtsIntoBlock (std::vector<Stmt *> &body) {
 }
 
 Stmt *
-Parser::parseVarDef () {
-    AccessModifier access   = Access;
+Parser::parseVarDef (ast::AccessModifier access) {
     const Token    firstTok = advance ();
     bool           isConst  = firstTok.Kind == TokenKind::Const;
     basic::NameObj name;
@@ -156,8 +152,7 @@ Parser::parseVarDef () {
 }
 
 Stmt *
-Parser::parseFuncDef () {
-    AccessModifier access   = Access;
+Parser::parseFuncDef (ast::AccessModifier access) {
     const Token    firstTok = advance ();
     basic::NameObj name;
     if (!expectName (name)) {
@@ -269,8 +264,7 @@ Parser::parseBreakContinue () {
 }
 
 Stmt *
-Parser::parseStructDef () {
-    auto           access   = Access;
+Parser::parseStructDef (ast::AccessModifier access) {
     const Token    firstTok = advance ();
     basic::NameObj name;
     if (!expectName (name)) {
@@ -309,9 +303,9 @@ Parser::parseImplStmt () {
     }
     std::vector<Method> methods;
     while (!isAtEnd () && !match (TokenKind::RBrace)) {
-        Access = match (TokenKind::Pub) ? AccessModifier::Pub : AccessModifier::Priv;
-        bool  isStatic = match (TokenKind::Static);
-        auto *method   = llvm::cast<FuncDef> (parseFuncDef ());
+        auto access = match (TokenKind::Pub) ? AccessModifier::Pub : AccessModifier::Priv;
+        bool isStatic = match (TokenKind::Static);
+        auto *method  = llvm::cast<FuncDef> (parseFuncDef (access));
         if (method != nullptr) {
             methods.emplace_back (method, isStatic);
         } else {
@@ -588,7 +582,6 @@ Parser::parseChain (Expr *base, bool allowStruct) {
     return base;
 }
 
-// NOLINTBEGIN(cppcoreguidelines-owning-memory)
 basic::Type *
 Parser::consumeType () {
 #define kind(kind) case TokenKind::kind:
@@ -633,7 +626,6 @@ Parser::consumeType () {
 #undef int_type
 #undef kind
 }
-// NOLINTEND(cppcoreguidelines-owning-memory)
 
 void
 Parser::synchronize () {
