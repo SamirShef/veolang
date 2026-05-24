@@ -84,6 +84,7 @@ Parser::parseStmt (bool expectSemi) {
             "expected statement, found '" + _curTok.Val + "'",
             Severity::Error)
         .AddSpan (_curTok.Start, _curTok.End, "expected statement here");
+    advance ();
     synchronize ();
     return nullptr;
 }
@@ -165,6 +166,9 @@ Parser::parseFuncDef (ast::AccessModifier access) {
     basic::Type          *retType = nullptr;
     if (match (TokenKind::Colon)) {
         retType = consumeType ();
+        if (retType == nullptr) {
+            return nullptr;
+        }
     }
     std::vector<Stmt *> body;
     if (!parseBlock (body)) {
@@ -231,14 +235,23 @@ Parser::parseForLoop () {
         if (!match (TokenKind::Semi)) {
             if (check (TokenKind::Let)) {
                 indexator = parseStmt (); // consume semi
+                if (indexator == nullptr) {
+                    return nullptr;
+                }
             }
         }
         cond = parseExpr ();
+        if (cond == nullptr) {
+            return nullptr;
+        }
         if (!expectSemi ()) {
             return nullptr;
         }
         if (!check (TokenKind::LBrace)) {
             iteration = parseStmt (false);
+            if (iteration == nullptr) {
+                return nullptr;
+            }
         }
     }
 
@@ -286,14 +299,20 @@ ast::Stmt *
 Parser::parseImplStmt () {
     const Token  firstTok          = advance ();
     basic::Type *structOrTraitType = consumeType ();
-    basic::Type *structType        = structOrTraitType;
-    basic::Type *traitType         = nullptr;
+    if (structOrTraitType == nullptr) {
+        return nullptr;
+    }
+    basic::Type *structType = structOrTraitType;
+    basic::Type *traitType  = nullptr;
     if (structOrTraitType == nullptr) {
         return nullptr;
     }
     if (match (TokenKind::For)) {
         traitType  = structOrTraitType;
         structType = consumeType ();
+        if (structType == nullptr) {
+            return nullptr;
+        }
     }
     if (structType == nullptr) {
         return nullptr;
@@ -305,11 +324,14 @@ Parser::parseImplStmt () {
     while (!isAtEnd () && !match (TokenKind::RBrace)) {
         auto access = match (TokenKind::Pub) ? AccessModifier::Pub : AccessModifier::Priv;
         bool isStatic = match (TokenKind::Static);
-        auto *method  = llvm::cast<FuncDef> (parseFuncDef (access));
-        if (method != nullptr) {
-            methods.emplace_back (method, isStatic);
-        } else {
-            synchronize ();
+        auto *fd      = parseFuncDef (access);
+        if (fd != nullptr) {
+            auto *method = llvm::cast<FuncDef> (fd);
+            if (method != nullptr) {
+                methods.emplace_back (method, isStatic);
+            } else {
+                synchronize ();
+            }
         }
     }
     return createNode<ImplStmt> (
@@ -323,16 +345,20 @@ Parser::parseImplStmt () {
 std::vector<Argument>
 Parser::parseArguments () {
     std::vector<Argument> args;
+    size_t                i = 0;
     while (!isAtEnd () && !match (TokenKind::RParen)) {
+        if (i != 0) {
+            if (!expectTok (TokenKind::Comma, ",")) {
+                break;
+            }
+        }
         const Argument arg = parseArgument ();
         if (arg.IsValid ()) {
             args.push_back (arg);
         } else {
             break;
         }
-        if (!check (TokenKind::RParen)) {
-            expectTok (TokenKind::Comma, ",");
-        }
+        ++i;
     }
     return std::move (args);
 }
@@ -355,14 +381,18 @@ Parser::parseArgument () {
 
 void
 Parser::parseArgumentsForCall (std::vector<ast::Expr *> &args) {
+    size_t i = 0;
     while (!isAtEnd () && !match (TokenKind::RParen)) {
+        if (i != 0) {
+            if (expectTok (TokenKind::Comma, ",")) {
+                break;
+            }
+        }
         Expr *expr = parseExpr ();
         if (expr != nullptr) {
             args.emplace_back (expr);
         }
-        if (!check (TokenKind::RParen)) {
-            expectTok (TokenKind::Comma, ",");
-        }
+        ++i;
     }
 }
 
@@ -373,6 +403,8 @@ Parser::parseFields () {
         const Field field = parseField ();
         if (field.IsValid ()) {
             fields.push_back (field);
+        } else {
+            break;
         }
     }
     return std::move (fields);
@@ -404,15 +436,21 @@ Parser::parseField () {
 std::vector<std::tuple<basic::NameObj, Expr *>>
 Parser::parseFieldsForInstance () {
     std::vector<std::tuple<basic::NameObj, Expr *>> fields;
+    size_t                                          i = 0;
     while (!isAtEnd () && !match (TokenKind::RBrace)) {
+        if (i != 0) {
+            if (!expectTok (TokenKind::Comma, ",")) {
+                break;
+            }
+        }
         auto field         = parseFieldForInstance ();
         auto &[name, expr] = field;
         if (name != basic::NameObj () && expr != nullptr) {
             fields.push_back (field);
+        } else {
+            break;
         }
-        if (!check (TokenKind::RBrace)) {
-            expectTok (TokenKind::Comma, ",");
-        }
+        ++i;
     }
     return std::move (fields);
 }
@@ -445,7 +483,10 @@ Parser::parseExpr (int minPrec, bool allowStruct) {
         const Token op = advance ();
 
         Expr *rhs = parseExpr (prec, allowStruct);
-        lhs       = createNode<BinaryExpr> (
+        if (rhs == nullptr) {
+            return nullptr;
+        }
+        lhs = createNode<BinaryExpr> (
             TokToBinOp (op.Kind),
             lhs,
             rhs,
@@ -478,7 +519,10 @@ Parser::parsePrimaryExpr (bool allowStruct) {
         lit (F64Lit);
 
     case TokenKind::LParen: {
-        Expr *expr     = parseExpr ();
+        Expr *expr = parseExpr ();
+        if (expr == nullptr) {
+            return nullptr;
+        }
         expr->Start () = tok.Start;
         expr->End ()   = _lastTok.End;
         if (!expectTok (TokenKind::RParen, ")")) {
@@ -566,15 +610,19 @@ Parser::parseChain (Expr *base, bool allowStruct) {
             if (match (TokenKind::LParen)) {
                 std::vector<Expr *> args;
                 parseArgumentsForCall (args);
-                return createNode<MethodCall> (
+                base = createNode<MethodCall> (
                     base,
                     basic::NameObj (tok),
                     std::move (args),
                     tok.Start,
                     _lastTok.End);
+            } else {
+                base = createNode<FieldExpr> (
+                    base,
+                    std::move (name),
+                    base->Start (),
+                    tok.End);
             }
-            base
-                = createNode<FieldExpr> (base, std::move (name), base->Start (), tok.End);
         } else {
             break;
         }
@@ -629,20 +677,28 @@ Parser::consumeType () {
 
 void
 Parser::synchronize () {
-    if (isStmtStart (_curTok.Kind)) {
+    if (isSynchronizationToken ()) {
         return;
     }
     advance ();
     while (!isAtEnd ()) {
-        if (check (_lastTok, TokenKind::Semi) || check (_lastTok, TokenKind::RBrace)
-            || check (_lastTok, TokenKind::RParen)) {
-            return;
-        }
-        if (isStmtStart (_curTok.Kind)) {
+        if (isSynchronizationToken ()) {
             return;
         }
         advance ();
     }
+}
+
+bool
+Parser::isSynchronizationToken () {
+    if (isStmtStart (_curTok.Kind)) {
+        return true;
+    }
+    if (check (_lastTok, TokenKind::Semi) || check (_lastTok, TokenKind::RBrace)
+        || check (_lastTok, TokenKind::RParen)) {
+        return true;
+    }
+    return false;
 }
 
 bool

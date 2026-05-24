@@ -1,4 +1,6 @@
 #pragma once
+#include "ast/context.h"
+
 #include <ast/expr.h>
 #include <ast/stmts/func_def.h>
 #include <ast/stmts/struct_def.h>
@@ -27,12 +29,15 @@ class Parser {
     diagnostic::DiagnosticEngine &_diag;     // NOLINT
     basic::TypePool              &_typePool; // NOLINT
     Lexer                         _lex;
-    llvm::BumpPtrAllocator        _allocator;
+    ast::Context                 &_context; // NOLINT
 
 public:
     explicit Parser (
-        diagnostic::DiagnosticEngine &diag, Lexer &lex, basic::TypePool &typePool)
-        : _diag (diag), _lex (lex), _typePool (typePool) {
+        diagnostic::DiagnosticEngine &diag,
+        Lexer                        &lex,
+        basic::TypePool              &typePool,
+        ast::Context                 &context)
+        : _diag (diag), _lex (lex), _typePool (typePool), _context (context) {
         advance ();
         advance ();
     }
@@ -52,7 +57,8 @@ public:
         size_t      count = nodes.size ();
         ast::Node **array = nullptr;
         if (count != 0) {
-            array = static_cast<ast::Node **> (_allocator.Allocate<ast::Node *> (count));
+            array
+                = static_cast<ast::Node **> (_context.AllocateArray<ast::Node *> (count));
             std::memcpy (
                 static_cast<void *> (array),
                 static_cast<void *> (nodes.data ()),
@@ -65,10 +71,7 @@ private:
     template <typename T, typename... Args>
     T *
     createNode (Args &&...args) {
-        void *mem = _allocator.Allocate (sizeof (T), alignof (T));
-        // NOLINTNEXTLINE(cppcoreguidelines-owning-memory)
-        auto *obj = new (mem) T (std::forward<Args> (args)...);
-        return obj;
+        return _context.CreateNode<T> (std::forward<Args> (args)...);
     }
 
     template <typename T, typename... Args>
@@ -148,6 +151,9 @@ private:
 
     void
     synchronize ();
+
+    bool
+    isSynchronizationToken ();
 
     bool
     match (TokenKind kind);

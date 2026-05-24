@@ -40,6 +40,11 @@ public:
         }
     }
 
+    std::vector<DiagnosticBuilder> &
+    Builders () {
+        return _builders;
+    }
+
 private:
     void
     renderDiag (DiagnosticBuilder &diag);

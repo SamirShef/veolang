@@ -1,6 +1,4 @@
 #pragma once
-#include "basic/types/type.h"
-
 #include <ast/exprs/asgn_expr.h>
 #include <ast/exprs/bin_expr.h>
 #include <ast/exprs/field_expr.h>
@@ -20,6 +18,7 @@
 #include <basic/symbols/module.h>
 #include <basic/symbols/scope.h>
 #include <basic/symbols/struct.h>
+#include <basic/types/pool.h>
 #include <basic/value.h>
 #include <cstddef>
 #include <diagnostic/engine.h>
@@ -34,9 +33,10 @@ using namespace basic;
 
 class Sema {
     DiagnosticEngine &_diag; // NOLINT(cppcoreguidelines-avoid-const-or-ref-data-members)
-    size_t            _localsCount = 0;
-    symbols::Module  *_mod;
-    hir::Builder      _builder;
+    TypePool &_typePool;     // NOLINT(cppcoreguidelines-avoid-const-or-ref-data-members)
+    size_t    _localsCount = 0;
+    symbols::Module           *_mod;
+    hir::Builder               _builder;
     std::stack<symbols::Scope> _vars;
     std::stack<Type *>         _funcRetTypes;
 
@@ -59,8 +59,12 @@ class Sema {
     std::optional<std::pair<symbols::Method *, symbols::Struct *>> _insideMethod;
 
 public:
-    Sema (DiagnosticEngine &diag, hir::Context &ctx, symbols::Module *mod)
-        : _diag (diag), _builder (ctx), _mod (mod) {
+    Sema (
+        DiagnosticEngine &diag,
+        hir::Context     &ctx,
+        symbols::Module  *mod,
+        TypePool         &typePool)
+        : _diag (diag), _builder (ctx), _mod (mod), _typePool (typePool) {
         _vars.emplace ();
     }
 
@@ -97,6 +101,12 @@ public:
     }
 
 private:
+    template <typename T, typename... Args>
+    Type *
+    createType (Args &&...args) {
+        return _typePool.GetOrCreate<T> (std::forward<Args> (args)...);
+    }
+
     void
     analyzeStmt (ast::Stmt *stmt);
 
@@ -155,6 +165,12 @@ private:
     analyzeAsgnExpr (ast::AsgnExpr *ae, Type *expectedType);
 
     SemanticResult
+    analyzeAsgnVar (ast::AsgnExpr *ae, SemanticResult &expr, const SemanticResult &ptr);
+
+    SemanticResult
+    analyzeAsgnField (ast::AsgnExpr *ae, SemanticResult &expr, const SemanticResult &ptr);
+
+    SemanticResult
     analyzeFieldExpr (ast::FieldExpr *fe, Type *expectedType);
 
     SemanticResult
@@ -183,6 +199,16 @@ private:
 
     Type *
     getCommonType (Type *lhs, Type *rhs, llvm::SMLoc start, llvm::SMLoc end);
+
+    static Type *
+    getCommonIngeter (Type *lhs, Type *rhs, llvm::SMLoc start, llvm::SMLoc end);
+
+    static Type *
+    getCommonFloating (Type *lhs, Type *rhs, llvm::SMLoc start, llvm::SMLoc end);
+
+    Type *
+    getCommonFloatingAndInteger (
+        Type *lhs, Type *rhs, llvm::SMLoc start, llvm::SMLoc end);
 
     OptValue
     foldBinary (
@@ -222,14 +248,48 @@ private:
         llvm::SMLoc                start,
         llvm::SMLoc                end);
 
+    static void
+    candidatesToStringVector (
+        symbols::FunctionCandidates *candidates, std::vector<std::string> &res);
+
+    static void
+    candidatesToStringVector (
+        symbols::MethodCandidates *candidates, std::vector<std::string> &res);
+
+    static std::string
+    funcCandidateToString (symbols::Function *func);
+
     static CastCost
     checkCastCost (Type *src, Type *dst);
 
     static bool
     canApplyAsgnOp (ast::AsgnOp op, Type *type);
 
+    static bool
+    viableFuncCandidate (
+        symbols::Function *func, const std::vector<Type *> &args, size_t &costSum);
+
     bool
     inGlobalScope () const;
+
+    bool
+    allowInScope (ast::Stmt *stmt, bool allowInGlobal = true);
+
+    bool
+    canAccessField (
+        const basic::NameObj  &feName,
+        const symbols::Field  &field,
+        const symbols::Struct *s,
+        bool                   canAccessStatic,
+        bool                   canAccessPrivate);
+
+    bool
+    canAccessMethod (
+        const basic::NameObj  &mcName,
+        const symbols::Method &method,
+        const symbols::Struct *s,
+        bool                   canAccessStatic,
+        bool                   canAccessPrivate);
 };
 
 }

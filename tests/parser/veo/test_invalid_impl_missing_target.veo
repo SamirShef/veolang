@@ -1,0 +1,3 @@
+impl {
+    func test() {}
+}
