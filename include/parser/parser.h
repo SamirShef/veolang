@@ -153,6 +153,9 @@ private:
     synchronize ();
 
     bool
+    isSynchronizationToken ();
+
+    bool
     match (TokenKind kind);
 
     static bool

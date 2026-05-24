@@ -1,0 +1,2 @@
+impl Point
+    func test() {}

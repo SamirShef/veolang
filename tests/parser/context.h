@@ -31,10 +31,13 @@ struct ParserContext {
         unsigned bufferId
             = Mgr.AddNewSourceBuffer (std::move (*bufferOrErr), llvm::SMLoc ());
 
-        basic::TypePool pool;
-        Lexer           lex (Diag, Mgr, bufferId);
-        Parser          parser (Diag, lex, pool, ASTContext);
-        return parser.Parse ();
+        Lexer  lex (Diag, Mgr, bufferId);
+        Parser parser (Diag, lex, Pool, ASTContext);
+        auto   res = parser.Parse ();
+        if (Diag.HasErrors ()) {
+            res.HasErrors = true;
+        }
+        return res;
     }
 
     static std::string

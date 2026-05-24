@@ -1,4 +1,5 @@
 #pragma once
+#include <basic/types/pool.h>
 #include <llvm/Support/Allocator.h>
 #include <ranges>
 

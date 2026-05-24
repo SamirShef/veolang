@@ -1,2 +1,1 @@
-let x = 10;
-let y = x + 2;
+let x: i32 = 10;

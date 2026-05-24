@@ -140,6 +140,9 @@ Compile (
     Lexer        lex (diag, mgr, bufferId);
     Parser       parser (diag, lex, pool, context);
     ParseResult  parseRes = parser.Parse ();
+    if (diag.HasErrors ()) {
+        parseRes.HasErrors = true;
+    }
 
     if (DumpASTOpt == DumpASTInto::Terminal) {
         ast::Dumper dumper (llvm::errs ());
