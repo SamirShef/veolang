@@ -1,3 +1,5 @@
+#include "ast/context.h"
+
 #include <ast/dumper.h>
 #include <basic/types/pool.h>
 #include <codegen/codegen.h>
@@ -98,10 +100,6 @@ LinkObjectFiles (const std::string &exeFile, const std::vector<std::string> &obj
             objs += ' ';
         }
     }
-    // int res = llvm::sys::ExecuteAndWait (
-    //     "clang",
-    //     { "clang", objs, "-o", exeFile, "-fuse-ld=lld" });
-    // return res >= 0;
     return system (("clang " + objs + " -o " + exeFile).c_str ()) == EXIT_SUCCESS;
 }
 
@@ -137,10 +135,11 @@ Compile (
     }
     unsigned bufferId = mgr.AddNewSourceBuffer (std::move (*bufferOrErr), llvm::SMLoc ());
 
-    TypePool    pool;
-    Lexer       lex (diag, mgr, bufferId);
-    Parser      parser (diag, lex, pool);
-    ParseResult parseRes = parser.Parse ();
+    TypePool     pool;
+    ast::Context context;
+    Lexer        lex (diag, mgr, bufferId);
+    Parser       parser (diag, lex, pool, context);
+    ParseResult  parseRes = parser.Parse ();
 
     if (DumpASTOpt == DumpASTInto::Terminal) {
         ast::Dumper dumper (llvm::errs ());

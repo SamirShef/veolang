@@ -1,8 +1,8 @@
-add_executable(test_parser
-    main.cpp
-    test_var_def.cpp
-)
+file(GLOB_RECURSE SOURCES "src/*.cpp")
 
+add_executable(test_parser main.cpp ${SOURCES})
+
+target_compile_options(test_parser PRIVATE -g)
 target_link_libraries(test_parser PRIVATE veoc-core)
 target_include_directories(test_parser PRIVATE ${CMAKE_SOURCE_DIR}/include)
 
