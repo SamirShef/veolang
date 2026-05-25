@@ -42,7 +42,7 @@ jobs:
           ctest --output-on-failure
           ./veoc new test
           cd test/
-          veoc build
+          ./../veoc build
 
       - name: Build (Windows)
         if: matrix.os == 'windows-latest'
@@ -55,7 +55,7 @@ jobs:
           ctest --output-on-failure
           ./veoc.exe new test
           cd test/
-          veoc build
+          ./../veoc.exe build
 
       - name: Upload
         uses: actions/upload-artifact@v4
