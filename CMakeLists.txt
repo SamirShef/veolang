@@ -35,6 +35,9 @@ if(TARGET LLVM)
 else()
     llvm_map_components_to_libnames(
         LLVM_LINK_LIBS
+        lldMinGW
+        lldELF
+        lldCommon
         core
         support
         analysis
@@ -63,6 +66,11 @@ list(FILTER SOURCES EXCLUDE REGEX ".*/main\\.cpp$|main\\.cpp$")
 add_library(veoc-core STATIC ${SOURCES})
 target_compile_options(veoc-core PRIVATE -fno-rtti -fno-exceptions -g)
 target_link_libraries(veoc-core PRIVATE
+    lldELF
+    lldMinGW
+    lldCOFF
+    lldMachO
+    lldCommon
     tomlplusplus::tomlplusplus
     ${LLVM_LINK_LIBS}
     ${LLVM_SYSTEM_LIBS}

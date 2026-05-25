@@ -5,9 +5,65 @@
 #include <llvm/IR/Module.h>
 #include <llvm/Target/TargetMachine.h>
 
+// NOLINTBEGIN
+namespace lld {
+
+namespace elf {
+
+bool
+link (
+    llvm::ArrayRef<const char *> args,
+    llvm::raw_ostream           &stdoutOS,
+    llvm::raw_ostream           &stderrOS,
+    bool                         exitEarly,
+    bool                         disableOutput);
+
+}
+
+namespace mingw {
+
+bool
+link (
+    llvm::ArrayRef<const char *> args,
+    llvm::raw_ostream           &stdoutOS,
+    llvm::raw_ostream           &stderrOS,
+    bool                         exitEarly,
+    bool                         disableOutput);
+
+}
+
+namespace coff {
+
+bool
+link (
+    llvm::ArrayRef<const char *> args,
+    llvm::raw_ostream           &stdoutOS,
+    llvm::raw_ostream           &stderrOS,
+    bool                         exitEarly,
+    bool                         disableOutput);
+
+}
+
+namespace macho {
+
+bool
+link (
+    llvm::ArrayRef<const char *> args,
+    llvm::raw_ostream           &stdoutOS,
+    llvm::raw_ostream           &stderrOS,
+    bool                         exitEarly,
+    bool                         disableOutput);
+
+}
+
+}
+// NOLINTEND
+
 namespace fs = std::filesystem;
 
 namespace veo::driver {
+
+enum class LinkerFlavor : uint8_t { Elf, MinGW, Coff, MachO, Unknown };
 
 struct CompilationResult {
     bool     Success;
@@ -26,10 +82,10 @@ EmitFile (
 
 bool
 EmitObjectFile (
-    llvm::Module       *mod,
-    const std::string  &fileName,
-    const llvm::Triple &triple,
-    const fs::path     &projectPath);
+    llvm::Module *mod, const std::string &fileName, const llvm::Triple &triple);
+
+LinkerFlavor
+SelectLinkerFlavor (const std::string &targetTriple);
 
 bool
 LinkObjectFiles (
