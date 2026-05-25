@@ -114,63 +114,22 @@ EmitObjectFile (
     return true;
 }
 
-LinkerFlavor
-SelectLinkerFlavor (const std::string &targetTriple) {
-    llvm::Triple triple (targetTriple);
-
-    if (triple.isOSWindows ()) {
-        if (triple.getEnvironment () == llvm::Triple::GNU) {
-            return LinkerFlavor::MinGW;
-        }
-        return LinkerFlavor::Coff;
-    }
-
-    if (triple.isMacOSX () || triple.isOSDarwin ()) {
-        return LinkerFlavor::MachO;
-    }
-
-    if (triple.isOSLinux () || triple.isOSFreeBSD ()) {
-        return LinkerFlavor::Elf;
-    }
-
-    return LinkerFlavor::Unknown;
-}
-
 bool
 LinkObjectFiles (
     const std::string              &target,
     const std::string              &exeFile,
     const std::vector<std::string> &objFiles) {
-    LinkerFlavor flavor = SelectLinkerFlavor (target);
-    if (flavor == LinkerFlavor::Unknown) {
-        llvm::errs ().changeColor (llvm::raw_fd_ostream::RED, true)
-            << "Error: Unsupported target triple for linking: "
-            << llvm::raw_fd_ostream::RESET << target << '\n';
-        return false;
+    std::string objs;
+    for (int i = 0; i < objFiles.size (); ++i) {
+        objs += objFiles[i];
+        if (i < objFiles.size () - 1) {
+            objs += ' ';
+        }
     }
-    std::vector<const char *> args;
-    args.push_back ("veoc-linker");
-
-    for (const auto &obj : objFiles) {
-        args.push_back (obj.c_str ());
-    }
-
-    args.push_back ("-o");
-    args.push_back (exeFile.c_str ());
-
-    llvm::raw_ostream &diagOs = llvm::errs ();
-    llvm::raw_ostream &infoOs = llvm::outs ();
-
-    switch (flavor) {
-#define variant(kind, name)                                                              \
-    case LinkerFlavor::kind: return lld::name::link (args, diagOs, infoOs, false, false);
-        variant (Elf, elf);
-        variant (MinGW, mingw);
-        variant (Coff, coff);
-        variant (MachO, macho);
-    default: return false;
-#undef variant
-    }
+    return system (("clang -fuse-ld=lld --target=\"" + target + "\" " + objs + " -o "
+                    + exeFile)
+                       .c_str ())
+           == EXIT_SUCCESS;
 }
 
 std::string
