@@ -263,7 +263,7 @@ Compile (
             << llvm::raw_fd_ostream::RESET;
     }
     if (EmitAsmOpt) {
-        std::string asmFileName = objPath;
+        std::string asmFileName = objPath.string ();
         size_t      dotPos      = asmFileName.find_last_of ('.');
         if (dotPos != std::string::npos) {
             asmFileName = asmFileName.substr (0, dotPos) + ".s";
