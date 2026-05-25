@@ -22,10 +22,9 @@ inline llvm::cl::opt<std::string> NewNameOpt (
 inline llvm::cl::SubCommand InitSub ("init", "Initialize a project in current directory");
 inline llvm::cl::SubCommand BuildSub ("build", "Build the current project");
 inline llvm::cl::SubCommand RunSub ("run", "Build the current project and run it");
+inline llvm::cl::SubCommand TestSub ("test", "Execut functions which marked as [test]");
 inline llvm::cl::SubCommand
-    TestSub ("test", "Executing functions which marked as [test]");
-inline llvm::cl::SubCommand
-    CheckSub ("check", "Checking code without dumping build artefacts");
+    CheckSub ("check", "Check code without dumping build artefacts");
 inline llvm::cl::SubCommand CleanSub ("clean", "Clean build directory");
 inline llvm::cl::SubCommand FetchSub ("fetch", "Update the module registry");
 
@@ -38,7 +37,7 @@ inline llvm::cl::opt<OptLevel> OptimizationLevelOpt (
         clEnumValN (
             OptLevel::O1,
             "O1",
-            "Optimize minimaly. Offers a basic level of optimization without a "
+            "Optimize minimally. Offers a basic level of optimization without a "
             "significant impact on compilation time."),
         clEnumValN (
             OptLevel::O2,
@@ -80,7 +79,9 @@ inline llvm::cl::opt<bool> EmitIROpt (
     "emit-ir", llvm::cl::desc ("Emits LLVM IR to .ll file "), llvm::cl::cat (Category));
 
 inline llvm::cl::opt<bool> EmitAsmOpt (
-    "emit-asm", llvm::cl::desc ("Emits LLVM IR to .s file "), llvm::cl::cat (Category));
+    "emit-asm",
+    llvm::cl::desc ("Emits native assembly to .s file "),
+    llvm::cl::cat (Category));
 
 inline llvm::cl::opt<bool> DumpSymOpt (
     "dump-sym",
@@ -98,7 +99,7 @@ enum class DumpASTInto : uint8_t { None, File, Terminal };
 
 inline llvm::cl::opt<DumpASTInto> DumpASTOpt (
     "dump-ast",
-    llvm::cl::desc ("Dumps AST even module to .txt file"),
+    llvm::cl::desc ("Dumps AST for each module to .txt file"),
     llvm::cl::values (
         clEnumValN (DumpASTInto::None, "none", "Does not dump AST"),
         clEnumValN (DumpASTInto::File, "file", "Dump AST to .txt file"),
