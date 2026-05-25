@@ -7,15 +7,10 @@ using namespace veo;
 
 int
 main (int argc, char **argv) {
-    if (driver::ParseArguments (argc, argv) != 0) {
+    if (!driver::ParseArguments (argc, argv)) {
         return 0;
     }
     driver::ExecuteArguments ();
-
-    llvm::SourceMgr              mgr;
-    diagnostic::DiagnosticEngine diag (mgr);
-
-    diag.Render ();
 
     return 0;
 }

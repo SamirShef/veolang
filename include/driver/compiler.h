@@ -1,5 +1,6 @@
 #pragma once
 #include <basic/symbols/module.h>
+#include <driver/cli_options.h>
 #include <filesystem>
 #include <llvm/IR/Module.h>
 
@@ -24,6 +25,9 @@ LinkObjectFiles (const std::string &exeFile, const std::vector<std::string> &obj
 
 std::string
 GetOutputName (const std::string &inputFile, const llvm::Triple &triple);
+
+void
+Optimize (llvm::Module &mod, OptLevel level);
 
 CompilationResult
 Compile (

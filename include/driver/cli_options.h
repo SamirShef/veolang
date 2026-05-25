@@ -29,15 +29,37 @@ inline llvm::cl::SubCommand
 inline llvm::cl::SubCommand CleanSub ("clean", "Clean build directory");
 inline llvm::cl::SubCommand FetchSub ("fetch", "Update the module registry");
 
-enum class OptLevel : uint8_t { O0, O1, O2, O3 };
+enum class OptLevel : uint8_t { O0, O1, O2, O3, Os, Oz };
 
 inline llvm::cl::opt<OptLevel> OptimizationLevelOpt (
     llvm::cl::desc ("Optimization level:"),
     llvm::cl::values (
-        clEnumValN (OptLevel::O0, "O0", "No optimization"),
-        clEnumValN (OptLevel::O1, "O1", "Basic optimization"),
-        clEnumValN (OptLevel::O2, "O2", "Default optimization"),
-        clEnumValN (OptLevel::O3, "O3", "Aggressive optimization")),
+        clEnumValN (OptLevel::O0, "O0", "No optimization."),
+        clEnumValN (
+            OptLevel::O1,
+            "O1",
+            "Optimize minimaly. Offers a basic level of optimization without a "
+            "significant impact on compilation time."),
+        clEnumValN (
+            OptLevel::O2,
+            "O2",
+            "Optimize moderately. The standart optimization level for production, "
+            "balancing speed and code size."),
+        clEnumValN (
+            OptLevel::O3,
+            "O3",
+            "Optimize aggressively. Maximizes execution speed intensive optimizations, "
+            "potentially increasing binary size."),
+        clEnumValN (
+            OptLevel::Os,
+            "Os",
+            "Optimize for code size. Enables all -O2 optimizations that do not increase "
+            "binary size."),
+        clEnumValN (
+            OptLevel::Oz,
+            "Oz",
+            "Optimize aggressively for code size. Further reduces binary size beyond "
+            "-Os, potentially sacrificing performance.")),
     llvm::cl::init (OptLevel::O0),
     llvm::cl::cat (Category));
 
@@ -83,16 +105,16 @@ inline llvm::cl::opt<DumpASTInto> DumpASTOpt (
 
 // NOLINTEND(cppcoreguidelines-avoid-non-const-global-variables)
 
-inline int
+inline bool
 ParseArguments (int argc, char **argv) {
     llvm::cl::HideUnrelatedOptions (Category);
     llvm::cl::ParseCommandLineOptions (argc, argv, "Veo Compiler");
 
     if (argc < 2) {
         llvm::cl::PrintHelpMessage ();
-        return 1;
+        return false;
     }
-    return 0;
+    return true;
 }
 
 void

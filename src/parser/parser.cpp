@@ -384,7 +384,7 @@ Parser::parseArgumentsForCall (std::vector<ast::Expr *> &args) {
     size_t i = 0;
     while (!isAtEnd () && !match (TokenKind::RParen)) {
         if (i != 0) {
-            if (expectTok (TokenKind::Comma, ",")) {
+            if (!expectTok (TokenKind::Comma, ",")) {
                 break;
             }
         }
