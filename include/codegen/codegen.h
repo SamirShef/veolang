@@ -82,9 +82,6 @@ public:
         return std::move (_mod);
     }
 
-    static std::string
-    MangleStaticField (symbols::Struct *sym, const std::string &fieldName);
-
 private:
     void
     generate (hir::Node *node);
@@ -148,27 +145,6 @@ private:
 
     llvm::Type *
     getType (basic::Type *type);
-
-    static std::string
-    mangleFunction (hir::Function *func);
-
-    static std::string
-    mangleMethod (symbols::Struct *sym, hir::Function *func);
-
-    static std::string
-    mangleGlobalVar (hir::VarDef *var);
-
-    static std::string
-    mangleStruct (hir::StructDef *sd);
-
-    static std::string
-    mangleStructSymbol (symbols::Struct *sym);
-
-    static std::string
-    mangleModule (symbols::Module *mod);
-
-    static std::string
-    mangleType (basic::Type *type);
 
     void
     generateImplicitMain ();

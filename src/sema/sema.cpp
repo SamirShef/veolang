@@ -2,7 +2,7 @@
 #include <ast/exprs/struct_instance.h>
 #include <basic/types/all.h>
 #include <basic/value.h>
-#include <codegen/codegen.h>
+#include <codegen/mangler.h>
 #include <cstdint>
 #include <diagnostic/codes.h>
 #include <lexer/token_kind.h>
@@ -1116,7 +1116,7 @@ Sema::analyzeFieldExpr (FieldExpr *fe, Type *expectedType) {
     hir::Node *node = nullptr;
     if (it->IsStatic) {
         node = _builder.CreateLoadGlobalVarByName (
-            CodeGen::MangleStaticField (s, it->Name.Val),
+            Mangler::MangleStaticField (s, it->Name.Val),
             it->Type,
             fe->Start (),
             fe->End ());

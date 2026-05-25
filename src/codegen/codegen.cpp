@@ -1,21 +1,11 @@
 #include <basic/symbols/module.h>
 #include <basic/types/all.h>
 #include <codegen/codegen.h>
-#include <sstream>
+#include <codegen/mangler.h>
 
 namespace veo {
 
 using namespace hir;
-
-std::string
-CodeGen::MangleStaticField (symbols::Struct *sym, const std::string &fieldName) {
-    std::ostringstream oss;
-    oss << "_VF";
-    oss << mangleModule (sym->Parent);
-    oss << "E" << sym->Name.Val.size () << sym->Name.Val;
-    oss << "E" << fieldName.size () << fieldName;
-    return oss.str ();
-}
 
 void
 CodeGen::generate (Node *node) {
@@ -45,7 +35,7 @@ CodeGen::generateBasicBlock (BasicBlock *bb) {
 void
 CodeGen::generateVarDef (VarDef *vd) {
     bool        isGlobal = !_curFunc.has_value ();
-    std::string name     = isGlobal ? mangleGlobalVar (vd) : vd->Name ().Val;
+    std::string name     = isGlobal ? Mangler::MangleGlobalVar (vd) : vd->Name ().Val;
     auto       *init     = vd->Init () != nullptr
                                ? generateExpr (vd->Init ())
                                : llvm::ConstantExpr::getNullValue (getType (vd->Type ()));
@@ -68,10 +58,11 @@ CodeGen::generateVarDef (VarDef *vd) {
 
 void
 CodeGen::declareFunc (Function *fd) {
-    const std::string &name
-        = fd->MethodBaseType () == nullptr
-              ? mangleFunction (fd)
-              : mangleMethod (fd->MethodBaseType ()->AsStruct ()->BaseSymbol (), fd);
+    const std::string &name = fd->MethodBaseType () == nullptr
+                                  ? Mangler::MangleFunction (fd)
+                                  : Mangler::MangleMethod (
+                                        fd->MethodBaseType ()->AsStruct ()->BaseSymbol (),
+                                        fd);
     std::vector<llvm::Type *> args;
     for (auto &a : fd->Args ()) {
         args.emplace_back (getType (a.Type));
@@ -92,13 +83,14 @@ CodeGen::declareFunc (Function *fd) {
 
 void
 CodeGen::generateFuncDef (Function *fd) {
-    _curFunc = CurrentFunction ();
-    const std::string &name
-        = fd->MethodBaseType () == nullptr
-              ? mangleFunction (fd)
-              : mangleMethod (fd->MethodBaseType ()->AsStruct ()->BaseSymbol (), fd);
-    auto  *func = _mod->getFunction (name);
-    size_t i    = 0;
+    _curFunc                = CurrentFunction ();
+    const std::string &name = fd->MethodBaseType () == nullptr
+                                  ? Mangler::MangleFunction (fd)
+                                  : Mangler::MangleMethod (
+                                        fd->MethodBaseType ()->AsStruct ()->BaseSymbol (),
+                                        fd);
+    auto              *func = _mod->getFunction (name);
+    size_t             i    = 0;
     for (auto &a : func->args ()) {
         a.setName (fd->Args ()[i].Name.Val);
         _curFunc->Locals.emplace_back (&a);
@@ -151,7 +143,7 @@ CodeGen::generateBranch (Branch *br) {
 
 void
 CodeGen::generateStruct (hir::StructDef *sd) {
-    const auto               &name = mangleStruct (sd);
+    const auto               &name = Mangler::MangleStruct (sd);
     std::vector<llvm::Type *> fields;
     fields.reserve (sd->Fields ().size ());
     for (const auto &field : sd->Fields ()) {
@@ -159,8 +151,9 @@ CodeGen::generateStruct (hir::StructDef *sd) {
         if (!field.IsStatic) {
             fields.emplace_back (type);
         } else {
-            const auto &fieldName = MangleStaticField (sd->BaseSymbol (), field.Name.Val);
-            auto       *gv        = new llvm::GlobalVariable (
+            const auto &fieldName
+                = Mangler::MangleStaticField (sd->BaseSymbol (), field.Name.Val);
+            auto *gv = new llvm::GlobalVariable (
                 *_mod,
                 type,
                 field.IsConst,
@@ -359,9 +352,10 @@ CodeGen::generateFieldExpr (hir::FieldExpr *fe) {
 
 llvm::Value *
 CodeGen::generateStructInstance (hir::StructInstance *si) {
-    const auto       *sym = si->BaseSymbol ();
-    llvm::StructType *type
-        = llvm::StructType::getTypeByName (_ctx, mangleStructSymbol (si->BaseSymbol ()));
+    const auto       *sym  = si->BaseSymbol ();
+    llvm::StructType *type = llvm::StructType::getTypeByName (
+        _ctx,
+        Mangler::MangleStructSymbol (si->BaseSymbol ()));
     if (_curFunc.has_value ()) {
         // local scope
         auto                      *structAlloca = _builder.CreateAlloca (type);
@@ -441,103 +435,12 @@ CodeGen::getType (basic::Type *type) {
     case basic::TypeKind::Struct:
         return llvm::StructType::getTypeByName (
             _ctx,
-            mangleStructSymbol (type->AsStruct ()->BaseSymbol ()));
+            Mangler::MangleStructSymbol (type->AsStruct ()->BaseSymbol ()));
     default: {
     }
     }
     return nullptr;
 }
-
-std::string
-CodeGen::mangleFunction (Function *func) {
-    auto              *sym = func->BaseSymbol ();
-    std::ostringstream oss;
-    oss << "_VF";
-    oss << mangleModule (sym->Parent);
-    oss << "E" << sym->Name.Val.size () << sym->Name.Val << "I";
-    for (auto &a : sym->Args) {
-        oss << mangleType (a.Type);
-    }
-    oss << "E";
-    return oss.str ();
-}
-
-std::string
-CodeGen::mangleMethod (symbols::Struct *sym, hir::Function *func) {
-    std::ostringstream oss;
-    oss << "_VM";
-    oss << mangleModule (sym->Parent);
-    oss << "E" << sym->Name.Val.size () << sym->Name.Val;
-    oss << "E" << func->Name ().Val.size () << func->Name ().Val << "I";
-    for (auto &a : func->Args ()) {
-        oss << mangleType (a.Type);
-    }
-    oss << "E";
-    return oss.str ();
-}
-
-std::string
-CodeGen::mangleGlobalVar (VarDef *var) {
-    auto              *sym = var->BaseSymbol ();
-    std::ostringstream oss;
-    oss << "_VG";
-    oss << mangleModule (sym->Parent);
-    oss << "E" << sym->Name.Val.size () << sym->Name.Val;
-    return oss.str ();
-}
-
-std::string
-CodeGen::mangleStruct (hir::StructDef *sd) {
-    return mangleStructSymbol (sd->BaseSymbol ());
-}
-
-std::string
-CodeGen::mangleStructSymbol (symbols::Struct *sym) {
-    std::ostringstream oss;
-    oss << "_VS";
-    oss << mangleModule (sym->Parent);
-    oss << "E" << sym->Name.Val.size () << sym->Name.Val;
-    return oss.str ();
-}
-
-std::string
-CodeGen::mangleModule (symbols::Module *mod) {
-    if (mod == nullptr) {
-        return "";
-    }
-    std::ostringstream oss;
-    oss << mangleModule (mod->Parent);
-    oss << mod->Name.size () << mod->Name;
-    return oss.str ();
-}
-
-// NOLINTBEGIN(cppcoreguidelines-avoid-magic-numbers)
-std::string
-CodeGen::mangleType (basic::Type *type) {
-    switch (type->Kind ()) {
-    case basic::TypeKind::Integer: {
-        auto *it = llvm::cast<basic::IntegerType> (type);
-        switch (it->BitWidth ()) {
-        case 16: return "s";
-        case 32: return "i";
-        case 64: return "l";
-        default: return "";
-        }
-    }
-    case basic::TypeKind::Floating:
-        return llvm::cast<basic::FloatingType> (type)->IsFloat () ? "f" : "d";
-    case basic::TypeKind::Bool: return "b";
-    case basic::TypeKind::Char: return "c";
-    case basic::TypeKind::Struct: {
-        auto *sym = type->AsStruct ()->BaseSymbol ();
-        return "S" + std::to_string (sym->Name.Val.size ()) + sym->Name.Val;
-    }
-    default: {
-    }
-    }
-    return "";
-}
-// NOLINTEND(cppcoreguidelines-avoid-magic-numbers)
 
 void
 CodeGen::generateImplicitMain () {
