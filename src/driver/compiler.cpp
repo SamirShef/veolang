@@ -67,13 +67,7 @@ EmitFile (
 
 bool
 EmitObjectFile (
-    llvm::Module *mod, const std::string &fileName, std::string targetTripleStr) {
-    if (targetTripleStr.empty ()) {
-        targetTripleStr = llvm::sys::getDefaultTargetTriple ();
-    }
-
-    llvm::Triple triple (targetTripleStr);
-
+    llvm::Module *mod, const std::string &fileName, const llvm::Triple &triple) {
     mod->setTargetTriple (triple);
 
     std::string         error;
@@ -121,7 +115,10 @@ EmitObjectFile (
 }
 
 bool
-LinkObjectFiles (const std::string &exeFile, const std::vector<std::string> &objFiles) {
+LinkObjectFiles (
+    const std::string              &target,
+    const std::string              &exeFile,
+    const std::vector<std::string> &objFiles) {
     std::string objs;
     for (int i = 0; i < objFiles.size (); ++i) {
         objs += objFiles[i];
@@ -129,7 +126,10 @@ LinkObjectFiles (const std::string &exeFile, const std::vector<std::string> &obj
             objs += ' ';
         }
     }
-    return system (("clang " + objs + " -o " + exeFile).c_str ()) == EXIT_SUCCESS;
+    return system (("clang -fuse-ld=lld --target=\"" + target + "\" " + objs + " -o "
+                    + exeFile)
+                       .c_str ())
+           == EXIT_SUCCESS;
 }
 
 std::string
@@ -181,10 +181,11 @@ Optimize (llvm::Module &mod, OptLevel level) {
 
 CompilationResult
 Compile (
-    const fs::path  &projectPath,
-    const fs::path  &filePath,
-    const fs::path  &objPath,
-    symbols::Module *mod) {
+    const fs::path     &projectPath,
+    const fs::path     &filePath,
+    const fs::path     &objPath,
+    symbols::Module    *mod,
+    const llvm::Triple &triple) {
     fs::path filePathInBuild
         = projectPath / "build" / "obj"
           / fs::absolute (filePath).lexically_relative (projectPath).lexically_normal ();
@@ -242,11 +243,12 @@ Compile (
     auto    llvmMod = codegen.Generate ();
 
     InitializeLLVMTargets ();
-    std::string  tripleStr = llvm::sys::getDefaultTargetTriple ();
-    llvm::Triple triple (tripleStr);
 
     Optimize (*llvmMod, OptimizationLevelOpt);
 
+    if (!EmitObjectFile (llvmMod.get (), objPath.string (), triple)) {
+        return { .Success = false, .ObjPath = "" };
+    }
     if (EmitIROpt) {
         std::error_code      ec;
         fs::path             llvmIRPath = objPath;
@@ -275,10 +277,6 @@ Compile (
             << "LLVM IR was dumped to "
             << fs::path (asmFileName).lexically_relative (projectPath).string () << '\n'
             << llvm::raw_fd_ostream::RESET;
-    }
-
-    if (!EmitObjectFile (llvmMod.get (), objPath.string (), tripleStr)) {
-        return { .Success = false, .ObjPath = "" };
     }
 
     return { .Success = !parseRes.HasErrors, .ObjPath = "" };

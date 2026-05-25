@@ -11,6 +11,10 @@ find_package(LLVM REQUIRED CONFIG)
 message(STATUS "LLVM ${LLVM_PACKAGE_VERSION} was found")
 message(STATUS "LLVM path: ${LLVM_DIR}")
 
+get_filename_component(LLVM_PREFIX "${LLVM_DIR}/../../.." ABSOLUTE)
+find_package(LLD REQUIRED CONFIG HINTS "${LLVM_PREFIX}/lib/cmake/lld")
+message(STATUS "LLD was found using hints at: ${LLVM_PREFIX}/lib/cmake/lld")
+
 include_directories(SYSTEM ${LLVM_INCLUDE_DIRS})
 add_definitions(${LLVM_DEFINITIONS})
 
@@ -63,6 +67,11 @@ list(FILTER SOURCES EXCLUDE REGEX ".*/main\\.cpp$|main\\.cpp$")
 add_library(veoc-core STATIC ${SOURCES})
 target_compile_options(veoc-core PRIVATE -fno-rtti -fno-exceptions -g)
 target_link_libraries(veoc-core PRIVATE
+    lldELF
+    lldMinGW
+    lldCOFF
+    lldMachO
+    lldCommon
     tomlplusplus::tomlplusplus
     ${LLVM_LINK_LIBS}
     ${LLVM_SYSTEM_LIBS}

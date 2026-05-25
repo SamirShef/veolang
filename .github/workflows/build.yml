@@ -31,6 +31,7 @@ jobs:
           install: >-
             mingw-w64-ucrt-x86_64-llvm-21 mingw-w64-ucrt-x86_64-clang-21
             mingw-w64-ucrt-x86_64-cmake mingw-w64-ucrt-x86_64-ninja
+            mingw-w64-ucrt-x86_64-lld-21
 
       - name: Build (Unix)
         if: matrix.os != 'windows-latest'
@@ -40,16 +41,23 @@ jobs:
           cmake --build build --config ${{ matrix.build_type }} --parallel
           cd build/
           ctest --output-on-failure
+          ./veoc new test
+          cd test/
+          ./../veoc build
 
       - name: Build (Windows)
         if: matrix.os == 'windows-latest'
         shell: msys2 {0}
         run: |
+          export PATH="/ucrt64/opt/llvm-21/bin:$PATH"
           cmake -B build -G Ninja -DCMAKE_BUILD_TYPE=${{ matrix.build_type }} -DLLVM_DIR=/ucrt64/opt/llvm-21/lib/cmake/llvm \
                 -DCMAKE_C_COMPILER=/ucrt64/opt/llvm-21/bin/clang.exe -DCMAKE_CXX_COMPILER=/ucrt64/opt/llvm-21/bin/clang++.exe
           cmake --build build --config ${{ matrix.build_type }} --parallel
           cd build/
           ctest --output-on-failure
+          ./veoc.exe new test
+          cd test/
+          ./../veoc.exe build
 
       - name: Upload
         uses: actions/upload-artifact@v4
