@@ -7,7 +7,6 @@
 #include <driver/compiler.h>
 #include <filesystem>
 #include <lexer/lexer.h>
-#include <lld/Common/Driver.h>
 #include <llvm/IR/LegacyPassManager.h>
 #include <llvm/MC/TargetRegistry.h>
 #include <llvm/Passes/OptimizationLevel.h>
