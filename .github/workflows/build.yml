@@ -40,7 +40,7 @@ jobs:
           cmake --build build --config ${{ matrix.build_type }} --parallel
           cd build/
           ctest --output-on-failure
-          ./veoc.exe new test
+          ./veoc new test
           cd test/
           veoc build
 
@@ -53,7 +53,7 @@ jobs:
           cmake --build build --config ${{ matrix.build_type }} --parallel
           cd build/
           ctest --output-on-failure
-          ./veoc new test
+          ./veoc.exe new test
           cd test/
           veoc build
 
