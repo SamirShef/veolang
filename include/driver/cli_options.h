@@ -79,6 +79,9 @@ inline llvm::cl::opt<bool> ForceRebuildOpt (
 inline llvm::cl::opt<bool> EmitIROpt (
     "emit-ir", llvm::cl::desc ("Emits LLVM IR to .ll file "), llvm::cl::cat (Category));
 
+inline llvm::cl::opt<bool> EmitAsmOpt (
+    "emit-asm", llvm::cl::desc ("Emits LLVM IR to .s file "), llvm::cl::cat (Category));
+
 inline llvm::cl::opt<bool> DumpSymOpt (
     "dump-sym",
     llvm::cl::desc ("Dumps symbol table even module to .veomodtxt file"),

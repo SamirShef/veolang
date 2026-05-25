@@ -3,6 +3,7 @@
 #include <driver/cli_options.h>
 #include <filesystem>
 #include <llvm/IR/Module.h>
+#include <llvm/Target/TargetMachine.h>
 
 namespace fs = std::filesystem;
 
@@ -17,8 +18,18 @@ void
 InitializeLLVMTargets ();
 
 bool
+EmitFile (
+    llvm::Module         *mod,
+    llvm::TargetMachine  *targetMachine,
+    const std::string    &fileName,
+    llvm::CodeGenFileType fileType);
+
+bool
 EmitObjectFile (
-    llvm::Module *mod, const std::string &fileName, std::string targetTripleStr);
+    llvm::Module      *mod,
+    const std::string &fileName,
+    std::string        targetTripleStr,
+    const fs::path    &projectPath);
 
 bool
 LinkObjectFiles (const std::string &exeFile, const std::vector<std::string> &objFiles);

@@ -36,6 +36,36 @@ InitializeLLVMTargets () {
 }
 
 bool
+EmitFile (
+    llvm::Module         *mod,
+    llvm::TargetMachine  *targetMachine,
+    const std::string    &fileName,
+    llvm::CodeGenFileType fileType) {
+    std::error_code      ec;
+    llvm::raw_fd_ostream dest (fileName, ec, llvm::sys::fs::OF_None);
+
+    if (ec) {
+        llvm::errs () << llvm::raw_fd_ostream::RED << "Could not open file " << fileName
+                      << ": " << ec.message () << '\n'
+                      << llvm::raw_fd_ostream::RESET;
+        return false;
+    }
+
+    llvm::legacy::PassManager pass;
+    if (targetMachine->addPassesToEmitFile (pass, dest, nullptr, fileType)) {
+        llvm::errs () << llvm::raw_fd_ostream::RED
+                      << "TargetMachine can't emit a file of this type\n"
+                      << llvm::raw_fd_ostream::RESET;
+        return false;
+    }
+
+    pass.run (*mod);
+    dest.flush ();
+
+    return true;
+}
+
+bool
 EmitObjectFile (
     llvm::Module *mod, const std::string &fileName, std::string targetTripleStr) {
     if (targetTripleStr.empty ()) {
@@ -66,28 +96,26 @@ EmitObjectFile (
 
     mod->setDataLayout (targetMachine->createDataLayout ());
 
-    std::error_code      ec;
-    llvm::raw_fd_ostream dest (fileName, ec, llvm::sys::fs::OF_None);
-
-    if (ec) {
-        llvm::errs () << llvm::raw_fd_ostream::RED << "Could not open file " << fileName
-                      << ": " << ec.message () << '\n'
-                      << llvm::raw_fd_ostream::RESET;
+    if (!EmitFile (mod, targetMachine, fileName, llvm::CodeGenFileType::ObjectFile)) {
         return false;
     }
+    if (EmitAsmOpt) {
+        std::string asmFileName = fileName;
+        size_t      dotPos      = asmFileName.find_last_of ('.');
+        if (dotPos != std::string::npos) {
+            asmFileName = asmFileName.substr (0, dotPos) + ".s";
+        } else {
+            asmFileName += ".s";
+        }
 
-    llvm::legacy::PassManager pass;
-    auto                      fileType = llvm::CodeGenFileType::ObjectFile;
-
-    if (targetMachine->addPassesToEmitFile (pass, dest, nullptr, fileType)) {
-        llvm::errs () << llvm::raw_fd_ostream::RED
-                      << "TargetMachine can't emit a file of this type\n"
-                      << llvm::raw_fd_ostream::RESET;
-        return false;
+        if (!EmitFile (
+                mod,
+                targetMachine,
+                asmFileName,
+                llvm::CodeGenFileType::AssemblyFile)) {
+            return false;
+        }
     }
-
-    pass.run (*mod);
-    dest.flush ();
 
     return true;
 }
@@ -220,9 +248,9 @@ Compile (
     Optimize (*llvmMod, OptimizationLevelOpt);
 
     if (EmitIROpt) {
-        std::error_code       ec;
-        std::filesystem::path llvmIRPath = objPath;
-        llvm::raw_fd_ostream  os (llvmIRPath.replace_extension (".ll").string (), ec);
+        std::error_code      ec;
+        fs::path             llvmIRPath = objPath;
+        llvm::raw_fd_ostream os (llvmIRPath.replace_extension (".ll").string (), ec);
         if (ec) {
             llvm::errs () << llvm::raw_fd_ostream::RED << ec.message ()
                           << llvm::raw_fd_ostream::RESET;
@@ -232,6 +260,20 @@ Compile (
         llvm::errs ().changeColor (llvm::raw_fd_ostream::WHITE, true)
             << "LLVM IR was dumped to "
             << llvmIRPath.lexically_relative (projectPath).string () << '\n'
+            << llvm::raw_fd_ostream::RESET;
+    }
+    if (EmitAsmOpt) {
+        std::string asmFileName = objPath;
+        size_t      dotPos      = asmFileName.find_last_of ('.');
+        if (dotPos != std::string::npos) {
+            asmFileName = asmFileName.substr (0, dotPos) + ".s";
+        } else {
+            asmFileName += ".s";
+        }
+
+        llvm::errs ().changeColor (llvm::raw_fd_ostream::WHITE, true)
+            << "LLVM IR was dumped to "
+            << fs::path (asmFileName).lexically_relative (projectPath).string () << '\n'
             << llvm::raw_fd_ostream::RESET;
     }
 

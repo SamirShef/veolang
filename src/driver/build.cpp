@@ -53,9 +53,8 @@ BuildDriver::Build () {
     llvm::Triple triple (targetTripleStr);
     auto         exePath = artefactDir / GetOutputName (manif.ProjectName, triple);
     if (LinkObjectFiles (exePath.string (), { objPath.string () })) {
-        llvm::errs () << llvm::raw_fd_ostream::GREEN
-                      << "SUCCESS: " << llvm::raw_fd_ostream::RESET << exePath.string ()
-                      << "\n";
+        llvm::errs ().changeColor (llvm::raw_fd_ostream::GREEN, true)
+            << "SUCCESS: " << llvm::raw_fd_ostream::RESET << exePath.string () << "\n";
     } else {
         exit (1);
     }
