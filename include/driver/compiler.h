@@ -26,13 +26,16 @@ EmitFile (
 
 bool
 EmitObjectFile (
-    llvm::Module      *mod,
-    const std::string &fileName,
-    std::string        targetTripleStr,
-    const fs::path    &projectPath);
+    llvm::Module       *mod,
+    const std::string  &fileName,
+    const llvm::Triple &triple,
+    const fs::path     &projectPath);
 
 bool
-LinkObjectFiles (const std::string &exeFile, const std::vector<std::string> &objFiles);
+LinkObjectFiles (
+    const std::string              &target,
+    const std::string              &exeFile,
+    const std::vector<std::string> &objFiles);
 
 std::string
 GetOutputName (const std::string &inputFile, const llvm::Triple &triple);
@@ -42,9 +45,10 @@ Optimize (llvm::Module &mod, OptLevel level);
 
 CompilationResult
 Compile (
-    const fs::path  &projectPath,
-    const fs::path  &filePath,
-    const fs::path  &objPath,
-    symbols::Module *mod);
+    const fs::path     &projectPath,
+    const fs::path     &filePath,
+    const fs::path     &objPath,
+    symbols::Module    *mod,
+    const llvm::Triple &triple);
 
 }

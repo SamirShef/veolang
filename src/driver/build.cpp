@@ -1,3 +1,5 @@
+#include "driver/cli_options.h"
+
 #include <basic/symbols/module.h>
 #include <driver/build.h>
 #include <driver/compiler.h>
@@ -45,14 +47,17 @@ BuildDriver::Build () {
                         / (manif.EntryPointPath.stem ().string () + ".o");
     objPath           = objPath.lexically_normal ();
     fs::create_directories (objPath.parent_path ());
-    auto compileRes = Compile (_projectRoot, manif.EntryPointPath, objPath, mod);
+
+    std::string  targetTripleStr = TargetTripleOpt.empty ()
+                                       ? llvm::sys::getDefaultTargetTriple ()
+                                       : TargetTripleOpt.getValue ();
+    llvm::Triple triple (targetTripleStr);
+    auto compileRes = Compile (_projectRoot, manif.EntryPointPath, objPath, mod, triple);
     if (!compileRes.Success) {
         exit (1);
     }
-    std::string  targetTripleStr = llvm::sys::getDefaultTargetTriple ();
-    llvm::Triple triple (targetTripleStr);
-    auto         exePath = artefactDir / GetOutputName (manif.ProjectName, triple);
-    if (LinkObjectFiles (exePath.string (), { objPath.string () })) {
+    auto exePath = artefactDir / GetOutputName (manif.ProjectName, triple);
+    if (LinkObjectFiles (targetTripleStr, exePath.string (), { objPath.string () })) {
         llvm::errs ().changeColor (llvm::raw_fd_ostream::GREEN, true)
             << "SUCCESS: " << llvm::raw_fd_ostream::RESET << exePath.string () << "\n";
     } else {

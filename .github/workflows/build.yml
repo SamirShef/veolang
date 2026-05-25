@@ -40,6 +40,9 @@ jobs:
           cmake --build build --config ${{ matrix.build_type }} --parallel
           cd build/
           ctest --output-on-failure
+          ./veoc.exe new test
+          cd test/
+          veoc build
 
       - name: Build (Windows)
         if: matrix.os == 'windows-latest'
@@ -50,6 +53,9 @@ jobs:
           cmake --build build --config ${{ matrix.build_type }} --parallel
           cd build/
           ctest --output-on-failure
+          ./veoc new test
+          cd test/
+          veoc build
 
       - name: Upload
         uses: actions/upload-artifact@v4
