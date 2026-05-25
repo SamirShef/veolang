@@ -1,5 +1,4 @@
-#include "ast/context.h"
-
+#include <ast/context.h>
 #include <ast/dumper.h>
 #include <basic/types/pool.h>
 #include <codegen/codegen.h>
@@ -10,6 +9,8 @@
 #include <lexer/lexer.h>
 #include <llvm/IR/LegacyPassManager.h>
 #include <llvm/MC/TargetRegistry.h>
+#include <llvm/Passes/OptimizationLevel.h>
+#include <llvm/Passes/PassBuilder.h>
 #include <llvm/Support/CodeGen.h>
 #include <llvm/Support/FileSystem.h>
 #include <llvm/Support/Path.h>
@@ -112,6 +113,44 @@ GetOutputName (const std::string &inputFile, const llvm::Triple &triple) {
     return outputExe;
 }
 
+void
+Optimize (llvm::Module &mod, OptLevel level) {
+    if (level == OptLevel::O0) {
+        return;
+    }
+
+    llvm::LoopAnalysisManager     lam;
+    llvm::FunctionAnalysisManager fam;
+    llvm::CGSCCAnalysisManager    cgam;
+    llvm::ModuleAnalysisManager   mam;
+
+    llvm::PassBuilder pb;
+
+    pb.registerModuleAnalyses (mam);
+    pb.registerCGSCCAnalyses (cgam);
+    pb.registerFunctionAnalyses (fam);
+    pb.registerLoopAnalyses (lam);
+    pb.crossRegisterProxies (lam, fam, cgam, mam);
+
+    llvm::ModulePassManager mpm;
+    llvm::OptimizationLevel llvmLevel;
+    switch (level) {
+#define variant(kind)                                                                    \
+    case OptLevel::kind: llvmLevel = llvm::OptimizationLevel::kind; break;
+        variant (O0);
+        variant (O1);
+        variant (O2);
+        variant (O3);
+        variant (Os);
+        variant (Oz);
+#undef variant
+    }
+
+    mpm = pb.buildPerModuleDefaultPipeline (llvmLevel);
+
+    mpm.run (mod, mam);
+}
+
 CompilationResult
 Compile (
     const fs::path  &projectPath,
@@ -177,6 +216,8 @@ Compile (
     InitializeLLVMTargets ();
     std::string  tripleStr = llvm::sys::getDefaultTargetTriple ();
     llvm::Triple triple (tripleStr);
+
+    Optimize (*llvmMod, OptimizationLevelOpt);
 
     if (EmitIROpt) {
         std::error_code       ec;
