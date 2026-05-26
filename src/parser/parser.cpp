@@ -6,6 +6,7 @@
 #include <ast/exprs/lit_expr.h>
 #include <ast/exprs/method_call.h>
 #include <ast/exprs/struct_instance.h>
+#include <ast/exprs/ternary_expr.h>
 #include <ast/exprs/un_expr.h>
 #include <ast/exprs/var_expr.h>
 #include <ast/stmts/break_continue.h>
@@ -480,6 +481,14 @@ Parser::parseExpr (int minPrec, bool allowStruct) {
 
     int prec = 0;
     while (!isAtEnd () && minPrec < (prec = GetTokPrecedence (_curTok.Kind))) {
+        if (match (TokenKind::Question)) { // ternary operator
+            lhs = parseTernary (lhs);
+            if (lhs == nullptr) {
+                return nullptr;
+            }
+            continue;
+        }
+
         const Token op = advance ();
 
         Expr *rhs = parseExpr (prec, allowStruct);
@@ -628,6 +637,27 @@ Parser::parseChain (Expr *base, bool allowStruct) {
         }
     }
     return base;
+}
+
+Expr *
+Parser::parseTernary (Expr *cond) {
+    Expr *trueVal = parseExpr ();
+    if (trueVal == nullptr) {
+        return nullptr;
+    }
+    if (!expectTok (TokenKind::Colon, ":")) {
+        return nullptr;
+    }
+    Expr *falseVal = parseExpr ();
+    if (falseVal == nullptr) {
+        return nullptr;
+    }
+    return createNode<TernaryExpr> (
+        cond,
+        trueVal,
+        falseVal,
+        cond->Start (),
+        falseVal->End ());
 }
 
 basic::Type *

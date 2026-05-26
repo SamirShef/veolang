@@ -183,6 +183,7 @@ CodeGen::generateExpr (Node *node) {
         variant (FieldExpr, generateFieldExpr, FieldExpr);
         variant (StructInstance, generateStructInstance, StructInstance);
         variant (LoadGlobalVarByName, generateLoadGlobalVarByName, LoadGlobalVarByName);
+        variant (TernaryExpr, generateTernaryExpr, TernaryExpr);
     default: return nullptr;
     }
 #undef variant
@@ -345,13 +346,13 @@ CodeGen::generateStore (Store *store) {
 }
 
 llvm::Value *
-CodeGen::generateFieldExpr (hir::FieldExpr *fe) {
+CodeGen::generateFieldExpr (FieldExpr *fe) {
     auto *base = generateExpr (fe->Base ());
     return _builder.CreateExtractValue (base, fe->Index ());
 }
 
 llvm::Value *
-CodeGen::generateStructInstance (hir::StructInstance *si) {
+CodeGen::generateStructInstance (StructInstance *si) {
     const auto       *sym  = si->BaseSymbol ();
     llvm::StructType *type = llvm::StructType::getTypeByName (
         _ctx,
@@ -386,9 +387,19 @@ CodeGen::generateStructInstance (hir::StructInstance *si) {
 }
 
 llvm::Value *
-CodeGen::generateLoadGlobalVarByName (hir::LoadGlobalVarByName *load) {
+CodeGen::generateLoadGlobalVarByName (LoadGlobalVarByName *load) {
     auto *lvalue = generateLValue (load);
     return _builder.CreateLoad (getType (load->Type ()), lvalue);
+}
+
+llvm::Value *
+CodeGen::generateTernaryExpr (TernaryExpr *te) {
+    auto *trueBB  = _basicBlocksMap.at (te->TrueBB ());
+    auto *falseBB = _basicBlocksMap.at (te->FalseBB ());
+    auto *phi     = _builder.CreatePHI (getType (te->Type ()), 2);
+    phi->addIncoming (generateExpr (te->TrueVal ()), trueBB);
+    phi->addIncoming (generateExpr (te->FalseVal ()), falseBB);
+    return phi;
 }
 
 llvm::Value *

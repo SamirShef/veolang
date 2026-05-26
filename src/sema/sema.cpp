@@ -560,6 +560,7 @@ Sema::analyzeExpr (Expr *expr, Type *expectedType) {
         variant (FieldExpr, analyzeFieldExpr, FieldExpr);
         variant (StructInstance, analyzeStructInstance, StructInstance);
         variant (MethodCall, analyzeMethodCall, MethodCall);
+        variant (TernaryExpr, analyzeTernaryExpr, TernaryExpr);
     default: return {};
     }
 #undef variant
@@ -1296,6 +1297,54 @@ Sema::analyzeMethodCall (MethodCall *mc, Type *expectedType) {
     auto val = Value (ValueKind::Unknown, method->Func->RetType);
     auto res = SemanticResult (val, node);
     res      = implicitlyCast (res, &expectedType, mc->Start (), mc->End ());
+    return res;
+}
+
+Sema::SemanticResult
+Sema::analyzeTernaryExpr (TernaryExpr *te, Type *expectedType) {
+    auto *trueBB  = _builder.CreateBasicBlock (_builder.Parent (), "cond.true");
+    auto *falseBB = _builder.CreateBasicBlock (_builder.Parent (), "cond.false");
+    auto *mergeBB = _builder.CreateBasicBlock (_builder.Parent (), "cond.merge");
+    auto  cond    = analyzeExpr (te->Cond (), _typePool.GetOrCreate<BoolType> ());
+    if (!cond.Val.has_value ()) {
+        return {};
+    }
+    _builder.CreateBr (
+        cond.Node,
+        trueBB,
+        falseBB,
+        te->Cond ()->Start (),
+        te->Cond ()->End ());
+
+    _builder.SetInsertionPoint (trueBB);
+    auto trueVal = analyzeExpr (te->TrueVal (), expectedType);
+    if (!trueVal.Val.has_value ()) {
+        return {};
+    }
+    if (expectedType == nullptr) {
+        expectedType = trueVal.Val->Type;
+    }
+    _builder.CreateBr (mergeBB, te->Start (), te->End ());
+
+    _builder.SetInsertionPoint (falseBB);
+    auto falseVal = analyzeExpr (te->FalseVal (), expectedType);
+    if (!falseVal.Val.has_value ()) {
+        return {};
+    }
+    _builder.CreateBr (mergeBB, te->Start (), te->End ());
+
+    _builder.SetInsertionPoint (mergeBB);
+    auto  val  = Value (ValueKind::Unknown, expectedType);
+    auto *node = _builder.CreateTernary (
+        expectedType,
+        trueVal.Node,
+        trueBB,
+        falseVal.Node,
+        falseBB,
+        te->Start (),
+        te->End ());
+    auto res = SemanticResult (val, node);
+    res      = implicitlyCast (res, &expectedType, te->Start (), te->End ());
     return res;
 }
 

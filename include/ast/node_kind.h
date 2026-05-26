@@ -26,6 +26,7 @@ enum class NodeKind : uint8_t {
     AsgnExpr,
     FieldExpr,
     StructInstance,
+    TernaryExpr,
     ExprEnd
 };
 

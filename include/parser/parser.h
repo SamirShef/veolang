@@ -146,6 +146,9 @@ private:
     ast::Expr *
     parseChain (ast::Expr *base, bool allowStruct = true);
 
+    ast::Expr *
+    parseTernary (ast::Expr *cond);
+
     basic::Type *
     consumeType ();
 

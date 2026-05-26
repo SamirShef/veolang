@@ -335,4 +335,31 @@ Dumper::dumpMethodCall (MethodCall *mc) {
     --_indentLvl;
 }
 
+void
+Dumper::dumpTernaryExpr (TernaryExpr *te) {
+    indent ();
+    _os << "TernaryExpr:\n";
+    ++_indentLvl;
+
+    indent ();
+    _os << "Cond:\n";
+    ++_indentLvl;
+    dumpExpr (te->Cond ());
+    --_indentLvl;
+
+    indent ();
+    _os << "TrueVal:\n";
+    ++_indentLvl;
+    dumpExpr (te->TrueVal ());
+    --_indentLvl;
+
+    indent ();
+    _os << "FalseVal:\n";
+    ++_indentLvl;
+    dumpExpr (te->FalseVal ());
+    --_indentLvl;
+
+    --_indentLvl;
+}
+
 }
