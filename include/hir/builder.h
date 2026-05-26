@@ -15,6 +15,7 @@
 #include <hir/store.h>
 #include <hir/struct_def.h>
 #include <hir/struct_instance.h>
+#include <hir/ternary_expr.h>
 #include <hir/un_expr.h>
 
 namespace veo::hir {
@@ -194,6 +195,25 @@ public:
         llvm::SMLoc         start,
         llvm::SMLoc         end) {
         return _ctx.CreateNode<FuncCall> (func, std::move (args), start, end, true);
+    }
+
+    TernaryExpr *
+    CreateTernary (
+        basic::Type *type,
+        Node        *trueVal,
+        BasicBlock  *trueBB,
+        Node        *falseVal,
+        BasicBlock  *falseBB,
+        llvm::SMLoc  start,
+        llvm::SMLoc  end) {
+        return _ctx.CreateNode<TernaryExpr> (
+            type,
+            trueVal,
+            trueBB,
+            falseVal,
+            falseBB,
+            start,
+            end);
     }
 
     Branch *

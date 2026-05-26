@@ -1,6 +1,4 @@
 #pragma once
-#include "hir/load_glob_var_by_name.h"
-
 #include <hir/bin_expr.h>
 #include <hir/branch.h>
 #include <hir/expr_stmt.h>
@@ -8,11 +6,13 @@
 #include <hir/func.h>
 #include <hir/func_call.h>
 #include <hir/lit_expr.h>
+#include <hir/load_glob_var_by_name.h>
 #include <hir/load_var.h>
 #include <hir/ret.h>
 #include <hir/store.h>
 #include <hir/struct_def.h>
 #include <hir/struct_instance.h>
+#include <hir/ternary_expr.h>
 #include <hir/un_expr.h>
 #include <hir/var_def.h>
 #include <llvm/IR/Function.h>
@@ -139,6 +139,9 @@ private:
 
     llvm::Value *
     generateLoadGlobalVarByName (hir::LoadGlobalVarByName *load);
+
+    llvm::Value *
+    generateTernaryExpr (hir::TernaryExpr *te);
 
     llvm::Value *
     generateLValue (hir::Node *node);

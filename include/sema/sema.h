@@ -6,6 +6,7 @@
 #include <ast/exprs/lit_expr.h>
 #include <ast/exprs/method_call.h>
 #include <ast/exprs/struct_instance.h>
+#include <ast/exprs/ternary_expr.h>
 #include <ast/exprs/un_expr.h>
 #include <ast/exprs/var_expr.h>
 #include <ast/stmts/break_continue.h>
@@ -178,6 +179,9 @@ private:
 
     SemanticResult
     analyzeMethodCall (ast::MethodCall *mc, Type *expectedType);
+
+    SemanticResult
+    analyzeTernaryExpr (ast::TernaryExpr *te, Type *expectedType);
 
     Type *
     resolveType (Type **type);

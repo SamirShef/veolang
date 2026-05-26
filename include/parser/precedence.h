@@ -6,6 +6,7 @@ namespace veo {
 
 enum class Precedence : uint8_t {
     Unary,
+    Ternary,
     Logical,
     Comparison,
     Equality,
@@ -21,6 +22,7 @@ GetTokPrecedence (TokenKind kind) {
 #define tok(kind) case TokenKind::kind:
 #define prec(kind) return (int) Precedence::kind;
     switch (kind) {
+        tok (Question) prec (Ternary);
         tok (LogAnd) tok (LogOr) prec (Logical);
         tok (Gt) tok (GtEq) tok (Lt) tok (LtEq) prec (Comparison);
         tok (EqEq) tok (BangEq) prec (Equality);

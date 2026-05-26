@@ -479,15 +479,16 @@ Parser::parseExpr (int minPrec, bool allowStruct) {
         return nullptr;
     }
 
-    if (match (TokenKind::Question)) { // ternary operator
-        lhs = parseTernary (lhs);
-    }
-    if (lhs == nullptr) {
-        return nullptr;
-    }
-
     int prec = 0;
     while (!isAtEnd () && minPrec < (prec = GetTokPrecedence (_curTok.Kind))) {
+        if (match (TokenKind::Question)) { // ternary operator
+            lhs = parseTernary (lhs);
+            if (lhs == nullptr) {
+                return nullptr;
+            }
+            continue;
+        }
+
         const Token op = advance ();
 
         Expr *rhs = parseExpr (prec, allowStruct);
