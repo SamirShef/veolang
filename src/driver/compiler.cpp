@@ -67,7 +67,10 @@ EmitFile (
 
 bool
 EmitObjectFile (
-    llvm::Module *mod, const std::string &fileName, const llvm::Triple &triple) {
+    llvm::Module       *mod,
+    const std::string  &fileName,
+    const llvm::Triple &triple,
+    const fs::path     &projectPath) {
     mod->setTargetTriple (triple);
 
     std::string         error;
@@ -90,8 +93,21 @@ EmitObjectFile (
 
     mod->setDataLayout (targetMachine->createDataLayout ());
 
-    if (!EmitFile (mod, targetMachine, fileName, llvm::CodeGenFileType::ObjectFile)) {
-        return false;
+    if (EmitIROpt) {
+        std::error_code ec;
+        std::string     llvmFileName = fileName;
+        size_t          dotPos       = llvmFileName.find_last_of ('.');
+        if (dotPos != std::string::npos) {
+            llvmFileName = llvmFileName.substr (0, dotPos) + ".ll";
+        } else {
+            llvmFileName += ".ll";
+        }
+        llvm::raw_fd_ostream os (llvmFileName, ec);
+        mod->print (os, nullptr);
+        llvm::errs ().changeColor (llvm::raw_fd_ostream::WHITE, true)
+            << "LLVM IR was dumped to "
+            << fs::path (llvmFileName).lexically_relative (projectPath).string () << '\n'
+            << llvm::raw_fd_ostream::RESET;
     }
     if (EmitAsmOpt) {
         std::string asmFileName = fileName;
@@ -109,6 +125,13 @@ EmitObjectFile (
                 llvm::CodeGenFileType::AssemblyFile)) {
             return false;
         }
+        llvm::errs ().changeColor (llvm::raw_fd_ostream::WHITE, true)
+            << "LLVM IR was dumped to "
+            << fs::path (asmFileName).lexically_relative (projectPath).string () << '\n'
+            << llvm::raw_fd_ostream::RESET;
+    }
+    if (!EmitFile (mod, targetMachine, fileName, llvm::CodeGenFileType::ObjectFile)) {
+        return false;
     }
 
     return true;
@@ -246,37 +269,8 @@ Compile (
 
     Optimize (*llvmMod, OptimizationLevelOpt);
 
-    if (!EmitObjectFile (llvmMod.get (), objPath.string (), triple)) {
+    if (!EmitObjectFile (llvmMod.get (), objPath.string (), triple, projectPath)) {
         return { .Success = false, .ObjPath = "" };
-    }
-    if (EmitIROpt) {
-        std::error_code      ec;
-        fs::path             llvmIRPath = objPath;
-        llvm::raw_fd_ostream os (llvmIRPath.replace_extension (".ll").string (), ec);
-        if (ec) {
-            llvm::errs () << llvm::raw_fd_ostream::RED << ec.message ()
-                          << llvm::raw_fd_ostream::RESET;
-            exit (1);
-        }
-        llvmMod->print (os, nullptr);
-        llvm::errs ().changeColor (llvm::raw_fd_ostream::WHITE, true)
-            << "LLVM IR was dumped to "
-            << llvmIRPath.lexically_relative (projectPath).string () << '\n'
-            << llvm::raw_fd_ostream::RESET;
-    }
-    if (EmitAsmOpt) {
-        std::string asmFileName = objPath.string ();
-        size_t      dotPos      = asmFileName.find_last_of ('.');
-        if (dotPos != std::string::npos) {
-            asmFileName = asmFileName.substr (0, dotPos) + ".s";
-        } else {
-            asmFileName += ".s";
-        }
-
-        llvm::errs ().changeColor (llvm::raw_fd_ostream::WHITE, true)
-            << "LLVM IR was dumped to "
-            << fs::path (asmFileName).lexically_relative (projectPath).string () << '\n'
-            << llvm::raw_fd_ostream::RESET;
     }
 
     return { .Success = !parseRes.HasErrors, .ObjPath = "" };

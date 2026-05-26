@@ -6,6 +6,7 @@
 #include <ast/exprs/lit_expr.h>
 #include <ast/exprs/method_call.h>
 #include <ast/exprs/struct_instance.h>
+#include <ast/exprs/ternary_expr.h>
 #include <ast/exprs/un_expr.h>
 #include <ast/exprs/var_expr.h>
 #include <ast/stmts/break_continue.h>
@@ -98,6 +99,7 @@ private:
             variant (FieldExpr, dumpFieldExpr, FieldExpr);
             variant (StructInstance, dumpStructInstance, StructInstance);
             variant (MethodCall, dumpMethodCall, MethodCall);
+            variant (TernaryExpr, dumpTernaryExpr, TernaryExpr);
         default: {
         }
         }
@@ -130,6 +132,9 @@ private:
 
     void
     dumpMethodCall (MethodCall *mc);
+
+    void
+    dumpTernaryExpr (TernaryExpr *te);
 
     void
     indent () {
