@@ -70,8 +70,9 @@ DiagCodeToIntegerCode (DiagCode code) {
 void
 DiagnosticEngine::renderDiag (DiagnosticBuilder &diag) {
     std::ranges::sort (diag.Spans (), [&] (const Annotation &a, const Annotation &b) {
-        return _mgr->getLineAndColumn (a.Span.Start).first
-               < _mgr->getLineAndColumn (b.Span.Start).first;
+        unsigned buffer = _mgr->FindBufferContainingLoc (a.Span.Start);
+        return _mgr->getLineAndColumn (a.Span.Start, buffer).first
+               < _mgr->getLineAndColumn (b.Span.Start, buffer).first;
     });
     printDiagnosticHeader (diag);
     printDiagnosticBody (diag);
