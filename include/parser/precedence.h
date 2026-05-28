@@ -5,16 +5,20 @@
 namespace veo {
 
 enum class Precedence : uint8_t {
-    Unary,
+    Lowest,
+    Assignment,
     Ternary,
-    Logical,
-    Comparison,
-    Equality,
-    BitwiseAnd,
-    BitwiseXor,
+    LogicalOr,
+    LogicalAnd,
     BiwiseOr,
+    BitwiseXor,
+    BitwiseAnd,
+    Equality,
+    Comparison,
     Sum,
     Product,
+    Unary,
+    Member,
 };
 
 inline int
@@ -22,8 +26,12 @@ GetTokPrecedence (TokenKind kind) {
 #define tok(kind) case TokenKind::kind:
 #define prec(kind) return (int) Precedence::kind;
     switch (kind) {
+        tok (Dot) prec (Member);
+        tok (Eq) tok (PlusEq) tok (MinusEq) tok (StarEq) tok (SlashEq) tok (PercentEq)
+            prec (Assignment);
         tok (Question) prec (Ternary);
-        tok (LogAnd) tok (LogOr) prec (Logical);
+        tok (LogAnd) prec (LogicalAnd);
+        tok (LogOr) prec (LogicalOr);
         tok (Gt) tok (GtEq) tok (Lt) tok (LtEq) prec (Comparison);
         tok (EqEq) tok (BangEq) prec (Equality);
         tok (BitAnd) prec (BitwiseAnd);
@@ -31,7 +39,7 @@ GetTokPrecedence (TokenKind kind) {
         tok (BitOr) prec (BiwiseOr);
         tok (Plus) tok (Minus) prec (Sum);
         tok (Star) tok (Slash) tok (Percent) prec (Product);
-    default: prec (Unary);
+    default: prec (Lowest);
     }
 #undef prec
 #undef tok

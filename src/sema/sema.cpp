@@ -929,6 +929,8 @@ Sema::analyzeAsgnExpr (AsgnExpr *ae, Type *expectedType) {
     if (ae->Ptr () == nullptr) {
         return {};
     }
+    // TODO: add check for pointer dereference
+    // For example: *p = 10;
     if (ae->Ptr ()->Kind () != NodeKind::VarExpr
         && ae->Ptr ()->Kind () != NodeKind::FieldExpr) {
         _diag
