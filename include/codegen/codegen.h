@@ -1,6 +1,7 @@
 #pragma once
 #include <hir/bin_expr.h>
 #include <hir/branch.h>
+#include <hir/cast.h>
 #include <hir/expr_stmt.h>
 #include <hir/field_expr.h>
 #include <hir/func.h>
@@ -142,6 +143,9 @@ private:
 
     llvm::Value *
     generateTernaryExpr (hir::TernaryExpr *te);
+
+    llvm::Value *
+    generateCast (hir::Cast *cast);
 
     llvm::Value *
     generateLValue (hir::Node *node);

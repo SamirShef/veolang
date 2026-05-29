@@ -215,7 +215,7 @@ Sema::analyzeRet (Return *ret) {
         if (_funcRetTypes.top () != nullptr) {
             _diag
                 .Report (
-                    DiagCode::ECannotImplCast,
+                    DiagCode::ECannotCast,
                     "cannot implicitly cast 'noth' to '"
                         + _funcRetTypes.top ()->ToString () + "'",
                     Severity::Error)
@@ -231,7 +231,7 @@ Sema::analyzeRet (Return *ret) {
         if (_funcRetTypes.top () == nullptr) {
             _diag
                 .Report (
-                    DiagCode::ECannotImplCast,
+                    DiagCode::ECannotCast,
                     "cannot implicitly cast '" + res.Val->Type->ToString ()
                         + "' to 'noth'",
                     Severity::Error)
@@ -561,6 +561,7 @@ Sema::analyzeExpr (Expr *expr, Type *expectedType) {
         variant (StructInstance, analyzeStructInstance, StructInstance);
         variant (MethodCall, analyzeMethodCall, MethodCall);
         variant (TernaryExpr, analyzeTernaryExpr, TernaryExpr);
+        variant (CastExpr, analyzeCastExpr, CastExpr);
     default: return {};
     }
 #undef variant
@@ -636,7 +637,7 @@ Sema::analyzeLiteralExpr (LiteralExpr *le, Type *expectedType) {
         if (!expectedType->IsNumber ()) {
             _diag
                 .Report (
-                    DiagCode::ECannotImplCast,
+                    DiagCode::ECannotCast,
                     "cannot implicitly cast 'i32' to '" + expectedType->ToString () + "'",
                     Severity::Error)
                 .AddSpan (le->Start (), le->End ());
@@ -1388,6 +1389,104 @@ Sema::analyzeTernaryExpr (TernaryExpr *te, Type *expectedType) {
     return res;
 }
 
+Sema::SemanticResult
+Sema::analyzeCastExpr (ast::CastExpr *ce, Type *expectedType) {
+    auto  val  = analyzeExpr (ce->GetExpr (), nullptr);
+    auto *type = ce->Type ();
+    if (!val.Val.has_value () || type == nullptr) {
+        return val;
+    }
+    resolveType (&val.Val->Type);
+    resolveType (&type);
+
+    Type *src = val.Val->Type;
+    Type *dst = type;
+
+    if (*src == *dst) {
+        return val;
+    }
+
+    auto kind    = hir::CastKind::Invalid;
+    bool canCast = false;
+    if (src->IsInteger () && dst->IsInteger ()) {
+        canCast = true;
+        kind    = castInts (src->AsInteger (), dst->AsInteger ());
+    } else if (src->IsFloating () && dst->IsFloating ()) {
+        canCast = true;
+        kind    = castFloats (src->AsFloating (), dst->AsFloating ());
+    } else if (src->IsInteger () && dst->IsFloating ()) {
+        canCast = true;
+        kind    = src->AsInteger ()->IsUnsigned () ? hir::CastKind::UIToFP
+                                                   : hir::CastKind::SIToFP;
+    } else if (src->IsFloating () && dst->IsInteger ()) {
+        canCast = true;
+        kind    = dst->AsInteger ()->IsUnsigned () ? hir::CastKind::FPToUI
+                                                   : hir::CastKind::FPToSI;
+    }
+
+    if (!canCast) {
+        _diag
+            .Report (
+                DiagCode::ECannotCast,
+                "cannot cast '" + src->ToString () + "' to '" + dst->ToString () + "'",
+                Severity::Error)
+            .AddSpan (ce->Start (), ce->End ());
+
+        return {};
+    }
+    return cast (kind, dst, val, ce->Start (), ce->End ());
+}
+
+hir::CastKind
+Sema::castInts (const IntegerType *src, const IntegerType *dst) {
+    if (src->BitWidth () < dst->BitWidth ()) {
+        return src->IsUnsigned () ? hir::CastKind::ZExt : hir::CastKind::SExt;
+    }
+    if (src->BitWidth () > dst->BitWidth ()) {
+        return hir::CastKind::Trunc;
+    }
+    return hir::CastKind::BitCast;
+}
+
+hir::CastKind
+Sema::castFloats (const FloatingType *src, const FloatingType *dst) {
+    if (src->IsFloat () && dst->IsDouble ()) {
+        return hir::CastKind::FPExt;
+    }
+    return hir::CastKind::FPTrunc;
+}
+
+Sema::SemanticResult
+Sema::cast (
+    hir::CastKind  kind,
+    Type          *dst,
+    SemanticResult val,
+    llvm::SMLoc    start,
+    llvm::SMLoc    end) {
+    auto *castNode = _builder.CreateCast (kind, dst, val.Node, start, end);
+
+    Value newValue = val.Val.value ();
+    if (newValue.Kind == ValueKind::Const) {
+        ValueData newData;
+        std::visit (
+            [&] (auto val) {
+                if (dst->IsInteger ()) {
+                    newData = ValueData (static_cast<int64_t> (val));
+                } else if (dst->IsFloating ()) {
+                    newData = ValueData (static_cast<double> (val));
+                }
+            },
+            val.Val->Data);
+
+        newValue = Value (ValueKind::Const, newData, dst);
+    } else {
+        newValue.Type = dst;
+    }
+
+    auto res = SemanticResult (newValue, castNode);
+    return implicitlyCast (res, &dst, start, end);
+}
+
 Type *
 Sema::resolveType (Type **type) {
     if (*type == nullptr) {
@@ -1699,6 +1798,27 @@ Sema::foldUnary (
         rhs.Data);
 }
 
+bool
+Sema::canImplicitlyCast (Sema::SemanticResult val, Type **expectedType) {
+    if (!val.Val.has_value () || *expectedType == nullptr) {
+        return false;
+    }
+    resolveType (&val.Val->Type);
+    resolveType (expectedType);
+
+    Type *src = val.Val->Type;
+    Type *dst = *expectedType;
+
+    if (*src == *dst) {
+        return true;
+    }
+    if (src->IsInteger () && dst->IsInteger () || src->IsFloating () && dst->IsFloating ()
+        || src->IsInteger () && dst->IsFloating ()) {
+        return true;
+    }
+    return false;
+}
+
 Sema::SemanticResult
 Sema::implicitlyCast (
     SemanticResult val, Type **expectedType, llvm::SMLoc start, llvm::SMLoc end) {
@@ -1714,16 +1834,31 @@ Sema::implicitlyCast (
     if (*src == *dst) {
         return val;
     }
+    if (!canImplicitlyCast (val, expectedType)) {
+        _diag
+            .Report (
+                DiagCode::ECannotCast,
+                "cannot implicitly cast '" + src->ToString () + "' to '"
+                    + dst->ToString () + "'",
+                Severity::Error)
+            .AddSpan (start, end);
 
-    _diag
-        .Report (
-            DiagCode::ECannotImplCast,
-            "cannot implicitly cast '" + src->ToString () + "' to '" + dst->ToString ()
-                + "'",
-            Severity::Error)
-        .AddSpan (start, end);
+        return {};
+    }
 
-    return {};
+    auto kind = hir::CastKind::Invalid;
+    if (src->IsInteger () && dst->IsInteger ()) {
+        kind = castInts (src->AsInteger (), dst->AsInteger ());
+    } else if (src->IsFloating () && dst->IsFloating ()) {
+        kind = castFloats (src->AsFloating (), dst->AsFloating ());
+    } else if (src->IsInteger () && dst->IsFloating ()) {
+        kind = src->AsInteger ()->IsUnsigned () ? hir::CastKind::UIToFP
+                                                : hir::CastKind::SIToFP;
+    } else if (src->IsFloating () && dst->IsInteger ()) {
+        kind = dst->AsInteger ()->IsUnsigned () ? hir::CastKind::FPToUI
+                                                : hir::CastKind::FPToSI;
+    }
+    return cast (kind, dst, val, start, end);
 }
 
 bool
