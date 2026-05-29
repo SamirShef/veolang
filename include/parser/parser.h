@@ -1,6 +1,5 @@
 #pragma once
-#include "ast/context.h"
-
+#include <ast/context.h>
 #include <ast/expr.h>
 #include <ast/stmts/func_def.h>
 #include <ast/stmts/struct_def.h>
@@ -138,7 +137,7 @@ private:
     parseFieldForInstance ();
 
     ast::Expr *
-    parseExpr (int minPrec = (int) Precedence::Unary, bool allowStruct = true);
+    parseExpr (int minPrec = (int) Precedence::Lowest, bool allowStruct = true);
 
     ast::Expr *
     parsePrimaryExpr (bool allowStruct = true);

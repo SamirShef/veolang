@@ -5,7 +5,7 @@
 
 namespace veo::ast {
 
-enum class UnOp : uint8_t { Minus, Not, Invalid };
+enum class UnOp : uint8_t { Minus, Not, Inverse, Invalid };
 
 inline UnOp
 TokToUnOp (TokenKind kind) {
@@ -15,6 +15,7 @@ TokToUnOp (TokenKind kind) {
     switch (kind) {
         variant (Minus, Minus);
         variant (Bang, Not);
+        variant (Tilde, Inverse);
     default: return un (Invalid);
     }
 #undef variant
@@ -28,6 +29,7 @@ UnOpToString (UnOp op) {
     switch (op) {
         variant (Minus, "-");
         variant (Not, "!");
+        variant (Inverse, "~");
         variant (Invalid, "<invalid>");
     }
 #undef variant

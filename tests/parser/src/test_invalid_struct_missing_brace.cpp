@@ -24,8 +24,8 @@ test_func (Parser, StructMissingBrace) {
         diagnostic::Severity::Error);
     assert_diag (
         context.Diag.Builders ()[2],
-        diagnostic::DiagCode::EExpectedStmt,
-        "expected statement, found '}'",
+        diagnostic::DiagCode::EExpectedExpr,
+        "expected expression, found '}'",
         diagnostic::Severity::Error);
     return true;
 }

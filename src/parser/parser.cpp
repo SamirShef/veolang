@@ -64,7 +64,7 @@ Parser::parseStmt (bool expectSemi) {
     case TokenKind::Impl: {
         return parseImplStmt ();
     }
-    case TokenKind::Id: {
+    default: {
         Expr *expr = parseExpr ();
         if (expr == nullptr) {
             return nullptr;
@@ -76,18 +76,7 @@ Parser::parseStmt (bool expectSemi) {
         stmt->End () = _curTok.End;
         return stmt;
     }
-    default: {
     }
-    }
-    _diag
-        .Report (
-            DiagCode::EExpectedStmt,
-            "expected statement, found '" + _curTok.Val + "'",
-            Severity::Error)
-        .AddSpan (_curTok.Start, _curTok.End, "expected statement here");
-    advance ();
-    synchronize ();
-    return nullptr;
 }
 
 ast::Stmt *
@@ -201,7 +190,7 @@ Parser::parseRet () {
 Stmt *
 Parser::parseIfElse () {
     const Token         firstTok = advance ();
-    Expr               *cond     = parseExpr ((int) Precedence::Unary, false);
+    Expr               *cond     = parseExpr ((int) Precedence::Lowest, false);
     std::vector<Stmt *> thenBranch;
     if (!parseBlock (thenBranch)) {
         return nullptr;
@@ -488,6 +477,22 @@ Parser::parseExpr (int minPrec, bool allowStruct) {
             }
             continue;
         }
+        if (check (TokenKind::Dot)) {
+            lhs = parseChain (lhs, allowStruct);
+            if (lhs == nullptr) {
+                return nullptr;
+            }
+            continue;
+        }
+        if (isAsgnOp (_curTok.Kind)) {
+            AsgnOp op   = TokToAsgnOp (advance ().Kind);
+            Expr  *init = parseExpr (prec - 1, allowStruct);
+            if (init == nullptr) {
+                return nullptr;
+            }
+            lhs = createNode<AsgnExpr> (op, lhs, init, lhs->Start (), init->End ());
+            continue;
+        }
 
         const Token op = advance ();
 
@@ -540,7 +545,8 @@ Parser::parsePrimaryExpr (bool allowStruct) {
         return expr;
     }
     case TokenKind::Minus:
-    case TokenKind::Bang: {
+    case TokenKind::Bang:
+    case TokenKind::Tilde: {
         return createNode<UnaryExpr> (
             TokToUnOp (tok.Kind),
             parsePrimaryExpr (allowStruct),
@@ -566,21 +572,7 @@ Parser::parsePrimaryExpr (bool allowStruct) {
                 _lastTok.End);
         }
         // VarExpr
-        Expr *expr = createNode<VarExpr> (basic::NameObj (tok), tok.Start, tok.End);
-
-        if (check (TokenKind::Dot)) {
-            expr = parseChain (expr, allowStruct);
-        }
-
-        if (isAsgnOp (_curTok.Kind)) {
-            AsgnOp op   = TokToAsgnOp (advance ().Kind);
-            Expr  *init = parseExpr ();
-            if (init == nullptr) {
-                return nullptr;
-            }
-            return createNode<AsgnExpr> (op, expr, init, expr->Start (), init->End ());
-        }
-        return expr;
+        return createNode<VarExpr> (basic::NameObj (tok), tok.Start, tok.End);
     }
     default: {
     }

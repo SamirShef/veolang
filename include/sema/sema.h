@@ -223,6 +223,9 @@ private:
         llvm::SMLoc  start,
         llvm::SMLoc  end);
 
+    static int64_t
+    foldBinaryBitwise (ValueData lhs, ValueData rhs, Type *commonType, ast::BinOp op);
+
     OptValue
     foldUnary (
         ast::UnOp    op,

@@ -75,9 +75,9 @@ enum class TokenKind : uint8_t {
     Colon,     // `:`
     Dollar,    // `$`
     Eq,        // `=`
-    BitAnd,    // '&`
+    BitAnd,    // `&`
     BitOr,     // `|`
-    LogAnd,    // '&&`
+    LogAnd,    // `&&`
     LogOr,     // `||`
     Plus,      // `+`
     Minus,     // `-`
