@@ -1,6 +1,7 @@
 #pragma once
 #include <ast/exprs/asgn_expr.h>
 #include <ast/exprs/bin_expr.h>
+#include <ast/exprs/cast_expr.h>
 #include <ast/exprs/field_expr.h>
 #include <ast/exprs/func_call.h>
 #include <ast/exprs/lit_expr.h>
@@ -100,6 +101,7 @@ private:
             variant (StructInstance, dumpStructInstance, StructInstance);
             variant (MethodCall, dumpMethodCall, MethodCall);
             variant (TernaryExpr, dumpTernaryExpr, TernaryExpr);
+            variant (CastExpr, dumpCastExpr, CastExpr);
         default: {
         }
         }
@@ -137,6 +139,9 @@ private:
     dumpTernaryExpr (TernaryExpr *te);
 
     void
+    dumpCastExpr (CastExpr *ce);
+
+    void
     indent () {
         _os.indent (_indentLvl * 2);
     }
@@ -148,6 +153,18 @@ private:
             return false;
         }
         return true;
+    }
+
+    void
+    print (const std::string &msg) {
+        indent ();
+        _os << msg;
+    }
+
+    void
+    print (const char *msg) {
+        indent ();
+        _os << msg;
     }
 };
 
