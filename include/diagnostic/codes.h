@@ -13,7 +13,7 @@ enum class DiagCode : uint8_t {
     EIncorrectCharLitLen,
     EIntSuffixForFloat,
     EInvalidNumSuffix,
-    ECannotImplCast,
+    ECannotCast,
     ELitOutOfRange,
     ECannotApplyOp,
     ECannotFindCommonType,

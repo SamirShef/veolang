@@ -1,3 +1,5 @@
+#include "ast/exprs/cast_expr.h"
+
 #include <ast/access_modifier.h>
 #include <ast/exprs/asgn_expr.h>
 #include <ast/exprs/bin_expr.h>
@@ -593,6 +595,11 @@ Expr *
 Parser::parseChain (Expr *base, bool allowStruct) {
     while (true) {
         if (match (TokenKind::Dot)) {
+            if (match (TokenKind::LParen)) { // cast
+                base = parseCastOperator (base);
+                continue;
+            }
+
             const Token    tok = _curTok;
             basic::NameObj name;
             if (!expectName (name)) {
@@ -629,6 +636,18 @@ Parser::parseChain (Expr *base, bool allowStruct) {
         }
     }
     return base;
+}
+
+Expr *
+Parser::parseCastOperator (ast::Expr *base) {
+    basic::Type *type = consumeType ();
+    if (type == nullptr) {
+        return nullptr;
+    }
+    if (!expectTok (TokenKind::RParen, ")")) {
+        return nullptr;
+    }
+    return createNode<ast::CastExpr> (type, base, base->Start (), _lastTok.End);
 }
 
 Expr *

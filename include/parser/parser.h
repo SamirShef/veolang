@@ -146,6 +146,9 @@ private:
     parseChain (ast::Expr *base, bool allowStruct = true);
 
     ast::Expr *
+    parseCastOperator (ast::Expr *base);
+
+    ast::Expr *
     parseTernary (ast::Expr *cond);
 
     basic::Type *

@@ -1,6 +1,7 @@
 #pragma once
 #include <ast/exprs/asgn_expr.h>
 #include <ast/exprs/bin_expr.h>
+#include <ast/exprs/cast_expr.h>
 #include <ast/exprs/field_expr.h>
 #include <ast/exprs/func_call.h>
 #include <ast/exprs/lit_expr.h>
@@ -183,6 +184,23 @@ private:
     SemanticResult
     analyzeTernaryExpr (ast::TernaryExpr *te, Type *expectedType);
 
+    SemanticResult
+    analyzeCastExpr (ast::CastExpr *ce, Type *expectedType);
+
+    hir::CastKind
+    castInts (const IntegerType *src, const IntegerType *dst);
+
+    hir::CastKind
+    castFloats (const FloatingType *src, const FloatingType *dst);
+
+    SemanticResult
+    cast (
+        hir::CastKind  kind,
+        Type          *dst,
+        SemanticResult val,
+        llvm::SMLoc    start,
+        llvm::SMLoc    end);
+
     Type *
     resolveType (Type **type);
 
@@ -233,6 +251,9 @@ private:
         Type        *resType,
         llvm::SMLoc  start,
         llvm::SMLoc  end);
+
+    bool
+    canImplicitlyCast (SemanticResult val, Type **expectedType);
 
     SemanticResult
     implicitlyCast (

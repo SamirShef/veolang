@@ -20,6 +20,7 @@ enum class NodeKind : uint8_t {
     StructInstance,
     FieldExpr,
     TernaryExpr,
+    Cast,
 };
 
 }

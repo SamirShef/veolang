@@ -184,6 +184,7 @@ CodeGen::generateExpr (Node *node) {
         variant (StructInstance, generateStructInstance, StructInstance);
         variant (LoadGlobalVarByName, generateLoadGlobalVarByName, LoadGlobalVarByName);
         variant (TernaryExpr, generateTernaryExpr, TernaryExpr);
+        variant (Cast, generateCast, Cast);
     default: return nullptr;
     }
 #undef variant
@@ -407,6 +408,29 @@ CodeGen::generateTernaryExpr (TernaryExpr *te) {
     phi->addIncoming (generateExpr (te->TrueVal ()), trueBB);
     phi->addIncoming (generateExpr (te->FalseVal ()), falseBB);
     return phi;
+}
+
+llvm::Value *
+CodeGen::generateCast (Cast *cast) {
+    switch (cast->GetCastKind ()) {
+#define variant(kind)                                                                    \
+    case CastKind::kind:                                                                 \
+        return _builder.Create##kind (                                                   \
+            generateExpr (cast->Expr ()),                                                \
+            getType (cast->Type ()));
+        variant (UIToFP);
+        variant (SIToFP);
+        variant (FPToUI);
+        variant (FPToSI);
+        variant (SExt);
+        variant (ZExt);
+        variant (FPTrunc);
+        variant (Trunc);
+        variant (BitCast);
+        variant (FPExt);
+#undef variant
+    default: return nullptr;
+    }
 }
 
 llvm::Value *

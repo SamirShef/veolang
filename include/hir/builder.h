@@ -4,6 +4,7 @@
 #include <hir/basic_block.h>
 #include <hir/bin_expr.h>
 #include <hir/branch.h>
+#include <hir/cast.h>
 #include <hir/context.h>
 #include <hir/expr_stmt.h>
 #include <hir/field_expr.h>
@@ -262,6 +263,16 @@ public:
         llvm::SMLoc                            start,
         llvm::SMLoc                            end) {
         return _ctx.CreateNode<StructInstance> (std::move (fields), base, start, end);
+    }
+
+    Cast *
+    CreateCast (
+        CastKind     kind,
+        basic::Type *type,
+        Node        *expr,
+        llvm::SMLoc  start,
+        llvm::SMLoc  end) {
+        return _ctx.CreateNode<Cast> (kind, type, expr, start, end);
     }
 };
 

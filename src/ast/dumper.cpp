@@ -31,9 +31,9 @@ Dumper::Dump (ParseResult res, unsigned startIndentLevel) {
 
 void
 Dumper::dumpVarDef (VarDef *vd) {
-    indent ();
-    _os << "VarDef: " << AccessToString (vd->Access ()) << ' '
-        << (vd->IsConst () ? "const" : "let") << ' ' << vd->Name ().Val;
+    print (
+        "VarDef: " + std::string (AccessToString (vd->Access ())) + ' '
+        + (vd->IsConst () ? "const" : "let") + ' ' + vd->Name ().Val);
     if (vd->Type () != nullptr) {
         _os << ": " << vd->Type ()->ToString ();
     }
@@ -47,9 +47,9 @@ Dumper::dumpVarDef (VarDef *vd) {
 
 void
 Dumper::dumpFuncDef (FuncDef *fd) {
-    indent ();
-    _os << "FuncDef: " << AccessToString (fd->Access ()) << ' ' << fd->Name ().Val
-        << " (";
+    print (
+        "FuncDef: " + std::string (AccessToString (fd->Access ())) + ' ' + fd->Name ().Val
+        + " (");
     size_t i = 0;
     for (const auto &arg : fd->Args ()) {
         if (arg.IsValid ()) {
@@ -74,8 +74,7 @@ Dumper::dumpFuncDef (FuncDef *fd) {
 
 void
 Dumper::dumpRet (Return *ret) {
-    indent ();
-    _os << "Return:\n";
+    print ("Return:\n");
     if (ret->RetExpr () != nullptr) {
         ++_indentLvl;
         dumpExpr (ret->RetExpr ());
@@ -85,8 +84,7 @@ Dumper::dumpRet (Return *ret) {
 
 void
 Dumper::dumpExprStmt (ExprStmt *es) {
-    indent ();
-    _os << "ExprStmt:\n";
+    print ("ExprStmt:\n");
     ++_indentLvl;
     dumpExpr (es->GetExpr ());
     --_indentLvl;
@@ -94,14 +92,12 @@ Dumper::dumpExprStmt (ExprStmt *es) {
 
 void
 Dumper::dumpIfElse (IfElseStmt *ies) {
-    indent ();
-    _os << "IfElseStmt:\n";
+    print ("IfElseStmt:\n");
 
     ++_indentLvl; // common
     dumpExpr (ies->Cond ());
 
-    indent ();
-    _os << "Then:\n";
+    print ("Then:\n");
     ++_indentLvl; // then
     for (const auto &stmt : ies->Then ()) {
         dumpStmt (stmt);
@@ -109,8 +105,7 @@ Dumper::dumpIfElse (IfElseStmt *ies) {
     --_indentLvl; // then
 
     if (!ies->Else ().empty ()) {
-        indent ();
-        _os << "Else:\n";
+        print ("Else:\n");
         ++_indentLvl; // else
         for (const auto &stmt : ies->Else ()) {
             dumpStmt (stmt);
@@ -123,37 +118,32 @@ Dumper::dumpIfElse (IfElseStmt *ies) {
 
 void
 Dumper::dumpForLoop (ForLoopStmt *fls) {
-    indent ();
-    _os << "ForLoopStmt:\n";
+    print ("ForLoopStmt:\n");
     ++_indentLvl;
 
     if (fls->Cond () != nullptr) {
-        indent ();
-        _os << "Cond:\n";
+        print ("Cond:\n");
         ++_indentLvl;
         dumpExpr (fls->Cond ());
         --_indentLvl;
     }
 
     if (fls->Indexator () != nullptr) {
-        indent ();
-        _os << "Indexator:\n";
+        print ("Indexator:\n");
         ++_indentLvl;
         dumpStmt (fls->Indexator ());
         --_indentLvl;
     }
 
     if (fls->Iteration () != nullptr) {
-        indent ();
-        _os << "Iteration:\n";
+        print ("Iteration:\n");
         ++_indentLvl;
         dumpStmt (fls->Iteration ());
         --_indentLvl;
     }
 
     if (!fls->Body ().empty ()) {
-        indent ();
-        _os << "Body:\n";
+        print ("Body:\n");
         ++_indentLvl;
         for (const auto &stmt : fls->Body ()) {
             dumpStmt (stmt);
@@ -166,43 +156,42 @@ Dumper::dumpForLoop (ForLoopStmt *fls) {
 
 void
 Dumper::dumpBreakContinue (BreakContinue *bc) {
-    indent ();
-    _os << "BreakContinue: "
-        << (bc->GetKind () == BreakContinue::Kind::Break ? "Break\n" : "Continue\n");
+    print (
+        std::string ("BreakContinue: ")
+        + (bc->GetKind () == BreakContinue::Kind::Break ? "Break\n" : "Continue\n"));
 }
 
 void
 Dumper::dumpStructDef (StructDef *sd) {
-    indent ();
-    _os << "StructDef: " << AccessToString (sd->Access ()) << ' ' << sd->Name ().Val
-        << '\n';
+    print (
+        "StructDef: " + std::string (AccessToString (sd->Access ())) + ' '
+        + sd->Name ().Val + '\n');
 
     ++_indentLvl;
     for (const auto &field : sd->Fields ()) {
-        indent ();
-        _os << "Field: " << AccessToString (field.Access) << ' '
-            << (field.IsStatic ? "static " : "") << (field.IsConst ? "const " : "")
-            << field.Name.Val << ": " << field.Type->ToString () << "\n";
+        print (
+            "Field: " + std::string (AccessToString (field.Access)) + ' '
+            + (field.IsStatic ? "static " : "") + (field.IsConst ? "const " : "")
+            + field.Name.Val + ": " + field.Type->ToString () + "\n");
     }
     --_indentLvl;
 }
 
 void
 Dumper::dumpImplStmt (ImplStmt *is) {
-    indent ();
-    _os << "ImplStmt: "
-        << (is->TraitType () != nullptr ? is->TraitType ()->ToString () + " for " : "")
-        << is->StructType ()->ToString () << '\n';
+    print (
+        std::string ("ImplStmt: ")
+        + (is->TraitType () != nullptr ? is->TraitType ()->ToString () + " for " : "")
+        + is->StructType ()->ToString () + '\n');
     ++_indentLvl;
 
-    indent ();
-    _os << "Methods:\n";
+    print ("Methods:\n");
     ++_indentLvl;
     for (const auto &method : is->Methods ()) {
         auto *func = method.Func;
-        indent ();
-        _os << AccessToString (func->Access ()) << ' '
-            << (method.IsStatic ? "static " : "") << func->Name ().Val << " (";
+        print (
+            std::string (AccessToString (func->Access ())) + ' '
+            + (method.IsStatic ? "static " : "") + func->Name ().Val + " (");
 
         size_t i = 0;
         for (const auto &arg : func->Args ()) {
@@ -231,14 +220,12 @@ Dumper::dumpImplStmt (ImplStmt *is) {
 
 void
 Dumper::dumpLiteralExpr (LiteralExpr *le) {
-    indent ();
-    _os << "LiteralExpr: " << le->Value () << '\n';
+    print ("LiteralExpr: " + le->Value () + '\n');
 }
 
 void
 Dumper::dumpBinaryExpr (BinaryExpr *be) {
-    indent ();
-    _os << "BinaryExpr: " << BinOpToString (be->Op ()) << '\n';
+    print ("BinaryExpr: " + std::string (BinOpToString (be->Op ())) + '\n');
     ++_indentLvl;
     dumpExpr (be->Lhs ());
     dumpExpr (be->Rhs ());
@@ -247,8 +234,7 @@ Dumper::dumpBinaryExpr (BinaryExpr *be) {
 
 void
 Dumper::dumpUnaryExpr (UnaryExpr *ue) {
-    indent ();
-    _os << "UnaryExpr: " << UnOpToString (ue->Op ()) << '\n';
+    print ("UnaryExpr: " + std::string (UnOpToString (ue->Op ())) + '\n');
     ++_indentLvl;
     dumpExpr (ue->Rhs ());
     --_indentLvl;
@@ -256,14 +242,12 @@ Dumper::dumpUnaryExpr (UnaryExpr *ue) {
 
 void
 Dumper::dumpVarExpr (VarExpr *ve) {
-    indent ();
-    _os << "VarExpr: " << ve->Name ().Val << '\n';
+    print ("VarExpr: " + ve->Name ().Val + '\n');
 }
 
 void
 Dumper::dumpFuncCall (FuncCall *fc) {
-    indent ();
-    _os << "FuncCall: " << fc->Name ().Val << '\n';
+    print ("FuncCall: " + fc->Name ().Val + '\n');
     ++_indentLvl;
     for (auto &a : fc->Args ()) {
         dumpExpr (a);
@@ -273,8 +257,7 @@ Dumper::dumpFuncCall (FuncCall *fc) {
 
 void
 Dumper::dumpAsgnExpr (AsgnExpr *ae) {
-    indent ();
-    _os << "AsgnExpr: " << AsgnOpToString (ae->Op ()) << '\n';
+    print ("AsgnExpr: " + std::string (AsgnOpToString (ae->Op ())) + '\n');
     ++_indentLvl;
     dumpExpr (ae->Ptr ());
     dumpExpr (ae->Init ());
@@ -283,12 +266,10 @@ Dumper::dumpAsgnExpr (AsgnExpr *ae) {
 
 void
 Dumper::dumpFieldExpr (FieldExpr *fe) {
-    indent ();
-    _os << "FieldExpr: " << fe->Name ().Val << '\n';
+    print ("FieldExpr: " + fe->Name ().Val + '\n');
     ++_indentLvl;
 
-    indent ();
-    _os << "From:\n";
+    print ("From:\n");
     ++_indentLvl;
     dumpExpr (fe->Base ());
     --_indentLvl;
@@ -298,16 +279,13 @@ Dumper::dumpFieldExpr (FieldExpr *fe) {
 
 void
 Dumper::dumpStructInstance (StructInstance *si) {
-    indent ();
-    _os << "StructInstance: " << si->Path ().Val << '\n';
+    print ("StructInstance: " + si->Path ().Val + '\n');
     ++_indentLvl;
 
-    indent ();
-    _os << "Fields:\n";
+    print ("Fields:\n");
     ++_indentLvl;
     for (const auto &[name, expr] : si->Fields ()) {
-        indent ();
-        _os << name.Val << ":\n";
+        print (name.Val + ":\n");
         ++_indentLvl;
         dumpExpr (expr);
         --_indentLvl;
@@ -319,15 +297,13 @@ Dumper::dumpStructInstance (StructInstance *si) {
 
 void
 Dumper::dumpMethodCall (MethodCall *mc) {
-    indent ();
-    _os << "MethodCall: " << mc->Name ().Val << '\n';
+    print ("MethodCall: " + mc->Name ().Val + '\n');
     ++_indentLvl;
     for (auto &a : mc->Args ()) {
         dumpExpr (a);
     }
 
-    indent ();
-    _os << "From:\n";
+    print ("From:\n");
     ++_indentLvl;
     dumpExpr (mc->Base ());
     --_indentLvl;
@@ -337,26 +313,37 @@ Dumper::dumpMethodCall (MethodCall *mc) {
 
 void
 Dumper::dumpTernaryExpr (TernaryExpr *te) {
-    indent ();
-    _os << "TernaryExpr:\n";
+    print ("TernaryExpr:\n");
     ++_indentLvl;
 
-    indent ();
-    _os << "Cond:\n";
+    print ("Cond:\n");
     ++_indentLvl;
     dumpExpr (te->Cond ());
     --_indentLvl;
 
-    indent ();
-    _os << "TrueVal:\n";
+    print ("TrueVal:\n");
     ++_indentLvl;
     dumpExpr (te->TrueVal ());
     --_indentLvl;
 
-    indent ();
-    _os << "FalseVal:\n";
+    print ("FalseVal:\n");
     ++_indentLvl;
     dumpExpr (te->FalseVal ());
+    --_indentLvl;
+
+    --_indentLvl;
+}
+
+void
+Dumper::dumpCastExpr (CastExpr *ce) {
+    print ("CastExpr:\n");
+    ++_indentLvl;
+
+    print ("CastTo: " + ce->Type ()->ToString () + '\n');
+
+    print ("Expr:\n");
+    ++_indentLvl;
+    dumpExpr (ce->GetExpr ());
     --_indentLvl;
 
     --_indentLvl;
