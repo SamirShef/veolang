@@ -554,7 +554,8 @@ Parser::parsePrimaryExpr (bool allowStruct) {
         return expr;
     }
     case TokenKind::Minus:
-    case TokenKind::Bang: {
+    case TokenKind::Bang:
+    case TokenKind::Tilde: {
         return createNode<UnaryExpr> (
             TokToUnOp (tok.Kind),
             parsePrimaryExpr (allowStruct),

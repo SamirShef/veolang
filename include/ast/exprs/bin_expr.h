@@ -19,6 +19,9 @@ enum class BinOp : uint8_t {
     GtEq,
     LogAnd,
     LogOr,
+    BitAnd,
+    BitXor,
+    BitOr,
     Invalid
 };
 
@@ -41,6 +44,9 @@ TokToBinOp (TokenKind kind) {
         variant (GtEq, GtEq);
         variant (LogAnd, LogAnd);
         variant (LogOr, LogOr);
+        variant (BitAnd, BitAnd);
+        variant (BitOr, BitOr);
+        variant (Carret, BitXor);
     default: return bin (Invalid);
     }
 #undef variant
@@ -65,6 +71,9 @@ BinOpToString (BinOp op) {
         variant (GtEq, ">=");
         variant (LogAnd, "&&");
         variant (LogOr, "||");
+        variant (BitAnd, "&");
+        variant (BitOr, "|");
+        variant (BitXor, "^");
         variant (Invalid, "<invalid>");
     }
 #undef variant

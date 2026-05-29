@@ -741,17 +741,14 @@ Sema::analyzeBinaryExpr (BinaryExpr *be, Type *expectedType) {
     if (lhs.Val->Kind == ValueKind::Const && rhs.Val->Kind == ValueKind::Const) {
         auto foldedValue
             = foldBinary (op, *lhs.Val, *rhs.Val, resType, be->Start (), be->End ());
+        auto res = SemanticResult (foldedValue, nullptr);
         if (expectedType != nullptr) {
-            implicitlyCast (
-                { foldedValue, nullptr },
-                &expectedType,
-                be->Start (),
-                be->End ());
+            res = implicitlyCast (res, &expectedType, be->Start (), be->End ());
         }
-        if (foldedValue.has_value ()) {
+        if (res.Val.has_value ()) {
             return {
-                foldedValue,
-                _builder.CreateLiteral (foldedValue.value (), be->Start (), be->End ())
+                res.Val,
+                _builder.CreateLiteral (res.Val.value (), be->Start (), be->End ())
             };
         }
     }
@@ -815,23 +812,37 @@ Sema::analyzeUnaryExpr (UnaryExpr *ue, Type *expectedType) {
             resType = rhs.Val->Type;
         }
         break;
+    case UnOp::Inverse:
+        if (!rhs.Val->Type->IsInteger ()) {
+            // TODO: report error
+            return {};
+        }
+        resType = rhs.Val->Type;
+        break;
 
     default: return {};
     }
 
     if (rhs.Val->Kind == ValueKind::Const) {
         auto foldedValue = foldUnary (op, *rhs.Val, resType, ue->Start (), ue->End ());
+        auto res         = SemanticResult (foldedValue, nullptr);
         if (expectedType != nullptr) {
-            implicitlyCast (
-                { foldedValue, nullptr },
-                &expectedType,
-                ue->Start (),
-                ue->End ());
+            res = implicitlyCast (res, &expectedType, ue->Start (), ue->End ());
         }
-        if (foldedValue.has_value ()) {
+        if (op == UnOp::Inverse) {
+            auto iVal       = std::get<0> (rhs.Val->Data);
+            bool isUnsigned = resType->AsInteger ()->IsUnsigned ();
+            res.Val         = Value (
+                ValueKind::Const,
+                ValueData (
+                    isUnsigned ? static_cast<int64_t> (~static_cast<uint64_t> (iVal))
+                               : ~iVal), // NOLINT(hicpp-signed-bitwise)
+                resType);
+        }
+        if (res.Val.has_value ()) {
             return {
-                foldedValue,
-                _builder.CreateLiteral (foldedValue.value (), ue->Start (), ue->End ())
+                res.Val,
+                _builder.CreateLiteral (res.Val.value (), ue->Start (), ue->End ())
             };
         }
     }
