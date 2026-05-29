@@ -77,15 +77,6 @@ Parser::parseStmt (bool expectSemi) {
         return stmt;
     }
     }
-    _diag
-        .Report (
-            DiagCode::EExpectedStmt,
-            "expected statement, found '" + _curTok.Val + "'",
-            Severity::Error)
-        .AddSpan (_curTok.Start, _curTok.End, "expected statement here");
-    advance ();
-    synchronize ();
-    return nullptr;
 }
 
 ast::Stmt *

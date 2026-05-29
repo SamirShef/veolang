@@ -7,7 +7,6 @@ enum class Severity : uint8_t { Error, Warning, Note, Help };
 
 enum class DiagCode : uint8_t {
     EUnexpectedToken,
-    EExpectedStmt,
     EExpectedExpr,
     EUnclosedStrLit,
     EUnclosedCharLit,
