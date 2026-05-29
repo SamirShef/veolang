@@ -738,12 +738,31 @@ Sema::analyzeBinaryExpr (BinaryExpr *be, Type *expectedType) {
     if (!lhs.Val.has_value () || !rhs.Val.has_value ()) {
         return {};
     }
+    if (op >= BinOp::BitAnd && op <= BinOp::BitOr) {
+        if (!lhs.Val->Type->IsInteger () || !rhs.Val->Type->IsInteger ()) {
+            _diag
+                .Report (
+                    DiagCode::ECannotApplyOp,
+                    "binary operator '" + std::string (BinOpToString (op))
+                        + "' cannot be applied to non-integer types '"
+                        + lhs.Val->Type->ToString () + "' and '"
+                        + rhs.Val->Type->ToString () + "'",
+                    Severity::Error)
+                .AddSpan (be->Start (), be->End ());
+            return {};
+        }
+    }
     if (lhs.Val->Kind == ValueKind::Const && rhs.Val->Kind == ValueKind::Const) {
         auto foldedValue
             = foldBinary (op, *lhs.Val, *rhs.Val, resType, be->Start (), be->End ());
         auto res = SemanticResult (foldedValue, nullptr);
         if (expectedType != nullptr) {
             res = implicitlyCast (res, &expectedType, be->Start (), be->End ());
+        }
+        if (op >= BinOp::BitAnd && op <= BinOp::BitOr) {
+            int64_t result
+                = foldBinaryBitwise (lhs.Val->Data, rhs.Val->Data, commonType, op);
+            res.Val = Value (ValueKind::Const, ValueData (result), commonType);
         }
         if (res.Val.has_value ()) {
             return {
@@ -787,8 +806,9 @@ Sema::analyzeUnaryExpr (UnaryExpr *ue, Type *expectedType) {
             _diag
                 .Report (
                     DiagCode::ECannotApplyOp,
-                    "unary operator cannot be applied to type '"
-                        + rhs.Val->Type->ToString () + "'",
+                    "unary operator '" + std::string (UnOpToString (op))
+                        + "' cannot be applied to type '" + rhs.Val->Type->ToString ()
+                        + "'",
                     Severity::Error)
                 .AddSpan (ue->Start (), ue->End ());
             return {};
@@ -814,7 +834,14 @@ Sema::analyzeUnaryExpr (UnaryExpr *ue, Type *expectedType) {
         break;
     case UnOp::Inverse:
         if (!rhs.Val->Type->IsInteger ()) {
-            // TODO: report error
+            _diag
+                .Report (
+                    DiagCode::ECannotApplyOp,
+                    "unary operator '" + std::string (UnOpToString (op))
+                        + "' cannot be applied to non-integer type '"
+                        + rhs.Val->Type->ToString () + "'",
+                    Severity::Error)
+                .AddSpan (ue->Start (), ue->End ());
             return {};
         }
         resType = rhs.Val->Type;
@@ -1609,6 +1636,34 @@ Sema::foldBinary (
                 rhs.Data);
         },
         lhs.Data);
+}
+
+int64_t
+Sema::foldBinaryBitwise (ValueData lhs, ValueData rhs, Type *commonType, ast::BinOp op) {
+    auto    lVal       = std::get<0> (lhs);
+    auto    rVal       = std::get<0> (rhs);
+    bool    isUnsigned = commonType->AsInteger ()->IsUnsigned ();
+    int64_t res        = 0;
+    switch (op) {
+        // NOLINTBEGIN(bugprone-macro-parentheses)
+#define variant(kind, _op)                                                               \
+    case BinOp::kind:                                                                    \
+        res = isUnsigned ? static_cast<int64_t> (static_cast<uint64_t> (lVal)            \
+                                                     _op static_cast<uint64_t> (rVal))   \
+                         : static_cast<uint64_t> (lVal)                                  \
+                               _op static_cast<uint64_t> (rVal);                         \
+        break;
+        // NOLINTEND(bugprone-macro-parentheses)
+
+        variant (BitAnd, &);
+        variant (BitOr, |);
+        variant (BitXor, ^);
+    default: {
+    }
+
+#undef variant
+    }
+    return res;
 }
 
 OptValue

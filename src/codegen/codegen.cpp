@@ -291,6 +291,9 @@ CodeGen::generateBinaryExpr (BinaryExpr *be) {
             return _builder.CreateICmpUGE (lhs, rhs);
         }
         return _builder.CreateICmpSGE (lhs, rhs);
+    case ast::BinOp::BitAnd: return _builder.CreateAnd (lhs, rhs);
+    case ast::BinOp::BitOr: return _builder.CreateOr (lhs, rhs);
+    case ast::BinOp::BitXor: return _builder.CreateXor (lhs, rhs);
     case ast::BinOp::LogAnd: return _builder.CreateLogicalAnd (lhs, rhs);
     case ast::BinOp::LogOr: return _builder.CreateLogicalOr (lhs, rhs);
     default: return nullptr;
