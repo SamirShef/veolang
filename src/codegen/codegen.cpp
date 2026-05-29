@@ -309,6 +309,10 @@ CodeGen::generateUnaryExpr (UnaryExpr *ue) {
         }
         return _builder.CreateNeg (rhs);
     case ast::UnOp::Not: return _builder.CreateNot (rhs);
+    case ast::UnOp::Inverse:
+        return _builder.CreateXor (
+            rhs,
+            _builder.getIntN (rhs->getType ()->getIntegerBitWidth (), -1));
     default: return nullptr;
     }
 }
