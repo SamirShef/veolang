@@ -11,16 +11,16 @@ using namespace diagnostic;
 
 Token
 Lexer::NextToken () {
-    while (peek () == '/' && (peek (1) == '/' || peek (1) == '*')) {
+    if (peek () == '/' && (peek (1) == '/' || peek (1) == '*')) {
         skipComments ();
         return NextToken ();
     }
-    while (isspace (peek ()) != 0) {
+    if (isspace (peek ()) != 0) {
         ++_curPtr;
         return NextToken ();
     }
 
-    if (peek () == '\0') {
+    if (_curPtr >= _bufEnd) {
         return { TokenKind::Eof, "", loc (_bufEnd), loc (_bufEnd) };
     }
     if ((isalpha (peek ()) != 0) || peek () == '_') {
