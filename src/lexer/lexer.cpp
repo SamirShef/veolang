@@ -91,9 +91,8 @@ Lexer::tokenizeNumLit (const char *tokStart) {
 Token
 Lexer::tokenizeStrLit (const char *tokStart) {
     ++_curPtr;
-    std::string val;
     while (peek () != '\0' && peek () != '\"') {
-        val += *_curPtr++;
+        ++_curPtr;
     }
     if (peek () == '\0') {
         _diag
@@ -103,6 +102,7 @@ Lexer::tokenizeStrLit (const char *tokStart) {
                 Severity::Error)
             .AddSpan (loc (tokStart), loc (_curPtr));
     }
+    std::string val (tokStart + 1, _curPtr - tokStart - 1);
     ++_curPtr;
     return { TokenKind::StrLit, val, loc (tokStart), loc (_curPtr) };
 }
@@ -110,10 +110,9 @@ Lexer::tokenizeStrLit (const char *tokStart) {
 Token
 Lexer::tokenizeCharLit (const char *tokStart) {
     ++_curPtr;
-    std::string val;
-    unsigned    len = 0;
+    unsigned len = 0;
     while (peek () != '\0' && peek () != '\'') {
-        val += *_curPtr++;
+        ++_curPtr;
         ++len;
     }
     bool unclosed = false;
@@ -126,6 +125,7 @@ Lexer::tokenizeCharLit (const char *tokStart) {
                 Severity::Error)
             .AddSpan (loc (tokStart), loc (_curPtr));
     }
+    ++_curPtr;
     if (len > 1 && !unclosed) {
         _diag
             .Report (
@@ -141,7 +141,7 @@ Lexer::tokenizeCharLit (const char *tokStart) {
                 Severity::Error)
             .AddSpan (loc (tokStart), loc (_curPtr));
     }
-    ++_curPtr;
+    std::string val (tokStart + 1, _curPtr - tokStart - 1);
     return { TokenKind::CharLit, val, loc (tokStart), loc (_curPtr) };
 }
 
