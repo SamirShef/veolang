@@ -1,4 +1,5 @@
 #pragma once
+#include <basic/symbols/module.h>
 #include <hir/bin_expr.h>
 #include <hir/branch.h>
 #include <hir/cast.h>
@@ -39,6 +40,7 @@ class CodeGen {
     llvm::IRBuilder<>                                         _builder;
     std::unique_ptr<llvm::Module>                             _mod;
     std::unordered_map<hir::BasicBlock *, llvm::BasicBlock *> _basicBlocksMap;
+    symbols::Module                                          *_semaMod;
 
     struct CurrentFunction {
         std::vector<llvm::Value *> Locals;
@@ -53,15 +55,16 @@ class CodeGen {
 
 public:
     CodeGen (
-        const std::string             &name,
+        symbols::Module               *semaMod,
         std::vector<hir::VarDef *>    &globals,
         std::vector<hir::Function *>  &funcs,
         std::vector<hir::StructDef *> &structs)
-        : _hirGlobals (globals),
+        : _semaMod (semaMod),
+          _hirGlobals (globals),
           _hirFuncs (funcs),
           _hirStructs (structs),
           _builder (_ctx),
-          _mod (std::make_unique<llvm::Module> (name, _ctx)) {}
+          _mod (std::make_unique<llvm::Module> (semaMod->Name, _ctx)) {}
 
     std::unique_ptr<llvm::Module>
     Generate () {
@@ -77,6 +80,8 @@ public:
         for (auto &f : _hirFuncs) {
             generateFuncDef (f);
         }
+
+        generateInitFunction ();
         if (_userMain.has_value ()) {
             generateImplicitMain ();
         }
@@ -152,6 +157,9 @@ private:
 
     llvm::Type *
     getType (basic::Type *type);
+
+    void
+    generateInitFunction ();
 
     void
     generateImplicitMain ();
