@@ -7,6 +7,7 @@
 #include <ast/exprs/func_call.h>
 #include <ast/exprs/lit_expr.h>
 #include <ast/exprs/method_call.h>
+#include <ast/exprs/nil.h>
 #include <ast/exprs/ref.h>
 #include <ast/exprs/struct_instance.h>
 #include <ast/exprs/ternary_expr.h>
@@ -590,6 +591,9 @@ Parser::parsePrimaryExpr (bool allowStruct) {
             return nullptr;
         }
         return createNode<RefExpr> (expr, tok.Start, expr->End ());
+    }
+    case TokenKind::Nil: {
+        return createNode<NilExpr> (tok.Start, tok.End);
     }
     default: {
     }

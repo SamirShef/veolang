@@ -11,6 +11,7 @@
 #include <hir/lit_expr.h>
 #include <hir/load_glob_var_by_name.h>
 #include <hir/load_var.h>
+#include <hir/nil.h>
 #include <hir/ref.h>
 #include <hir/ret.h>
 #include <hir/store.h>
@@ -24,6 +25,7 @@
 #include <llvm/IR/IRBuilder.h>
 #include <llvm/IR/LLVMContext.h>
 #include <llvm/IR/Module.h>
+#include <llvm/Support/SourceMgr.h>
 #include <memory>
 #include <unordered_map>
 #include <vector>
@@ -43,6 +45,7 @@ class CodeGen {
     std::unique_ptr<llvm::Module>                             _mod;
     std::unordered_map<hir::BasicBlock *, llvm::BasicBlock *> _basicBlocksMap;
     symbols::Module                                          *_semaMod;
+    llvm::SourceMgr                                          &_srcMgr;
 
     struct CurrentFunction {
         std::vector<llvm::Value *> Locals;
@@ -57,11 +60,13 @@ class CodeGen {
 
 public:
     CodeGen (
+        llvm::SourceMgr               &srcMgr,
         symbols::Module               *semaMod,
         std::vector<hir::VarDef *>    &globals,
         std::vector<hir::Function *>  &funcs,
         std::vector<hir::StructDef *> &structs)
-        : _semaMod (semaMod),
+        : _srcMgr (srcMgr),
+          _semaMod (semaMod),
           _hirGlobals (globals),
           _hirFuncs (funcs),
           _hirStructs (structs),
@@ -70,6 +75,8 @@ public:
 
     std::unique_ptr<llvm::Module>
     Generate () {
+        generateRuntime ();
+
         for (auto &s : _hirStructs) {
             generateStruct (s);
         }
@@ -161,6 +168,9 @@ private:
     generateDerefExpr (hir::DerefExpr *de);
 
     llvm::Value *
+    generateNilExpr (hir::NilExpr *ne);
+
+    llvm::Value *
     generateLValue (hir::Node *node);
 
     llvm::Type *
@@ -171,6 +181,12 @@ private:
 
     void
     generateImplicitMain ();
+
+    void
+    generateRuntime ();
+
+    void
+    generateCheckNil (llvm::Value *ptr, llvm::SMLoc start);
 };
 
 }

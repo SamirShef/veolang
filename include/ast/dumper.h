@@ -7,6 +7,7 @@
 #include <ast/exprs/func_call.h>
 #include <ast/exprs/lit_expr.h>
 #include <ast/exprs/method_call.h>
+#include <ast/exprs/nil.h>
 #include <ast/exprs/ref.h>
 #include <ast/exprs/struct_instance.h>
 #include <ast/exprs/ternary_expr.h>
@@ -106,6 +107,7 @@ private:
             variant (CastExpr, dumpCastExpr, CastExpr);
             variant (RefExpr, dumpRefExpr, RefExpr);
             variant (DerefExpr, dumpDerefExpr, DerefExpr);
+            variant (NilExpr, dumpNilExpr, NilExpr);
         default: {
         }
         }
@@ -150,6 +152,9 @@ private:
 
     void
     dumpDerefExpr (DerefExpr *de);
+
+    void
+    dumpNilExpr (NilExpr *ne);
 
     void
     indent () {

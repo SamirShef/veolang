@@ -365,4 +365,9 @@ Dumper::dumpDerefExpr (DerefExpr *de) {
     --_indentLvl;
 }
 
+void
+Dumper::dumpNilExpr (NilExpr *ne) {
+    print ("NilExpr\n");
+}
+
 }

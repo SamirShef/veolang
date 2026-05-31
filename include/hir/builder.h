@@ -13,6 +13,7 @@
 #include <hir/lit_expr.h>
 #include <hir/load_glob_var_by_name.h>
 #include <hir/load_var.h>
+#include <hir/nil.h>
 #include <hir/ref.h>
 #include <hir/ret.h>
 #include <hir/store.h>
@@ -286,6 +287,11 @@ public:
     CreateDereference (
         Node *expr, basic::Type *type, llvm::SMLoc start, llvm::SMLoc end) {
         return _ctx.CreateNode<DerefExpr> (expr, type, start, end);
+    }
+
+    NilExpr *
+    CreateNil (llvm::SMLoc start, llvm::SMLoc end) {
+        return _ctx.CreateNode<NilExpr> (start, end);
     }
 };
 

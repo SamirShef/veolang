@@ -7,6 +7,7 @@
 #include <ast/exprs/func_call.h>
 #include <ast/exprs/lit_expr.h>
 #include <ast/exprs/method_call.h>
+#include <ast/exprs/nil.h>
 #include <ast/exprs/ref.h>
 #include <ast/exprs/struct_instance.h>
 #include <ast/exprs/ternary_expr.h>
@@ -197,6 +198,9 @@ private:
 
     SemanticResult
     analyzeDerefExpr (ast::DerefExpr *de, Type *expectedType);
+
+    SemanticResult
+    analyzeNilExpr (ast::NilExpr *ne, Type *expectedType);
 
     hir::CastKind
     castInts (const IntegerType *src, const IntegerType *dst);

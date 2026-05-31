@@ -30,6 +30,7 @@ enum class NodeKind : uint8_t {
     CastExpr,
     RefExpr,
     DerefExpr,
+    NilExpr,
     ExprEnd
 };
 

@@ -65,6 +65,9 @@ Sema::analyzeVarDef (VarDef *vd) {
     Type *type     = vd->Type ();
     resolveType (&type);
     auto val = analyzeExpr (vd->Init (), vd->Type ());
+    if (!val.Val.has_value () && vd->Init () != nullptr) {
+        return;
+    }
     if (val.Val.has_value ()) {
         if (vd->IsConst () && val.Val->Kind != ValueKind::Const) {
             _diag
@@ -545,6 +548,7 @@ Sema::analyzeExpr (Expr *expr, Type *expectedType) {
         variant (CastExpr, analyzeCastExpr, CastExpr);
         variant (RefExpr, analyzeRefExpr, RefExpr);
         variant (DerefExpr, analyzeDerefExpr, DerefExpr);
+        variant (NilExpr, analyzeNilExpr, NilExpr);
     default: return {};
     }
 #undef variant
@@ -1526,6 +1530,35 @@ Sema::analyzeDerefExpr (DerefExpr *de, Type *expectedType) {
     auto res = SemanticResult (val, node);
     res      = implicitlyCast (res, &expectedType, de->Start (), de->End ());
     return res;
+}
+
+Sema::SemanticResult
+Sema::analyzeNilExpr (NilExpr *ne, Type *expectedType) {
+    if (expectedType == nullptr) {
+        _diag
+            .Report (
+                DiagCode::ECannotInferType,
+                "cannot infer pointer type for 'nil'",
+                Severity::Error)
+            .AddSpan (ne->Start (), ne->End ());
+        return {};
+    }
+    if (!expectedType->IsPointer ()) {
+        _diag
+            .Report (
+                DiagCode::ECannotAssignNilToNonPointer,
+                "cannot assign 'nil' to a non-pointer type '"
+                    + typeToString (expectedType) + "'",
+                Severity::Error)
+            .AddSpan (
+                ne->Start (),
+                ne->End (),
+                "expected '" + typeToString (expectedType) + "', found 'nil'");
+        return {};
+    }
+    auto  val  = Value (ValueKind::Unknown, expectedType);
+    auto *node = _builder.CreateNil (ne->Start (), ne->End ());
+    return { val, node };
 }
 
 hir::CastKind
