@@ -185,6 +185,8 @@ CodeGen::generateExpr (Node *node) {
         variant (LoadGlobalVarByName, generateLoadGlobalVarByName, LoadGlobalVarByName);
         variant (TernaryExpr, generateTernaryExpr, TernaryExpr);
         variant (Cast, generateCast, Cast);
+        variant (RefExpr, generateRefExpr, RefExpr);
+        variant (DerefExpr, generateDerefExpr, DerefExpr);
     default: return nullptr;
     }
 #undef variant
@@ -434,6 +436,17 @@ CodeGen::generateCast (Cast *cast) {
 }
 
 llvm::Value *
+CodeGen::generateRefExpr (hir::RefExpr *re) {
+    return generateLValue (re->Expr ());
+}
+
+llvm::Value *
+CodeGen::generateDerefExpr (hir::DerefExpr *de) {
+    auto *ptr = generateExpr (de->Expr ());
+    return _builder.CreateLoad (getType (de->Type ()), ptr);
+}
+
+llvm::Value *
 CodeGen::generateLValue (Node *node) {
     if (node == nullptr) {
         return nullptr;
@@ -455,6 +468,10 @@ CodeGen::generateLValue (Node *node) {
     case NodeKind::LoadGlobalVarByName: {
         auto *load = llvm::cast<LoadGlobalVarByName> (node);
         return _mod->getNamedGlobal (load->Name ());
+    }
+    case NodeKind::DerefExpr: {
+        auto *de = llvm::cast<DerefExpr> (node);
+        return generateExpr (de->Expr ());
     }
     default: return nullptr;
     }
@@ -478,6 +495,7 @@ CodeGen::getType (basic::Type *type) {
         return llvm::StructType::getTypeByName (
             _ctx,
             Mangler::MangleStructSymbol (type->AsStruct ()->BaseSymbol ()));
+    case basic::TypeKind::Pointer: return _builder.getPtrTy ();
     default: {
     }
     }

@@ -2,10 +2,12 @@
 #include <ast/exprs/asgn_expr.h>
 #include <ast/exprs/bin_expr.h>
 #include <ast/exprs/cast_expr.h>
+#include <ast/exprs/deref.h>
 #include <ast/exprs/field_expr.h>
 #include <ast/exprs/func_call.h>
 #include <ast/exprs/lit_expr.h>
 #include <ast/exprs/method_call.h>
+#include <ast/exprs/ref.h>
 #include <ast/exprs/struct_instance.h>
 #include <ast/exprs/ternary_expr.h>
 #include <ast/exprs/un_expr.h>
@@ -102,6 +104,8 @@ private:
             variant (MethodCall, dumpMethodCall, MethodCall);
             variant (TernaryExpr, dumpTernaryExpr, TernaryExpr);
             variant (CastExpr, dumpCastExpr, CastExpr);
+            variant (RefExpr, dumpRefExpr, RefExpr);
+            variant (DerefExpr, dumpDerefExpr, DerefExpr);
         default: {
         }
         }
@@ -140,6 +144,12 @@ private:
 
     void
     dumpCastExpr (CastExpr *ce);
+
+    void
+    dumpRefExpr (RefExpr *re);
+
+    void
+    dumpDerefExpr (DerefExpr *de);
 
     void
     indent () {

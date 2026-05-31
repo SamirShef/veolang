@@ -1,12 +1,13 @@
-#include "ast/exprs/cast_expr.h"
-
 #include <ast/access_modifier.h>
 #include <ast/exprs/asgn_expr.h>
 #include <ast/exprs/bin_expr.h>
+#include <ast/exprs/cast_expr.h>
+#include <ast/exprs/deref.h>
 #include <ast/exprs/field_expr.h>
 #include <ast/exprs/func_call.h>
 #include <ast/exprs/lit_expr.h>
 #include <ast/exprs/method_call.h>
+#include <ast/exprs/ref.h>
 #include <ast/exprs/struct_instance.h>
 #include <ast/exprs/ternary_expr.h>
 #include <ast/exprs/un_expr.h>
@@ -576,6 +577,20 @@ Parser::parsePrimaryExpr (bool allowStruct) {
         // VarExpr
         return createNode<VarExpr> (basic::NameObj (tok), tok.Start, tok.End);
     }
+    case TokenKind::Star: {
+        Expr *expr = parsePrimaryExpr ();
+        if (expr == nullptr) {
+            return nullptr;
+        }
+        return createNode<DerefExpr> (expr, tok.Start, expr->End ());
+    }
+    case TokenKind::BitAnd: {
+        Expr *expr = parsePrimaryExpr ();
+        if (expr == nullptr) {
+            return nullptr;
+        }
+        return createNode<RefExpr> (expr, tok.Start, expr->End ());
+    }
     default: {
     }
     } // NOLINTEND(bugprone-branch-clone)
@@ -701,6 +716,7 @@ Parser::consumeType () {
             }
             return createType<basic::NamedType> (std::move (path));
         }
+        kind (Star) return createType<basic::PointerType> (consumeType ());
     default:
         _diag
             .Report (

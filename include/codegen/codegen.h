@@ -3,6 +3,7 @@
 #include <hir/bin_expr.h>
 #include <hir/branch.h>
 #include <hir/cast.h>
+#include <hir/deref.h>
 #include <hir/expr_stmt.h>
 #include <hir/field_expr.h>
 #include <hir/func.h>
@@ -10,6 +11,7 @@
 #include <hir/lit_expr.h>
 #include <hir/load_glob_var_by_name.h>
 #include <hir/load_var.h>
+#include <hir/ref.h>
 #include <hir/ret.h>
 #include <hir/store.h>
 #include <hir/struct_def.h>
@@ -151,6 +153,12 @@ private:
 
     llvm::Value *
     generateCast (hir::Cast *cast);
+
+    llvm::Value *
+    generateRefExpr (hir::RefExpr *re);
+
+    llvm::Value *
+    generateDerefExpr (hir::DerefExpr *de);
 
     llvm::Value *
     generateLValue (hir::Node *node);

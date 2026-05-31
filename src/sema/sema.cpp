@@ -543,6 +543,8 @@ Sema::analyzeExpr (Expr *expr, Type *expectedType) {
         variant (MethodCall, analyzeMethodCall, MethodCall);
         variant (TernaryExpr, analyzeTernaryExpr, TernaryExpr);
         variant (CastExpr, analyzeCastExpr, CastExpr);
+        variant (RefExpr, analyzeRefExpr, RefExpr);
+        variant (DerefExpr, analyzeDerefExpr, DerefExpr);
     default: return {};
     }
 #undef variant
@@ -974,10 +976,9 @@ Sema::analyzeAsgnExpr (AsgnExpr *ae, Type *expectedType) {
     if (ae->Ptr () == nullptr) {
         return {};
     }
-    // TODO: add check for pointer dereference
-    // For example: *p = 10;
     if (ae->Ptr ()->Kind () != NodeKind::VarExpr
-        && ae->Ptr ()->Kind () != NodeKind::FieldExpr) {
+        && ae->Ptr ()->Kind () != NodeKind::FieldExpr
+        && ae->Ptr ()->Kind () != NodeKind::DerefExpr) {
         _diag
             .Report (
                 DiagCode::ELHSIsNotAssignable,
@@ -1007,10 +1008,15 @@ Sema::analyzeAsgnExpr (AsgnExpr *ae, Type *expectedType) {
     }
     if (ae->Ptr ()->Kind () == NodeKind::VarExpr) {
         expr = analyzeAsgnVar (ae, expr, ptr);
-    } else { // only field
+    } else if (ae->Ptr ()->Kind () == NodeKind::FieldExpr) {
         expr = analyzeAsgnField (ae, expr, ptr);
+    } else { // pointer
+        expr = analyzeAsgnPtr (ae, expr, ptr);
     }
-    expr       = implicitlyCast (expr, &expectedType, ae->Start (), ae->End ());
+    expr = implicitlyCast (expr, &expectedType, ae->Start (), ae->End ());
+    if (!expr.Val.has_value ()) {
+        return {};
+    }
     auto *node = _builder.CreateStore (ptr.Node, expr.Node, ae->Start (), ae->End ());
     return { expr.Val, node };
 }
@@ -1105,6 +1111,22 @@ Sema::analyzeAsgnField (
             ae->Init ()->End ());
     }
     expr.Val = Value (ValueKind::Unknown, expr.Val->Type);
+    return expr;
+}
+
+Sema::SemanticResult
+Sema::analyzeAsgnPtr (
+    ast::AsgnExpr *ae, SemanticResult &expr, const SemanticResult &ptr) {
+    auto op = AsgnOpToBinOp (ae->Op ());
+    if (ae->Op () != AsgnOp::Eq) {
+        expr.Node = _builder.CreateBinary (
+            op,
+            expr.Val->Type,
+            ptr.Node,
+            expr.Node,
+            ae->Init ()->Start (),
+            ae->Init ()->End ());
+    }
     return expr;
 }
 
@@ -1456,6 +1478,54 @@ Sema::analyzeCastExpr (ast::CastExpr *ce, Type *expectedType) {
         return {};
     }
     return cast (kind, dst, val, ce->Start (), ce->End ());
+}
+
+Sema::SemanticResult
+Sema::analyzeRefExpr (RefExpr *re, Type *expectedType) {
+    if (re->GetExpr ()->Kind () != NodeKind::VarExpr
+        && re->GetExpr ()->Kind () != NodeKind::FieldExpr) {
+        _diag
+            .Report (
+                DiagCode::ECannotTakeAddress,
+                "cannot take the address of an rvalue",
+                Severity::Error)
+            .AddSpan (re->GetExpr ()->Start (), re->GetExpr ()->End ());
+        return {};
+    }
+    auto expr = analyzeExpr (re->GetExpr (), nullptr);
+    if (!expr.Val.has_value ()) {
+        return {};
+    }
+    auto *ptrType = createType<PointerType> (expr.Val->Type);
+    auto  val     = Value (ValueKind::Unknown, ptrType);
+    auto *node    = _builder.CreateReference (expr.Node, re->Start (), re->End ());
+    auto  res     = SemanticResult (val, node);
+    res           = implicitlyCast (res, &expectedType, re->Start (), re->End ());
+    return res;
+}
+
+Sema::SemanticResult
+Sema::analyzeDerefExpr (DerefExpr *de, Type *expectedType) {
+    auto expr = analyzeExpr (de->GetExpr (), nullptr);
+    if (!expr.Val.has_value ()) {
+        return {};
+    }
+    if (!expr.Val->Type->IsPointer ()) {
+        _diag
+            .Report (
+                DiagCode::ECannotDereferenceNonPointer,
+                "type '" + typeToString (expr.Val->Type) + "' cannot be dereferenced",
+                Severity::Error)
+            .AddSpan (de->GetExpr ()->Start (), de->GetExpr ()->End ());
+        return {};
+    }
+    auto *ptrBaseType = expr.Val->Type->AsPointer ()->Base ();
+    auto  val         = Value (ValueKind::Unknown, ptrBaseType);
+    auto *node
+        = _builder.CreateDereference (expr.Node, ptrBaseType, de->Start (), de->End ());
+    auto res = SemanticResult (val, node);
+    res      = implicitlyCast (res, &expectedType, de->Start (), de->End ());
+    return res;
 }
 
 hir::CastKind

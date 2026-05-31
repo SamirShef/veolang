@@ -349,4 +349,20 @@ Dumper::dumpCastExpr (CastExpr *ce) {
     --_indentLvl;
 }
 
+void
+Dumper::dumpRefExpr (RefExpr *re) {
+    print ("RefExpr:\n");
+    ++_indentLvl;
+    dumpExpr (re->GetExpr ());
+    --_indentLvl;
+}
+
+void
+Dumper::dumpDerefExpr (DerefExpr *de) {
+    print ("DerefExpr:\n");
+    ++_indentLvl;
+    dumpExpr (de->GetExpr ());
+    --_indentLvl;
+}
+
 }

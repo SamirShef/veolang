@@ -11,6 +11,7 @@ as (Bool);
 as (Char);
 as (Struct);
 as (Named);
+as (Pointer);
 
 #undef as
 
@@ -45,7 +46,12 @@ operator== (const Type &lhs, const Type &rhs) {
         const auto *nrhs = rhs.AsNamed ();
         return nlhs->Path () == nrhs->Path ();
     }
-    default: return true;
+    case TypeKind::Pointer: {
+        const auto *plhs = lhs.AsPointer ();
+        const auto *prhs = rhs.AsPointer ();
+        return *plhs->Base () == *prhs->Base ();
+    }
+    default: return true; // BoolType and CharType
     }
 }
 
