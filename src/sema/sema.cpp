@@ -1324,13 +1324,27 @@ Sema::analyzeMethodCall (MethodCall *mc, Type *expectedType) {
 
 Sema::SemanticResult
 Sema::analyzeTernaryExpr (TernaryExpr *te, Type *expectedType) {
-    auto *trueBB  = _builder.CreateBasicBlock (_builder.Parent (), "cond.true");
-    auto *falseBB = _builder.CreateBasicBlock (_builder.Parent (), "cond.false");
-    auto *mergeBB = _builder.CreateBasicBlock (_builder.Parent (), "cond.merge");
-    auto  cond    = analyzeExpr (te->Cond (), _typePool.GetOrCreate<BoolType> ());
+    auto cond = analyzeExpr (te->Cond (), _typePool.GetOrCreate<BoolType> ());
     if (!cond.Val.has_value ()) {
         return {};
     }
+    if (cond.Val->Kind == ValueKind::Const) {
+        auto trueVal = analyzeExpr (te->TrueVal (), expectedType);
+        if (!trueVal.Val.has_value ()) {
+            return {};
+        }
+        if (expectedType == nullptr) {
+            expectedType = trueVal.Val->Type;
+        }
+        auto falseVal = analyzeExpr (te->FalseVal (), expectedType);
+        if (!falseVal.Val.has_value ()) {
+            return {};
+        }
+        return std::get<0> (cond.Val->Data) == 1 ? trueVal : falseVal;
+    }
+    auto *trueBB  = _builder.CreateBasicBlock (_builder.Parent (), "cond.true");
+    auto *falseBB = _builder.CreateBasicBlock (_builder.Parent (), "cond.false");
+    auto *mergeBB = _builder.CreateBasicBlock (_builder.Parent (), "cond.merge");
     _builder.CreateBr (
         cond.Node,
         trueBB,
