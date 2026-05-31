@@ -36,9 +36,6 @@ void
 CodeGen::generateVarDef (VarDef *vd) {
     bool        isGlobal = !_curFunc.has_value ();
     std::string name     = isGlobal ? Mangler::MangleGlobalVar (vd) : vd->Name ().Val;
-    auto       *init     = vd->Init () != nullptr
-                               ? generateExpr (vd->Init ())
-                               : llvm::ConstantExpr::getNullValue (getType (vd->Type ()));
     auto       *type     = getType (vd->Type ());
     if (isGlobal) {
         auto *gv = new llvm::GlobalVariable (
@@ -46,10 +43,13 @@ CodeGen::generateVarDef (VarDef *vd) {
             type,
             vd->IsConst (),
             llvm::GlobalValue::ExternalLinkage,
-            llvm::cast<llvm::Constant> (init),
+            llvm::ConstantExpr::getNullValue (type),
             name);
         _globals.emplace_back (gv);
     } else {
+        auto *init   = vd->Init () != nullptr
+                           ? generateExpr (vd->Init ())
+                           : llvm::ConstantExpr::getNullValue (getType (vd->Type ()));
         auto *alloca = _builder.CreateAlloca (type, nullptr, name);
         _builder.CreateStore (init, alloca);
         _curFunc->Locals.emplace_back (alloca);
@@ -485,6 +485,29 @@ CodeGen::getType (basic::Type *type) {
 }
 
 void
+CodeGen::generateInitFunction () {
+    const std::string  &name     = "__veo_init_mod_" + _semaMod->ToString ();
+    llvm::FunctionType *funcType = llvm::FunctionType::get (_builder.getVoidTy (), false);
+    llvm::Function     *func     = llvm::Function::Create (
+        funcType,
+        llvm::GlobalValue::ExternalLinkage,
+        name,
+        *_mod);
+    llvm::BasicBlock *entry = llvm::BasicBlock::Create (_ctx, "entry", func);
+    _builder.SetInsertPoint (entry);
+    for (const auto *global : _hirGlobals) {
+        const std::string &name = Mangler::MangleGlobalVar (global);
+        auto              *gv   = _mod->getGlobalVariable (name);
+        if (gv->getInitializer () == nullptr) { // is declaration
+            continue;
+        }
+        auto *val = generateExpr (global->Init ());
+        _builder.CreateStore (val, gv);
+    }
+    _builder.CreateRetVoid ();
+}
+
+void
 CodeGen::generateImplicitMain () {
     auto                     *sym = _userMain->HIR->BaseSymbol ();
     std::vector<llvm::Type *> argsTypes;
@@ -507,8 +530,14 @@ CodeGen::generateImplicitMain () {
     }
     auto *entry = llvm::BasicBlock::Create (_ctx, "entry", main);
     _builder.SetInsertPoint (entry);
-    auto *call = _builder.CreateCall (_userMain->LLVM, args);
-    _builder.CreateRet (call);
+
+    auto *initMod = _mod->getFunction ("__veo_init_mod_" + _semaMod->ToString ());
+    if (initMod != nullptr) {
+        auto *callInitMod = _builder.CreateCall (initMod, {}); // call init mod
+    }
+
+    auto *callMain = _builder.CreateCall (_userMain->LLVM, args); // call user main
+    _builder.CreateRet (callMain);
 }
 
 }

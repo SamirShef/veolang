@@ -10,28 +10,28 @@ namespace veo {
 class Mangler {
 public:
     static std::string
-    MangleFunction (hir::Function *func);
+    MangleFunction (const hir::Function *func);
 
     static std::string
-    MangleMethod (symbols::Struct *sym, hir::Function *func);
+    MangleMethod (const symbols::Struct *sym, hir::Function *func);
 
     static std::string
-    MangleGlobalVar (hir::VarDef *var);
+    MangleGlobalVar (const hir::VarDef *var);
 
     static std::string
-    MangleStaticField (symbols::Struct *sym, const std::string &fieldName);
+    MangleStaticField (const symbols::Struct *sym, const std::string &fieldName);
 
     static std::string
-    MangleStruct (hir::StructDef *sd);
+    MangleStruct (const hir::StructDef *sd);
 
     static std::string
-    MangleStructSymbol (symbols::Struct *sym);
+    MangleStructSymbol (const symbols::Struct *sym);
 
     static std::string
-    MangleModule (symbols::Module *mod);
+    MangleModule (const symbols::Module *mod);
 
     static std::string
-    MangleType (basic::Type *type);
+    MangleType (const basic::Type *type);
 };
 
 }

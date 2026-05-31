@@ -66,36 +66,17 @@ Sema::analyzeVarDef (VarDef *vd) {
     resolveType (&type);
     auto val = analyzeExpr (vd->Init (), vd->Type ());
     if (val.Val.has_value ()) {
-        if (isGlobal) {
-            if (val.Val->Kind != ValueKind::Const) {
-                _diag
-                    .Report (
-                        DiagCode::ECannotInitRuntimeVal,
-                        "cannot initialize global variable with a runtime value",
-                        Severity::Error)
-                    .AddSpan (
-                        vd->Init ()->Start (),
-                        vd->Init ()->End (),
-                        "evaluated at runtime")
-                    .AddNote (
-                        "global variables can only be initialized with compile-time "
-                        "constants or other global variables");
-                return;
-            }
-        }
-        if (vd->IsConst ()) {
-            if (val.Val->Kind != ValueKind::Const) {
-                _diag
-                    .Report (
-                        DiagCode::ENotAConst,
-                        "initializer element is not a constant expression",
-                        Severity::Error)
-                    .AddSpan (
-                        vd->Init ()->Start (),
-                        vd->Init ()->End (),
-                        "non-constant expression");
-                return;
-            }
+        if (vd->IsConst () && val.Val->Kind != ValueKind::Const) {
+            _diag
+                .Report (
+                    DiagCode::ENotAConst,
+                    "initializer element is not a constant expression",
+                    Severity::Error)
+                .AddSpan (
+                    vd->Init ()->Start (),
+                    vd->Init ()->End (),
+                    "non-constant expression");
+            return;
         }
     }
     if (type == nullptr) {

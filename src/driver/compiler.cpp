@@ -262,7 +262,7 @@ Compile (
         exit (1);
     }
 
-    CodeGen codegen (mod->Name, ctx.Globals (), ctx.Functions (), ctx.Structs ());
+    CodeGen codegen (mod, ctx.Globals (), ctx.Functions (), ctx.Structs ());
     auto    llvmMod = codegen.Generate ();
 
     InitializeLLVMTargets ();

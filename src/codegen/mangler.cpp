@@ -6,7 +6,7 @@
 namespace veo {
 
 std::string
-Mangler::MangleFunction (hir::Function *func) {
+Mangler::MangleFunction (const hir::Function *func) {
     auto              *sym = func->BaseSymbol ();
     std::ostringstream oss;
     oss << "_VF";
@@ -20,7 +20,7 @@ Mangler::MangleFunction (hir::Function *func) {
 }
 
 std::string
-Mangler::MangleMethod (symbols::Struct *sym, hir::Function *func) {
+Mangler::MangleMethod (const symbols::Struct *sym, hir::Function *func) {
 
     std::ostringstream oss;
     oss << "_VM";
@@ -35,7 +35,7 @@ Mangler::MangleMethod (symbols::Struct *sym, hir::Function *func) {
 }
 
 std::string
-Mangler::MangleGlobalVar (hir::VarDef *var) {
+Mangler::MangleGlobalVar (const hir::VarDef *var) {
 
     auto              *sym = var->BaseSymbol ();
     std::ostringstream oss;
@@ -46,7 +46,7 @@ Mangler::MangleGlobalVar (hir::VarDef *var) {
 }
 
 std::string
-Mangler::MangleStaticField (symbols::Struct *sym, const std::string &fieldName) {
+Mangler::MangleStaticField (const symbols::Struct *sym, const std::string &fieldName) {
     std::ostringstream oss;
     oss << "_VF";
     oss << MangleModule (sym->Parent);
@@ -56,13 +56,13 @@ Mangler::MangleStaticField (symbols::Struct *sym, const std::string &fieldName) 
 }
 
 std::string
-Mangler::MangleStruct (hir::StructDef *sd) {
+Mangler::MangleStruct (const hir::StructDef *sd) {
 
     return MangleStructSymbol (sd->BaseSymbol ());
 }
 
 std::string
-Mangler::MangleStructSymbol (symbols::Struct *sym) {
+Mangler::MangleStructSymbol (const symbols::Struct *sym) {
 
     std::ostringstream oss;
     oss << "_VS";
@@ -72,7 +72,7 @@ Mangler::MangleStructSymbol (symbols::Struct *sym) {
 }
 
 std::string
-Mangler::MangleModule (symbols::Module *mod) {
+Mangler::MangleModule (const symbols::Module *mod) {
     if (mod == nullptr) {
         return "";
     }
@@ -84,10 +84,10 @@ Mangler::MangleModule (symbols::Module *mod) {
 
 // NOLINTBEGIN(cppcoreguidelines-avoid-magic-numbers)
 std::string
-Mangler::MangleType (basic::Type *type) {
+Mangler::MangleType (const basic::Type *type) {
     switch (type->Kind ()) {
     case basic::TypeKind::Integer: {
-        auto *it = llvm::cast<basic::IntegerType> (type);
+        const auto *it = llvm::cast<basic::IntegerType> (type);
         switch (it->BitWidth ()) {
         case 16: return "s";
         case 32: return "i";
