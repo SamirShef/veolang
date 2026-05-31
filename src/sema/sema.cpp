@@ -550,11 +550,23 @@ Sema::analyzeExpr (Expr *expr, Type *expectedType) {
 
 Sema::SemanticResult
 Sema::analyzeLiteralExpr (LiteralExpr *le, Type *expectedType) {
-    const std::string &val = le->Value ();
+    std::string val = le->Value ();
     switch (le->Kind ()) {
 #define int_lit(kind, bitWidth, isUnsigned, min, max)                                    \
     case TokenKind::kind##Lit: {                                                         \
-        int64_t ival  = std::stoll (val);                                                \
+        int base = 10;                                                                   \
+        if (val.length () > 2) {                                                         \
+            switch (tolower (val[1])) {                                                  \
+            case 'x': base = 16; break;                                                  \
+            case 'o': base = 8; break;                                                   \
+            case 'b': base = 2; break;                                                   \
+            default: base = 10; break;                                                   \
+            }                                                                            \
+            if (base != 10) {                                                            \
+                val.erase (0, 2);                                                        \
+            }                                                                            \
+        }                                                                                \
+        int64_t ival  = std::stoll (val, nullptr, base);                                 \
         auto    value = Value (                                                          \
             ValueKind::Const,                                                            \
             ValueData (ival),                                                            \
@@ -624,7 +636,19 @@ Sema::analyzeLiteralExpr (LiteralExpr *le, Type *expectedType) {
                 .AddSpan (le->Start (), le->End ());
             return {};
         }
-        int64_t ival  = std::stoll (val);
+        int base = 10;
+        if (val.length () > 2) {
+            switch (tolower (val[1])) {
+            case 'x': base = 16; break;
+            case 'o': base = 8; break;
+            case 'b': base = 2; break;
+            default: base = 10; break;
+            }
+            if (base != 10) {
+                val.erase (0, 2);
+            }
+        }
+        int64_t ival  = std::stoll (val, nullptr, base);
         auto    value = Value (
             ValueKind::Const,
             expectedType->IsInteger () ? ValueData (ival)

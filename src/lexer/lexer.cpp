@@ -9,6 +9,17 @@ using namespace diagnostic;
 
 #define loc(ptr) llvm::SMLoc::getFromPointer (ptr)
 
+bool
+IsDigit (char c, int base) {
+    switch (base) {
+    case 2: return c >= '0' && c <= '1';
+    case 8: return c >= '0' && c <= '7';
+    case 10: return isdigit (c) != 0;
+    case 16: return isxdigit (c) != 0;
+    default: return false;
+    }
+}
+
 Token
 Lexer::NextToken () {
     if (peek () == '/' && (peek (1) == '/' || peek (1) == '*')) {
@@ -62,22 +73,42 @@ Token
 Lexer::tokenizeNumLit (const char *tokStart) {
     std::string val;
     bool        isFloat = false;
+    int         base    = 10;
     if (peek () == '.') {
         val += "0.";
         isFloat = true;
         ++_curPtr;
+    } else if (peek () == '0') {
+        switch (tolower (peek (1))) {
+        case 'x':
+            base = 16;
+            val += "0x";
+            break;
+        case 'o':
+            base = 8;
+            val += "0o";
+            break;
+        case 'b':
+            base = 2;
+            val += "0b";
+            break;
+        default: base = 10;
+        }
+        if (base != 10) {
+            _curPtr += 2;
+        }
     }
     while (peek () != '\0'
-           && ((isdigit (peek ()) != 0) || peek () == '.' || peek () == '_')) {
+           && (IsDigit (peek (), base) || peek () == '.' || peek () == '_')) {
         if (peek () == '_') {
-            if (isdigit (peek (-1)) == 0) {
+            if (!IsDigit (peek (-1), base)) {
                 break;
             }
             ++_curPtr;
             continue;
         }
         if (peek () == '.') {
-            if (isFloat || isdigit (peek (1)) == 0) {
+            if (isFloat || !IsDigit (peek (1), base) || base != 10) {
                 break;
             }
             isFloat = true;
