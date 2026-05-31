@@ -477,7 +477,7 @@ CodeGen::generateLValue (Node *node) {
         return _mod->getNamedGlobal (load->Name ());
     }
     case NodeKind::DerefExpr: {
-        return generateDerefExpr (llvm::cast<DerefExpr> (node));
+        return generateExpr (llvm::cast<DerefExpr> (node)->Expr ());
     }
     default: return nullptr;
     }

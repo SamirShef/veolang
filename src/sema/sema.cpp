@@ -1060,6 +1060,14 @@ Sema::analyzeAsgnField (
     if (!base.Val.has_value ()) {
         return {};
     }
+    while (base.Val->Type->IsPointer ()) {
+        base.Val->Type = base.Val->Type->AsPointer ()->Base ();
+        base.Node      = _builder.CreateDereference (
+            base.Node,
+            base.Val->Type,
+            fieldExpr->Start (),
+            fieldExpr->End ());
+    }
     if (!base.Val->Type->IsStruct ()) {
         _diag
             .Report (
@@ -1139,6 +1147,14 @@ Sema::analyzeFieldExpr (FieldExpr *fe, Type *expectedType) {
     auto base = analyzeExpr (fe->Base (), nullptr);
     if (!base.Val.has_value ()) {
         return {};
+    }
+    while (base.Val->Type->IsPointer ()) {
+        base.Val->Type = base.Val->Type->AsPointer ()->Base ();
+        base.Node      = _builder.CreateDereference (
+            base.Node,
+            base.Val->Type,
+            fe->Start (),
+            fe->End ());
     }
     if (!base.Val->Type->IsStruct ()) {
         _diag
@@ -1305,6 +1321,14 @@ Sema::analyzeMethodCall (MethodCall *mc, Type *expectedType) {
     auto base = analyzeExpr (mc->Base (), nullptr);
     if (!base.Val.has_value ()) {
         return {};
+    }
+    while (base.Val->Type->IsPointer ()) {
+        base.Val->Type = base.Val->Type->AsPointer ()->Base ();
+        base.Node      = _builder.CreateDereference (
+            base.Node,
+            base.Val->Type,
+            mc->Start (),
+            mc->End ());
     }
     if (!base.Val->Type->IsStruct ()) {
         _diag
