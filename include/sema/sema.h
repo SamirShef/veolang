@@ -276,15 +276,15 @@ private:
         llvm::SMLoc                start,
         llvm::SMLoc                end);
 
-    static void
+    void
     candidatesToStringVector (
         symbols::FunctionCandidates *candidates, std::vector<std::string> &res);
 
-    static void
+    void
     candidatesToStringVector (
         symbols::MethodCandidates *candidates, std::vector<std::string> &res);
 
-    static std::string
+    std::string
     funcCandidateToString (symbols::Function *func);
 
     static CastCost
@@ -318,6 +318,9 @@ private:
         const symbols::Struct *s,
         bool                   canAccessStatic,
         bool                   canAccessPrivate);
+
+    std::string
+    typeToString (Type *type);
 };
 
 }

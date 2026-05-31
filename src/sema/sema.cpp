@@ -198,7 +198,7 @@ Sema::analyzeRet (Return *ret) {
                 .Report (
                     DiagCode::ECannotCast,
                     "cannot implicitly cast 'noth' to '"
-                        + _funcRetTypes.top ()->ToString () + "'",
+                        + typeToString (_funcRetTypes.top ()) + "'",
                     Severity::Error)
                 .AddSpan (ret->Start (), ret->End ());
             return;
@@ -213,7 +213,7 @@ Sema::analyzeRet (Return *ret) {
             _diag
                 .Report (
                     DiagCode::ECannotCast,
-                    "cannot implicitly cast '" + res.Val->Type->ToString ()
+                    "cannot implicitly cast '" + typeToString (res.Val->Type)
                         + "' to 'noth'",
                     Severity::Error)
                 .AddSpan (ret->RetExpr ()->Start (), ret->RetExpr ()->End ());
@@ -423,7 +423,7 @@ Sema::declareImplMethods (ast::ImplStmt *is) {
             .Report (
                 DiagCode::ECannotImplForNonStructType,
                 "cannot implement methods for non-structure type '"
-                    + is->StructType ()->ToString () + "'",
+                    + typeToString (is->StructType ()) + "'",
                 Severity::Error)
             .AddSpan (is->Start (), is->End ());
         return;
@@ -578,7 +578,7 @@ Sema::analyzeLiteralExpr (LiteralExpr *le, Type *expectedType) {
             _diag                                                                        \
                 .Report (                                                                \
                     DiagCode::ELitOutOfRange,                                            \
-                    "literal out of range for '" + res.Val->Type->ToString () + "'",     \
+                    "literal out of range for '" + typeToString (res.Val->Type) + "'",   \
                     Severity::Error)                                                     \
                 .AddSpan (                                                               \
                     le->Start (),                                                        \
@@ -631,7 +631,8 @@ Sema::analyzeLiteralExpr (LiteralExpr *le, Type *expectedType) {
             _diag
                 .Report (
                     DiagCode::ECannotCast,
-                    "cannot implicitly cast 'i32' to '" + expectedType->ToString () + "'",
+                    "cannot implicitly cast 'i32' to '" + typeToString (expectedType)
+                        + "'",
                     Severity::Error)
                 .AddSpan (le->Start (), le->End ());
             return {};
@@ -665,7 +666,7 @@ Sema::analyzeLiteralExpr (LiteralExpr *le, Type *expectedType) {
             _diag
                 .Report (
                     DiagCode::ELitOutOfRange,
-                    "literal out of range for '" + value.Type->ToString () + "'",
+                    "literal out of range for '" + typeToString (value.Type) + "'",
                     Severity::Error)
                 .AddSpan (
                     le->Start (),
@@ -751,8 +752,8 @@ Sema::analyzeBinaryExpr (BinaryExpr *be, Type *expectedType) {
                     DiagCode::ECannotApplyOp,
                     "binary operator '" + std::string (BinOpToString (op))
                         + "' cannot be applied to non-integer types '"
-                        + lhs.Val->Type->ToString () + "' and '"
-                        + rhs.Val->Type->ToString () + "'",
+                        + typeToString (lhs.Val->Type) + "' and '"
+                        + typeToString (rhs.Val->Type) + "'",
                     Severity::Error)
                 .AddSpan (be->Start (), be->End ());
             return {};
@@ -813,7 +814,7 @@ Sema::analyzeUnaryExpr (UnaryExpr *ue, Type *expectedType) {
                 .Report (
                     DiagCode::ECannotApplyOp,
                     "unary operator '" + std::string (UnOpToString (op))
-                        + "' cannot be applied to type '" + rhs.Val->Type->ToString ()
+                        + "' cannot be applied to type '" + typeToString (rhs.Val->Type)
                         + "'",
                     Severity::Error)
                 .AddSpan (ue->Start (), ue->End ());
@@ -845,7 +846,7 @@ Sema::analyzeUnaryExpr (UnaryExpr *ue, Type *expectedType) {
                     DiagCode::ECannotApplyOp,
                     "unary operator '" + std::string (UnOpToString (op))
                         + "' cannot be applied to non-integer type '"
-                        + rhs.Val->Type->ToString () + "'",
+                        + typeToString (rhs.Val->Type) + "'",
                     Severity::Error)
                 .AddSpan (ue->Start (), ue->End ());
             return {};
@@ -999,7 +1000,7 @@ Sema::analyzeAsgnExpr (AsgnExpr *ae, Type *expectedType) {
             .Report (
                 DiagCode::ECannotApplyOp,
                 "cannot apply operator '" + std::string (AsgnOpToString (ae->Op ()))
-                    + "' with type '" + ptr.Val->Type->ToString () + "'",
+                    + "' with type '" + typeToString (ptr.Val->Type) + "'",
                 Severity::Error)
             .AddSpan (ae->Ptr ()->Start (), ae->Ptr ()->End ());
         return {};
@@ -1054,7 +1055,7 @@ Sema::analyzeAsgnField (
             .Report (
                 DiagCode::ECannotAccessFromNonStruct,
                 "attempted to access a field on a non-structure type '"
-                    + base.Val->Type->ToString () + "'",
+                    + typeToString (base.Val->Type) + "'",
                 Severity::Error)
             .AddSpan (fieldExpr->Name ().Start, fieldExpr->Name ().End);
         return {};
@@ -1118,7 +1119,7 @@ Sema::analyzeFieldExpr (FieldExpr *fe, Type *expectedType) {
             .Report (
                 DiagCode::ECannotAccessFromNonStruct,
                 "attempted to access a field on a non-structure type '"
-                    + base.Val->Type->ToString () + "'",
+                    + typeToString (base.Val->Type) + "'",
                 Severity::Error)
             .AddSpan (fe->Name ().Start, fe->Name ().End);
         return {};
@@ -1284,7 +1285,7 @@ Sema::analyzeMethodCall (MethodCall *mc, Type *expectedType) {
             .Report (
                 DiagCode::ECannotAccessFromNonStruct,
                 "attempted to access a method on a non-structure type '"
-                    + base.Val->Type->ToString () + "'",
+                    + typeToString (base.Val->Type) + "'",
                 Severity::Error)
             .AddSpan (mc->Name ().Start, mc->Name ().End);
         return {};
@@ -1447,7 +1448,8 @@ Sema::analyzeCastExpr (ast::CastExpr *ce, Type *expectedType) {
         _diag
             .Report (
                 DiagCode::ECannotCast,
-                "cannot cast '" + src->ToString () + "' to '" + dst->ToString () + "'",
+                "cannot cast '" + typeToString (src) + "' to '" + typeToString (dst)
+                    + "'",
                 Severity::Error)
             .AddSpan (ce->Start (), ce->End ());
 
@@ -1802,7 +1804,7 @@ Sema::foldUnary (
                         .Report (
                             DiagCode::ECannotApplyOp,
                             "cannot apply operator '!' with type '"
-                                + rhs.Type->ToString () + "'",
+                                + typeToString (rhs.Type) + "'",
                             Severity::Error)
                         .AddSpan (start, end);
                     return std::nullopt;
@@ -1857,8 +1859,8 @@ Sema::implicitlyCast (
         _diag
             .Report (
                 DiagCode::ECannotCast,
-                "cannot implicitly cast '" + src->ToString () + "' to '"
-                    + dst->ToString () + "'",
+                "cannot implicitly cast '" + typeToString (src) + "' to '"
+                    + typeToString (dst) + "'",
                 Severity::Error)
             .AddSpan (start, end);
 
@@ -2064,13 +2066,13 @@ Sema::funcCandidateToString (symbols::Function *func) {
     oss << "func " << func->Name.Val << "(";
     size_t i = 0;
     for (const auto &a : func->Args) {
-        oss << a.Type->ToString ();
+        oss << typeToString (a.Type);
         if (i < func->Args.size () - 1) {
             oss << ", ";
         }
         ++i;
     }
-    oss << "): " << func->RetType->ToString ();
+    oss << "): " << typeToString (func->RetType);
     return oss.str ();
 }
 
@@ -2241,6 +2243,23 @@ Sema::canAccessMethod (
         return false;
     }
     return true;
+}
+
+std::string
+Sema::typeToString (Type *type) {
+    if (!type->IsStruct ()) {
+        return type->ToString ();
+    }
+    const auto *sType  = type->AsStruct ();
+    std::string res    = sType->BaseSymbol ()->Name.Val;
+    Module     *curMod = sType->BaseSymbol ()->Parent;
+    while (curMod != nullptr) {
+        if (*curMod == *_mod) {
+            break;
+        }
+        res = curMod->Name + '.' + res; // NOLINT
+    }
+    return res;
 }
 
 }
