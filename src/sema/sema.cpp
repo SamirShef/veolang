@@ -488,7 +488,7 @@ Sema::analyzeImplStmt (ImplStmt *is) {
         if (!method.IsStatic) {
             args.emplace_back (
                 basic::NameObj ("this", fd->Name ().Start, fd->Name ().End),
-                is->StructType ());
+                createType<PointerType> (is->StructType ()));
         }
         for (const auto &arg : fd->Args ()) {
             args.emplace_back (arg);
@@ -1379,7 +1379,8 @@ Sema::analyzeMethodCall (MethodCall *mc, Type *expectedType) {
     }
     std::vector<hir::Node *> hirArgs;
     if (!method->IsStatic) {
-        hirArgs.emplace_back (base.Node);
+        hirArgs.emplace_back (
+            _builder.CreateReference (base.Node, mc->Start (), mc->End ()));
     }
     for (size_t i = 0; i < argResults.size (); ++i) {
         auto res = analyzeExpr (mc->Args ()[i], method->Func->Args[i].Type);
