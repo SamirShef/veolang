@@ -41,6 +41,9 @@ enum class DiagCode : uint8_t {
     ECannotFindType,
     ECannotInferType,
     ECannotImplForNonStructType,
+    ECannotTakeAddress,
+    ECannotDereferenceNonPointer,
+    ECannotAssignNilToNonPointer,
 
     WUnusedVar,
     WLossPrecision,

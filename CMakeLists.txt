@@ -11,10 +11,6 @@ find_package(LLVM REQUIRED CONFIG)
 message(STATUS "LLVM ${LLVM_PACKAGE_VERSION} was found")
 message(STATUS "LLVM path: ${LLVM_DIR}")
 
-get_filename_component(LLVM_PREFIX "${LLVM_DIR}/../../.." ABSOLUTE)
-find_package(LLD REQUIRED CONFIG HINTS "${LLVM_PREFIX}/lib/cmake/lld")
-message(STATUS "LLD was found using hints at: ${LLVM_PREFIX}/lib/cmake/lld")
-
 include_directories(SYSTEM ${LLVM_INCLUDE_DIRS})
 add_definitions(${LLVM_DEFINITIONS})
 

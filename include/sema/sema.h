@@ -2,10 +2,13 @@
 #include <ast/exprs/asgn_expr.h>
 #include <ast/exprs/bin_expr.h>
 #include <ast/exprs/cast_expr.h>
+#include <ast/exprs/deref.h>
 #include <ast/exprs/field_expr.h>
 #include <ast/exprs/func_call.h>
 #include <ast/exprs/lit_expr.h>
 #include <ast/exprs/method_call.h>
+#include <ast/exprs/nil.h>
+#include <ast/exprs/ref.h>
 #include <ast/exprs/struct_instance.h>
 #include <ast/exprs/ternary_expr.h>
 #include <ast/exprs/un_expr.h>
@@ -173,6 +176,9 @@ private:
     analyzeAsgnField (ast::AsgnExpr *ae, SemanticResult &expr, const SemanticResult &ptr);
 
     SemanticResult
+    analyzeAsgnPtr (ast::AsgnExpr *ae, SemanticResult &expr, const SemanticResult &ptr);
+
+    SemanticResult
     analyzeFieldExpr (ast::FieldExpr *fe, Type *expectedType);
 
     SemanticResult
@@ -186,6 +192,15 @@ private:
 
     SemanticResult
     analyzeCastExpr (ast::CastExpr *ce, Type *expectedType);
+
+    SemanticResult
+    analyzeRefExpr (ast::RefExpr *re, Type *expectedType);
+
+    SemanticResult
+    analyzeDerefExpr (ast::DerefExpr *de, Type *expectedType);
+
+    SemanticResult
+    analyzeNilExpr (ast::NilExpr *ne, Type *expectedType);
 
     hir::CastKind
     castInts (const IntegerType *src, const IntegerType *dst);

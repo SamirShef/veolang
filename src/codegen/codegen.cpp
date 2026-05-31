@@ -185,6 +185,9 @@ CodeGen::generateExpr (Node *node) {
         variant (LoadGlobalVarByName, generateLoadGlobalVarByName, LoadGlobalVarByName);
         variant (TernaryExpr, generateTernaryExpr, TernaryExpr);
         variant (Cast, generateCast, Cast);
+        variant (RefExpr, generateRefExpr, RefExpr);
+        variant (DerefExpr, generateDerefExpr, DerefExpr);
+        variant (NilExpr, generateNilExpr, NilExpr);
     default: return nullptr;
     }
 #undef variant
@@ -434,6 +437,23 @@ CodeGen::generateCast (Cast *cast) {
 }
 
 llvm::Value *
+CodeGen::generateRefExpr (hir::RefExpr *re) {
+    return generateLValue (re->Expr ());
+}
+
+llvm::Value *
+CodeGen::generateDerefExpr (hir::DerefExpr *de) {
+    auto *ptr = generateExpr (de->Expr ());
+    generateCheckNil (ptr, de->Start ());
+    return _builder.CreateLoad (getType (de->Type ()), ptr);
+}
+
+llvm::Value *
+CodeGen::generateNilExpr (hir::NilExpr *ne) {
+    return llvm::ConstantPointerNull::get (_builder.getPtrTy ());
+}
+
+llvm::Value *
 CodeGen::generateLValue (Node *node) {
     if (node == nullptr) {
         return nullptr;
@@ -455,6 +475,9 @@ CodeGen::generateLValue (Node *node) {
     case NodeKind::LoadGlobalVarByName: {
         auto *load = llvm::cast<LoadGlobalVarByName> (node);
         return _mod->getNamedGlobal (load->Name ());
+    }
+    case NodeKind::DerefExpr: {
+        return generateExpr (llvm::cast<DerefExpr> (node)->Expr ());
     }
     default: return nullptr;
     }
@@ -478,6 +501,7 @@ CodeGen::getType (basic::Type *type) {
         return llvm::StructType::getTypeByName (
             _ctx,
             Mangler::MangleStructSymbol (type->AsStruct ()->BaseSymbol ()));
+    case basic::TypeKind::Pointer: return _builder.getPtrTy ();
     default: {
     }
     }
@@ -538,6 +562,51 @@ CodeGen::generateImplicitMain () {
 
     auto *callMain = _builder.CreateCall (_userMain->LLVM, args); // call user main
     _builder.CreateRet (callMain);
+}
+
+void
+CodeGen::generateRuntime () {
+    auto *abortFuncType = llvm::FunctionType::get (_builder.getVoidTy (), false);
+    auto *abortFunc     = llvm::Function::Create (
+        abortFuncType,
+        llvm::GlobalValue::ExternalLinkage,
+        "abort",
+        *_mod);
+
+    auto *printfFuncType = llvm::FunctionType::get (
+        _builder.getInt32Ty (),
+        { _builder.getPtrTy () },
+        true);
+    auto *printfFunc = llvm::Function::Create (
+        printfFuncType,
+        llvm::GlobalValue::ExternalLinkage,
+        "printf",
+        *_mod);
+}
+
+void
+CodeGen::generateCheckNil (llvm::Value *ptr, llvm::SMLoc start) {
+    auto *parent  = _builder.GetInsertBlock ()->getParent ();
+    auto *cond    = _builder.CreateIsNull (ptr);
+    auto *thenBB  = llvm::BasicBlock::Create (_ctx, "then", parent);
+    auto *mergeBB = llvm::BasicBlock::Create (_ctx, "merge", parent);
+    _builder.CreateCondBr (cond, thenBB, mergeBB);
+
+    _builder.SetInsertPoint (thenBB);
+    auto               bufferId   = _srcMgr.FindBufferContainingLoc (start);
+    const auto        &buffer     = _srcMgr.getBufferInfo (bufferId);
+    const std::string &bufferName = buffer.Buffer->getBufferIdentifier ().str ();
+    auto               lineCol    = _srcMgr.getLineAndColumn (start);
+    auto              *msg        = _builder.CreateGlobalString (
+        "Null pointer dereferencing at: " + bufferName + ":"
+        + std::to_string (lineCol.first) + ":" + std::to_string (lineCol.second) + '\n');
+    auto *printfFunc = _mod->getFunction ("printf");
+    _builder.CreateCall (printfFunc, { msg });
+    auto *abortFunc = _mod->getFunction ("abort");
+    _builder.CreateCall (abortFunc, {});
+    _builder.CreateUnreachable ();
+
+    _builder.SetInsertPoint (mergeBB);
 }
 
 }

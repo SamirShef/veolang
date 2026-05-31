@@ -65,6 +65,9 @@ Sema::analyzeVarDef (VarDef *vd) {
     Type *type     = vd->Type ();
     resolveType (&type);
     auto val = analyzeExpr (vd->Init (), vd->Type ());
+    if (!val.Val.has_value () && vd->Init () != nullptr) {
+        return;
+    }
     if (val.Val.has_value ()) {
         if (vd->IsConst () && val.Val->Kind != ValueKind::Const) {
             _diag
@@ -543,6 +546,9 @@ Sema::analyzeExpr (Expr *expr, Type *expectedType) {
         variant (MethodCall, analyzeMethodCall, MethodCall);
         variant (TernaryExpr, analyzeTernaryExpr, TernaryExpr);
         variant (CastExpr, analyzeCastExpr, CastExpr);
+        variant (RefExpr, analyzeRefExpr, RefExpr);
+        variant (DerefExpr, analyzeDerefExpr, DerefExpr);
+        variant (NilExpr, analyzeNilExpr, NilExpr);
     default: return {};
     }
 #undef variant
@@ -974,10 +980,9 @@ Sema::analyzeAsgnExpr (AsgnExpr *ae, Type *expectedType) {
     if (ae->Ptr () == nullptr) {
         return {};
     }
-    // TODO: add check for pointer dereference
-    // For example: *p = 10;
     if (ae->Ptr ()->Kind () != NodeKind::VarExpr
-        && ae->Ptr ()->Kind () != NodeKind::FieldExpr) {
+        && ae->Ptr ()->Kind () != NodeKind::FieldExpr
+        && ae->Ptr ()->Kind () != NodeKind::DerefExpr) {
         _diag
             .Report (
                 DiagCode::ELHSIsNotAssignable,
@@ -1007,10 +1012,15 @@ Sema::analyzeAsgnExpr (AsgnExpr *ae, Type *expectedType) {
     }
     if (ae->Ptr ()->Kind () == NodeKind::VarExpr) {
         expr = analyzeAsgnVar (ae, expr, ptr);
-    } else { // only field
+    } else if (ae->Ptr ()->Kind () == NodeKind::FieldExpr) {
         expr = analyzeAsgnField (ae, expr, ptr);
+    } else { // pointer
+        expr = analyzeAsgnPtr (ae, expr, ptr);
     }
-    expr       = implicitlyCast (expr, &expectedType, ae->Start (), ae->End ());
+    expr = implicitlyCast (expr, &expectedType, ae->Start (), ae->End ());
+    if (!expr.Val.has_value ()) {
+        return {};
+    }
     auto *node = _builder.CreateStore (ptr.Node, expr.Node, ae->Start (), ae->End ());
     return { expr.Val, node };
 }
@@ -1049,6 +1059,14 @@ Sema::analyzeAsgnField (
     auto  base      = analyzeExpr (fieldExpr->Base (), nullptr);
     if (!base.Val.has_value ()) {
         return {};
+    }
+    while (base.Val->Type->IsPointer ()) {
+        base.Val->Type = base.Val->Type->AsPointer ()->Base ();
+        base.Node      = _builder.CreateDereference (
+            base.Node,
+            base.Val->Type,
+            fieldExpr->Start (),
+            fieldExpr->End ());
     }
     if (!base.Val->Type->IsStruct ()) {
         _diag
@@ -1109,10 +1127,34 @@ Sema::analyzeAsgnField (
 }
 
 Sema::SemanticResult
+Sema::analyzeAsgnPtr (
+    ast::AsgnExpr *ae, SemanticResult &expr, const SemanticResult &ptr) {
+    auto op = AsgnOpToBinOp (ae->Op ());
+    if (ae->Op () != AsgnOp::Eq) {
+        expr.Node = _builder.CreateBinary (
+            op,
+            expr.Val->Type,
+            ptr.Node,
+            expr.Node,
+            ae->Init ()->Start (),
+            ae->Init ()->End ());
+    }
+    return expr;
+}
+
+Sema::SemanticResult
 Sema::analyzeFieldExpr (FieldExpr *fe, Type *expectedType) {
     auto base = analyzeExpr (fe->Base (), nullptr);
     if (!base.Val.has_value ()) {
         return {};
+    }
+    while (base.Val->Type->IsPointer ()) {
+        base.Val->Type = base.Val->Type->AsPointer ()->Base ();
+        base.Node      = _builder.CreateDereference (
+            base.Node,
+            base.Val->Type,
+            fe->Start (),
+            fe->End ());
     }
     if (!base.Val->Type->IsStruct ()) {
         _diag
@@ -1279,6 +1321,14 @@ Sema::analyzeMethodCall (MethodCall *mc, Type *expectedType) {
     auto base = analyzeExpr (mc->Base (), nullptr);
     if (!base.Val.has_value ()) {
         return {};
+    }
+    while (base.Val->Type->IsPointer ()) {
+        base.Val->Type = base.Val->Type->AsPointer ()->Base ();
+        base.Node      = _builder.CreateDereference (
+            base.Node,
+            base.Val->Type,
+            mc->Start (),
+            mc->End ());
     }
     if (!base.Val->Type->IsStruct ()) {
         _diag
@@ -1456,6 +1506,83 @@ Sema::analyzeCastExpr (ast::CastExpr *ce, Type *expectedType) {
         return {};
     }
     return cast (kind, dst, val, ce->Start (), ce->End ());
+}
+
+Sema::SemanticResult
+Sema::analyzeRefExpr (RefExpr *re, Type *expectedType) {
+    if (re->GetExpr ()->Kind () != NodeKind::VarExpr
+        && re->GetExpr ()->Kind () != NodeKind::FieldExpr) {
+        _diag
+            .Report (
+                DiagCode::ECannotTakeAddress,
+                "cannot take the address of an rvalue",
+                Severity::Error)
+            .AddSpan (re->GetExpr ()->Start (), re->GetExpr ()->End ());
+        return {};
+    }
+    auto expr = analyzeExpr (re->GetExpr (), nullptr);
+    if (!expr.Val.has_value ()) {
+        return {};
+    }
+    auto *ptrType = createType<PointerType> (expr.Val->Type);
+    auto  val     = Value (ValueKind::Unknown, ptrType);
+    auto *node    = _builder.CreateReference (expr.Node, re->Start (), re->End ());
+    auto  res     = SemanticResult (val, node);
+    res           = implicitlyCast (res, &expectedType, re->Start (), re->End ());
+    return res;
+}
+
+Sema::SemanticResult
+Sema::analyzeDerefExpr (DerefExpr *de, Type *expectedType) {
+    auto expr = analyzeExpr (de->GetExpr (), nullptr);
+    if (!expr.Val.has_value ()) {
+        return {};
+    }
+    if (!expr.Val->Type->IsPointer ()) {
+        _diag
+            .Report (
+                DiagCode::ECannotDereferenceNonPointer,
+                "type '" + typeToString (expr.Val->Type) + "' cannot be dereferenced",
+                Severity::Error)
+            .AddSpan (de->GetExpr ()->Start (), de->GetExpr ()->End ());
+        return {};
+    }
+    auto *ptrBaseType = expr.Val->Type->AsPointer ()->Base ();
+    auto  val         = Value (ValueKind::Unknown, ptrBaseType);
+    auto *node
+        = _builder.CreateDereference (expr.Node, ptrBaseType, de->Start (), de->End ());
+    auto res = SemanticResult (val, node);
+    res      = implicitlyCast (res, &expectedType, de->Start (), de->End ());
+    return res;
+}
+
+Sema::SemanticResult
+Sema::analyzeNilExpr (NilExpr *ne, Type *expectedType) {
+    if (expectedType == nullptr) {
+        _diag
+            .Report (
+                DiagCode::ECannotInferType,
+                "cannot infer pointer type for 'nil'",
+                Severity::Error)
+            .AddSpan (ne->Start (), ne->End ());
+        return {};
+    }
+    if (!expectedType->IsPointer ()) {
+        _diag
+            .Report (
+                DiagCode::ECannotAssignNilToNonPointer,
+                "cannot assign 'nil' to a non-pointer type '"
+                    + typeToString (expectedType) + "'",
+                Severity::Error)
+            .AddSpan (
+                ne->Start (),
+                ne->End (),
+                "expected '" + typeToString (expectedType) + "', found 'nil'");
+        return {};
+    }
+    auto  val  = Value (ValueKind::Unknown, expectedType);
+    auto *node = _builder.CreateNil (ne->Start (), ne->End ());
+    return { val, node };
 }
 
 hir::CastKind
