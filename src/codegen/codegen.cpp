@@ -479,7 +479,12 @@ CodeGen::generateLValue (Node *node) {
     case NodeKind::DerefExpr: {
         return generateExpr (llvm::cast<DerefExpr> (node)->Expr ());
     }
-    default: return nullptr;
+    default: {
+        auto *val       = generateExpr (node);
+        auto *tmpAlloca = _builder.CreateAlloca (val->getType ());
+        _builder.CreateStore (val, tmpAlloca);
+        return tmpAlloca;
+    }
     }
 }
 

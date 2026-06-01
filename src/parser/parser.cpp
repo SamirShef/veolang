@@ -579,14 +579,14 @@ Parser::parsePrimaryExpr (bool allowStruct) {
         return createNode<VarExpr> (basic::NameObj (tok), tok.Start, tok.End);
     }
     case TokenKind::Star: {
-        Expr *expr = parsePrimaryExpr ();
+        Expr *expr = parseExpr ((int) Precedence::Unary);
         if (expr == nullptr) {
             return nullptr;
         }
         return createNode<DerefExpr> (expr, tok.Start, expr->End ());
     }
     case TokenKind::BitAnd: {
-        Expr *expr = parsePrimaryExpr ();
+        Expr *expr = parseExpr ((int) Precedence::Unary);
         if (expr == nullptr) {
             return nullptr;
         }

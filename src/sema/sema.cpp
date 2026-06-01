@@ -1347,9 +1347,10 @@ Sema::analyzeMethodCall (MethodCall *mc, Type *expectedType) {
             .AddSpan (mc->Name ().Start, mc->Name ().End);
         return {};
     }
-    auto *s            = base.Val->Type->AsStruct ()->BaseSymbol ();
-    bool  baseIsConst  = base.Val->Kind == ValueKind::Const;
-    bool  baseIsStatic = base.Val->Kind == ValueKind::Type;
+    auto *s              = base.Val->Type->AsStruct ()->BaseSymbol ();
+    bool  baseIsConstVar = base.Val->Kind == ValueKind::Const
+                           && base.Node->Kind () == hir::NodeKind::LoadVar;
+    bool  baseIsStatic   = base.Val->Kind == ValueKind::Type;
     bool  baseIsThis
         = !baseIsStatic && _insideMethod.has_value () && *_insideMethod->second == *s;
     bool canAccessPrivate
@@ -1385,7 +1386,7 @@ Sema::analyzeMethodCall (MethodCall *mc, Type *expectedType) {
     if (!canAccessMethod (mc->Name (), *method, s, baseIsStatic, canAccessPrivate)) {
         return {};
     }
-    if (baseIsConst) {
+    if (baseIsConstVar) {
         _methodCallOnConstBase.emplace_back (mc, method);
     }
     std::vector<hir::Node *> hirArgs;
@@ -1650,6 +1651,12 @@ Sema::cast (
 Type *
 Sema::resolveType (Type **type) {
     if (*type == nullptr) {
+        return *type;
+    }
+    if ((*type)->IsPointer ()) {
+        auto *ptrBase = (*type)->AsPointer ()->Base ();
+        resolveType (&ptrBase);
+        *type = createType<PointerType> (ptrBase);
         return *type;
     }
     if (!(*type)->IsNamed ()) {
@@ -1960,11 +1967,14 @@ Sema::foldUnary (
 
 bool
 Sema::canImplicitlyCast (Sema::SemanticResult val, Type **expectedType) {
-    if (!val.Val.has_value () || *expectedType == nullptr) {
+    if (!val.Val.has_value ()) {
         return false;
     }
     resolveType (&val.Val->Type);
     resolveType (expectedType);
+    if (*expectedType == nullptr) {
+        return false;
+    }
 
     Type *src = val.Val->Type;
     Type *dst = *expectedType;
@@ -1982,11 +1992,14 @@ Sema::canImplicitlyCast (Sema::SemanticResult val, Type **expectedType) {
 Sema::SemanticResult
 Sema::implicitlyCast (
     SemanticResult val, Type **expectedType, llvm::SMLoc start, llvm::SMLoc end) {
-    if (!val.Val.has_value () || *expectedType == nullptr) {
+    if (!val.Val.has_value ()) {
         return val;
     }
     resolveType (&val.Val->Type);
     resolveType (expectedType);
+    if (*expectedType == nullptr) {
+        return val;
+    }
 
     Type *src = val.Val->Type;
     Type *dst = *expectedType;
@@ -2386,6 +2399,9 @@ Sema::canAccessMethod (
 
 std::string
 Sema::typeToString (Type *type) {
+    if (type->IsPointer ()) {
+        return '*' + typeToString (type->AsPointer ()->Base ());
+    }
     if (!type->IsStruct ()) {
         return type->ToString ();
     }
