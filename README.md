@@ -29,7 +29,7 @@ sudo apt-get update
 sudo apt-get install -y build-essential cmake ninja-build
 
 # Install LLVM 21 (using the official LLVM repository if not available in default package manager)
-wget [https://apt.llvm.org/llvm.sh](https://apt.llvm.org/llvm.sh)
+wget https://apt.llvm.org/llvm.sh
 chmod +x llvm.sh
 sudo ./llvm.sh 21
 sudo apt-get install -y llvm-21-dev libclang-21-dev lld-21
