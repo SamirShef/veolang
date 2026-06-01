@@ -918,12 +918,16 @@ Sema::analyzeVarExpr (VarExpr *ve, Type *expectedType) {
         var->IsConst ? var->Val->Data : ValueData (),
         var->Type);
     hir::Node *node = nullptr;
-    node            = _builder.CreateLoadVar (
-        var->Index,
-        var->Type,
-        var->IsGlobal,
-        ve->Start (),
-        ve->End ());
+    if (var->IsConst && !_exprAsLValue) {
+        node = _builder.CreateLiteral (value, ve->Start (), ve->End ());
+    } else {
+        node = _builder.CreateLoadVar (
+            var->Index,
+            var->Type,
+            var->IsGlobal,
+            ve->Start (),
+            ve->End ());
+    }
     auto res = SemanticResult (value, node);
     if (expectedType != nullptr) {
         res = implicitlyCast (res, &expectedType, ve->Start (), ve->End ());
@@ -1081,6 +1085,10 @@ Sema::analyzeAsgnField (
     bool canAccessPrivate
         = baseIsThis
           || baseIsStatic && _insideMethod.has_value () && *_insideMethod->second == *sym;
+    if (baseIsThis) {
+        // Modifying 'this' object
+        _insideMethod->first->IsConst = false;
+    }
     auto field = std::ranges::find_if (sym->Fields, [&] (const symbols::Field &field) {
         return field.Name.Val == fieldExpr->Name ().Val;
     });
@@ -1314,7 +1322,10 @@ Sema::analyzeStructInstance (StructInstance *si, Type *expectedType) {
 
 Sema::SemanticResult
 Sema::analyzeMethodCall (MethodCall *mc, Type *expectedType) {
-    auto base = analyzeExpr (mc->Base (), nullptr);
+    bool oldExprAsLValue = _exprAsLValue;
+    _exprAsLValue        = true;
+    auto base            = analyzeExpr (mc->Base (), nullptr);
+    _exprAsLValue        = oldExprAsLValue;
     if (!base.Val.has_value ()) {
         return {};
     }
@@ -1337,6 +1348,7 @@ Sema::analyzeMethodCall (MethodCall *mc, Type *expectedType) {
         return {};
     }
     auto *s            = base.Val->Type->AsStruct ()->BaseSymbol ();
+    bool  baseIsConst  = base.Val->Kind == ValueKind::Const;
     bool  baseIsStatic = base.Val->Kind == ValueKind::Type;
     bool  baseIsThis
         = !baseIsStatic && _insideMethod.has_value () && *_insideMethod->second == *s;
@@ -1372,6 +1384,9 @@ Sema::analyzeMethodCall (MethodCall *mc, Type *expectedType) {
 
     if (!canAccessMethod (mc->Name (), *method, s, baseIsStatic, canAccessPrivate)) {
         return {};
+    }
+    if (baseIsConst) {
+        _methodCallOnConstBase.emplace_back (mc, method);
     }
     std::vector<hir::Node *> hirArgs;
     if (!method->IsStatic) {
@@ -2384,6 +2399,20 @@ Sema::typeToString (Type *type) {
         res = curMod->Name + '.' + res; // NOLINT
     }
     return res;
+}
+
+void
+Sema::analyzeMethodCallOnConstBase (MethodCall *mc, symbols::Method *method) {
+    if (!method->IsConst) {
+        _diag
+            .Report (
+                DiagCode::ECannotCallMethodOnImmutableReceiver,
+                "method '" + mc->Name ().Val
+                    + "' cannot be called on an immutable receiver",
+                Severity::Error)
+            .AddSpan (mc->Name ().Start, mc->Name ().End);
+        return;
+    }
 }
 
 }

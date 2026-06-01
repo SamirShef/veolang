@@ -62,6 +62,9 @@ class Sema {
     std::stack<Loop> _loops;
 
     std::optional<std::pair<symbols::Method *, symbols::Struct *>> _insideMethod;
+    std::vector<std::pair<ast::MethodCall *, symbols::Method *>>   _methodCallOnConstBase;
+
+    bool _exprAsLValue = false;
 
 public:
     Sema (
@@ -102,6 +105,10 @@ public:
                 continue;
             }
             analyzeStmt (stmt);
+        }
+
+        for (auto &[node, method] : _methodCallOnConstBase) {
+            analyzeMethodCallOnConstBase (node, method);
         }
     }
 
@@ -336,6 +343,9 @@ private:
 
     std::string
     typeToString (Type *type);
+
+    void
+    analyzeMethodCallOnConstBase (ast::MethodCall *mc, symbols::Method *method);
 };
 
 }
