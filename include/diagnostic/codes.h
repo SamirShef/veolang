@@ -44,6 +44,7 @@ enum class DiagCode : uint8_t {
     ECannotTakeAddress,
     ECannotDereferenceNonPointer,
     ECannotAssignNilToNonPointer,
+    ECannotCallMethodOnImmutableReceiver,
 
     WUnusedVar,
     WLossPrecision,
