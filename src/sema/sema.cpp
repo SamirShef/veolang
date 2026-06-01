@@ -918,16 +918,12 @@ Sema::analyzeVarExpr (VarExpr *ve, Type *expectedType) {
         var->IsConst ? var->Val->Data : ValueData (),
         var->Type);
     hir::Node *node = nullptr;
-    if (var->IsConst) {
-        node = _builder.CreateLiteral (value, ve->Start (), ve->End ());
-    } else {
-        node = _builder.CreateLoadVar (
-            var->Index,
-            var->Type,
-            var->IsGlobal,
-            ve->Start (),
-            ve->End ());
-    }
+    node            = _builder.CreateLoadVar (
+        var->Index,
+        var->Type,
+        var->IsGlobal,
+        ve->Start (),
+        ve->End ());
     auto res = SemanticResult (value, node);
     if (expectedType != nullptr) {
         res = implicitlyCast (res, &expectedType, ve->Start (), ve->End ());
