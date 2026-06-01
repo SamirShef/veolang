@@ -918,7 +918,7 @@ Sema::analyzeVarExpr (VarExpr *ve, Type *expectedType) {
         var->IsConst ? var->Val->Data : ValueData (),
         var->Type);
     hir::Node *node = nullptr;
-    if (var->IsConst && !_exprAsLValue) {
+    if (var->IsConst && !value.Type->IsStruct ()) {
         node = _builder.CreateLiteral (value, ve->Start (), ve->End ());
     } else {
         node = _builder.CreateLoadVar (
@@ -1322,10 +1322,7 @@ Sema::analyzeStructInstance (StructInstance *si, Type *expectedType) {
 
 Sema::SemanticResult
 Sema::analyzeMethodCall (MethodCall *mc, Type *expectedType) {
-    bool oldExprAsLValue = _exprAsLValue;
-    _exprAsLValue        = true;
-    auto base            = analyzeExpr (mc->Base (), nullptr);
-    _exprAsLValue        = oldExprAsLValue;
+    auto base = analyzeExpr (mc->Base (), nullptr);
     if (!base.Val.has_value ()) {
         return {};
     }

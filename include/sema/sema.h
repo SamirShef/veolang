@@ -64,8 +64,6 @@ class Sema {
     std::optional<std::pair<symbols::Method *, symbols::Struct *>> _insideMethod;
     std::vector<std::pair<ast::MethodCall *, symbols::Method *>>   _methodCallOnConstBase;
 
-    bool _exprAsLValue = false;
-
 public:
     Sema (
         DiagnosticEngine &diag,
