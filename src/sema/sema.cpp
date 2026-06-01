@@ -14,6 +14,24 @@ namespace veo {
 using namespace symbols;
 using namespace ast;
 
+static std::optional<long long>
+SafeStoll (const std::string &str, int base = 10) {
+    char *endptr = nullptr;
+    errno        = 0;
+
+    auto result = std::strtoll (str.c_str (), &endptr, base);
+
+    if (endptr == str.c_str ()) {
+        return std::nullopt;
+    }
+
+    if (errno == ERANGE) {
+        return std::nullopt;
+    }
+
+    return result;
+}
+
 static BinOp
 AsgnOpToBinOp (AsgnOp op) {
 #define variant(kind, op)                                                                \
@@ -558,7 +576,7 @@ Sema::SemanticResult
 Sema::analyzeLiteralExpr (LiteralExpr *le, Type *expectedType) {
     std::string val = le->Value ();
     switch (le->Kind ()) {
-#define int_lit(kind, bitWidth, isUnsigned, min, max)                                    \
+#define int_lit(kind, typeName, bitWidth, isUnsigned, min, max)                          \
     case TokenKind::kind##Lit: {                                                         \
         int base = 10;                                                                   \
         if (val.length () > 2) {                                                         \
@@ -572,10 +590,25 @@ Sema::analyzeLiteralExpr (LiteralExpr *le, Type *expectedType) {
                 val.erase (0, 2);                                                        \
             }                                                                            \
         }                                                                                \
-        int64_t ival  = std::stoll (val, nullptr, base);                                 \
-        auto    value = Value (                                                          \
+        auto ival = SafeStoll (val, base);                                               \
+        if (!ival.has_value ()) {                                                        \
+            _diag                                                                        \
+                .Report (                                                                \
+                    DiagCode::EIntLitTooLarge,                                           \
+                    "integer literal is too large for type '" #typeName "'",             \
+                    Severity::Error)                                                     \
+                .AddSpan (                                                               \
+                    le->Start (),                                                        \
+                    le->End (),                                                          \
+                    "value overflows " #bitWidth "-bit integer")                         \
+                .AddNote (                                                               \
+                    "the maximum supported literal value is " + std::to_string (max)     \
+                    + " (max " #typeName ")");                                           \
+            return {};                                                                   \
+        }                                                                                \
+        auto value = Value (                                                             \
             ValueKind::Const,                                                            \
-            ValueData (ival),                                                            \
+            ValueData (ival.value ()),                                                   \
             createType<IntegerType> (bitWidth, isUnsigned));                             \
         auto res = SemanticResult (                                                      \
             value,                                                                       \
@@ -616,15 +649,15 @@ Sema::analyzeLiteralExpr (LiteralExpr *le, Type *expectedType) {
         return res;                                                                      \
     }
 
-        int_lit (U8, 8, true, 0, UINT8_MAX);
-        int_lit (U16, 16, true, 0, UINT16_MAX);
-        int_lit (U32, 32, true, 0, UINT32_MAX);
-        int_lit (U64, 64, true, 0, UINT64_MAX);
+        int_lit (U8, u8, 8, true, 0, UINT8_MAX);
+        int_lit (U16, u16, 16, true, 0, UINT16_MAX);
+        int_lit (U32, u32, 32, true, 0, UINT32_MAX);
+        int_lit (U64, u64, 64, true, 0, UINT64_MAX);
 
-        int_lit (I8, 8, false, INT8_MIN, INT8_MAX);
-        int_lit (I16, 16, false, INT16_MIN, INT16_MAX);
-        int_lit (I32, 32, false, INT32_MIN, INT32_MAX);
-        int_lit (I64, 64, false, INT64_MIN, INT64_MAX);
+        int_lit (I8, i8, 8, false, INT8_MIN, INT8_MAX);
+        int_lit (I16, i16, 16, false, INT16_MIN, INT16_MAX);
+        int_lit (I32, i32, 32, false, INT32_MIN, INT32_MAX);
+        int_lit (I64, i64, 64, false, INT64_MIN, INT64_MAX);
 
         float_lit (F32, Float);
         float_lit (F64, Double);
@@ -655,20 +688,37 @@ Sema::analyzeLiteralExpr (LiteralExpr *le, Type *expectedType) {
                 val.erase (0, 2);
             }
         }
-        int64_t ival  = std::stoll (val, nullptr, base);
-        auto    value = Value (
+        auto ival = SafeStoll (val, base);
+        if (!ival.has_value ()) {
+            _diag
+                .Report (
+                    DiagCode::EIntLitTooLarge,
+                    "integer literal is too large to fit in any integer type",
+                    Severity::Error)
+                .AddSpan (le->Start (), le->End (), "value overflows 64-bit integer")
+                .AddNote (
+                    "the maximum supported literal value is " + std::to_string (~0ULL)
+                    + " (max u64)");
+            return {};
+        }
+        auto value = Value (
             ValueKind::Const,
-            expectedType->IsInteger () ? ValueData (ival)
-                                       : ValueData (static_cast<double> (ival)),
+            expectedType->IsInteger () ? ValueData (ival.value ())
+                                       : ValueData (static_cast<double> (ival.value ())),
             expectedType);
         if (expectedType->IsInteger () && !canFit (value, expectedType)) {
             const auto *it  = expectedType->AsInteger ();
             int64_t     min = it->IsUnsigned ()
                                   ? 0
                                   : -static_cast<int64_t> (1ULL << (it->BitWidth () - 1));
-            auto max = it->IsUnsigned ()
-                           ? static_cast<int64_t> (1ULL << it->BitWidth ()) - 1
-                           : static_cast<int64_t> (1ULL << (it->BitWidth () - 1)) - 1;
+            uint64_t    max = 0;
+            if (it->IsUnsigned ()) {
+                max = it->BitWidth () == 64
+                          ? ~0ULL
+                          : static_cast<uint64_t> (1ULL << it->BitWidth ()) - 1;
+            } else {
+                max = static_cast<uint64_t> (1ULL << (it->BitWidth () - 1)) - 1;
+            }
             _diag
                 .Report (
                     DiagCode::ELitOutOfRange,
@@ -953,6 +1003,9 @@ Sema::analyzeFuncCall (FuncCall *fc, Type *expectedType) {
     std::vector<SemanticResult> argResults;
     for (auto &a : fc->Args ()) {
         auto argRes = analyzeExpr (a, nullptr);
+        if (!argRes.Val.has_value ()) {
+            continue;
+        }
         argResults.emplace_back (argRes);
         argTypes.emplace_back (argRes.Val->Type);
     }
@@ -1370,6 +1423,9 @@ Sema::analyzeMethodCall (MethodCall *mc, Type *expectedType) {
     std::vector<SemanticResult> argResults;
     for (auto &a : mc->Args ()) {
         auto argRes = analyzeExpr (a, nullptr);
+        if (!argRes.Val.has_value ()) {
+            continue;
+        }
         argResults.emplace_back (argRes);
         argTypes.emplace_back (argRes.Val->Type);
     }
@@ -2045,13 +2101,13 @@ Sema::canFit (Value &val, const Type *targetType) {
                     if (arg < 0) {
                         return false;
                     }
-                    auto     uval = static_cast<uint64_t> (arg);
-                    uint64_t umax = (1ULL << bits) - 1;
+                    auto uval = static_cast<uint64_t> (arg);
+                    auto umax = (bits == 64) ? ~0ULL : (1ULL << bits) - 1;
                     return uval <= umax;
                 }
                 auto min = -static_cast<int64_t> ((1ULL << (bits - 1)));
-                auto max = static_cast<int64_t> ((1ULL << (bits - 1)) - 1);
-                return arg >= min && arg <= max;
+                auto max = static_cast<uint64_t> ((1ULL << (bits - 1))) - 1;
+                return arg >= min && static_cast<uint64_t> (arg) <= max;
             }
 
             return false;
