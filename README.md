@@ -61,8 +61,8 @@ pacman -Syu --needed \
 * Clone the repository:
 
 ```bash
-git clone [https://github.com/SamirShef/veolang.git](https://github.com/SamirShef/veolang.git)
-cd veoc
+git clone https://github.com/SamirShef/veolang.git
+cd veolang
 ```
 
 * Configure the project using CMake. It is recommended to use lld for faster linking:
@@ -94,8 +94,8 @@ ctest --output-on-failure
 * Clone the repository and navigate into it:
 
 ```bash
-git clone [https://github.com/SamirShef/veolang.git](https://github.com/SamirShef/veolang.git)
-cd veoc
+git clone https://github.com/SamirShef/veolang.git
+cd veolang
 ```
 
 * Ensure the LLVM 21 binaries are in your environment path, then configure the build using Ninja and Clang:
