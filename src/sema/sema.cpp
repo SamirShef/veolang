@@ -916,18 +916,18 @@ Sema::analyzeUnaryExpr (UnaryExpr *ue, Type *expectedType) {
     if (rhs.Val->Kind == ValueKind::Const) {
         auto foldedValue = foldUnary (op, *rhs.Val, resType, ue->Start (), ue->End ());
         auto res         = SemanticResult (foldedValue, nullptr);
-        if (expectedType != nullptr) {
-            res = implicitlyCast (res, &expectedType, ue->Start (), ue->End ());
-        }
         if (op == UnOp::Inverse) {
             auto iVal       = std::get<0> (rhs.Val->Data);
             bool isUnsigned = resType->AsInteger ()->IsUnsigned ();
             res.Val         = Value (
                 ValueKind::Const,
                 ValueData (
-                    isUnsigned ? static_cast<int64_t> (~static_cast<uint64_t> (iVal))
+                    isUnsigned ? (~static_cast<int64_t> (iVal)) // NOLINT
                                : ~iVal), // NOLINT(hicpp-signed-bitwise)
                 resType);
+        }
+        if (expectedType != nullptr) {
+            res = implicitlyCast (res, &expectedType, ue->Start (), ue->End ());
         }
         if (res.Val.has_value ()) {
             return {
@@ -2035,8 +2035,22 @@ Sema::canImplicitlyCast (Sema::SemanticResult val, Type **expectedType) {
     if (*src == *dst) {
         return true;
     }
-    if (src->IsInteger () && dst->IsInteger () || src->IsFloating () && dst->IsFloating ()
-        || src->IsInteger () && dst->IsFloating ()) {
+    if (src->IsInteger () && dst->IsInteger ()) {
+        const auto *srcI = src->AsInteger ();
+        const auto *dstI = dst->AsInteger ();
+        if (dstI->BitWidth () >= srcI->BitWidth ()) {
+            if (srcI->IsUnsigned () == dstI->IsUnsigned ()
+                || dstI->BitWidth () > srcI->BitWidth ()) {
+                return true;
+            }
+        }
+    }
+    if (src->IsFloating () && dst->IsFloating ()) {
+        const auto *srcF = src->AsFloating ();
+        const auto *dstF = dst->AsFloating ();
+        return (int) dstF->GetFloatingKind () >= (int) srcF->GetFloatingKind ();
+    }
+    if (src->IsInteger () && dst->IsFloating ()) {
         return true;
     }
     return false;
