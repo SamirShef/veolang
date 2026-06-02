@@ -254,7 +254,8 @@ Compile (
     }
 
     hir::Context ctx;
-    Sema         sema (diag, ctx, mod, pool);
+    hir::Builder builder (ctx);
+    Sema         sema (diag, builder, mod, pool);
     sema.Analyze (parseRes);
 
     diag.Render ();

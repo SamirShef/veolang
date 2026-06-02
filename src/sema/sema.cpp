@@ -99,6 +99,8 @@ Sema::analyzeVarDef (VarDef *vd) {
                     "non-constant expression");
             return;
         }
+    } else if (type != nullptr) {
+        val.Val = Value (ValueKind::Const, type);
     }
     if (type == nullptr) {
         if (val.Val.has_value ()) {
@@ -1165,9 +1167,6 @@ Sema::analyzeAsgnField (
                 Severity::Error)
             .AddSpan (ae->Ptr ()->Start (), ae->Ptr ()->End ());
         return {};
-    }
-    if (_insideMethod.has_value () && *_insideMethod->second == *sym) {
-        _insideMethod->first->IsConst = false;
     }
     auto op = AsgnOpToBinOp (ae->Op ());
     if (ae->Op () != AsgnOp::Eq) {

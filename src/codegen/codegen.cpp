@@ -38,12 +38,17 @@ CodeGen::generateVarDef (VarDef *vd) {
     std::string name     = isGlobal ? Mangler::MangleGlobalVar (vd) : vd->Name ().Val;
     auto       *type     = getType (vd->Type ());
     if (isGlobal) {
+        llvm::Value *init = nullptr;
+        if (vd->IsConst ()) {
+            init = generateExpr (vd->Init ());
+        }
+        init     = init == nullptr ? llvm::ConstantExpr::getNullValue (type) : init;
         auto *gv = new llvm::GlobalVariable (
             *_mod,
             type,
             vd->IsConst (),
             llvm::GlobalValue::ExternalLinkage,
-            llvm::ConstantExpr::getNullValue (type),
+            llvm::cast<llvm::Constant> (init),
             name);
         _globals.emplace_back (gv);
     } else {
@@ -160,7 +165,6 @@ CodeGen::generateStruct (hir::StructDef *sd) {
                 llvm::GlobalValue::ExternalLinkage,
                 llvm::ConstantExpr::getNullValue (type),
                 fieldName);
-            _globals.emplace_back (gv);
         }
     }
     llvm::StructType::create (_ctx, fields, name);
@@ -474,7 +478,7 @@ CodeGen::generateLValue (Node *node) {
     }
     case NodeKind::LoadGlobalVarByName: {
         auto *load = llvm::cast<LoadGlobalVarByName> (node);
-        return _mod->getNamedGlobal (load->Name ());
+        return _mod->getGlobalVariable (load->Name ());
     }
     case NodeKind::DerefExpr: {
         return generateExpr (llvm::cast<DerefExpr> (node)->Expr ());
@@ -527,10 +531,16 @@ CodeGen::generateInitFunction () {
     for (const auto *global : _hirGlobals) {
         const std::string &name = Mangler::MangleGlobalVar (global);
         auto              *gv   = _mod->getGlobalVariable (name);
+        if (gv->isConstant ()) {
+            continue;
+        }
         if (gv->getInitializer () == nullptr) { // is declaration
             continue;
         }
         auto *val = generateExpr (global->Init ());
+        if (val == nullptr) {
+            val = llvm::ConstantExpr::getNullValue (gv->getType ());
+        }
         _builder.CreateStore (val, gv);
     }
     _builder.CreateRetVoid ();
