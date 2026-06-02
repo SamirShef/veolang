@@ -21,14 +21,13 @@ Mangler::MangleFunction (const hir::Function *func) {
 
 std::string
 Mangler::MangleMethod (const symbols::Struct *sym, hir::Function *func) {
-
     std::ostringstream oss;
     oss << "_VM";
     oss << MangleModule (sym->Parent);
     oss << "E" << sym->Name.Val.size () << sym->Name.Val;
     oss << "E" << func->Name ().Val.size () << func->Name ().Val << "I";
     for (auto &a : func->Args ()) {
-        oss << MangleType (a.Type);
+        oss << MangleType (a->Type ());
     }
     oss << "E";
     return oss.str ();
@@ -36,7 +35,6 @@ Mangler::MangleMethod (const symbols::Struct *sym, hir::Function *func) {
 
 std::string
 Mangler::MangleGlobalVar (const hir::VarDef *var) {
-
     auto              *sym = var->BaseSymbol ();
     std::ostringstream oss;
     oss << "_VG";
@@ -57,7 +55,6 @@ Mangler::MangleStaticField (const symbols::Struct *sym, const std::string &field
 
 std::string
 Mangler::MangleStruct (const hir::StructDef *sd) {
-
     return MangleStructSymbol (sd->BaseSymbol ());
 }
 

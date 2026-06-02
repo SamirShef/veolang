@@ -36,7 +36,7 @@ class CodeGen {
     std::vector<hir::VarDef *>                               &_hirGlobals;
     std::vector<hir::Function *>                             &_hirFuncs;
     std::vector<hir::StructDef *>                            &_hirStructs;
-    std::vector<llvm::GlobalVariable *>                       _globals;
+    std::unordered_map<hir::VarDef *, llvm::GlobalVariable *> _globals;
     std::unordered_map<symbols::Function *, llvm::Function *> _funcsMap;
     std::unordered_map<symbols::Function *, llvm::Function *> _methodsMap;
     std::vector<llvm::Function *>                             _funcs;
@@ -48,7 +48,7 @@ class CodeGen {
     llvm::SourceMgr                                          &_srcMgr;
 
     struct CurrentFunction {
-        std::vector<llvm::Value *> Locals;
+        std::unordered_map<hir::VarDef *, llvm::Value *> Locals;
     };
     std::optional<CurrentFunction> _curFunc = std::nullopt;
 
@@ -172,6 +172,12 @@ private:
 
     llvm::Value *
     generateLValue (hir::Node *node);
+
+    llvm::Value *
+    findGlobal (hir::VarDef *vd);
+
+    llvm::Value *
+    findLocal (hir::VarDef *vd);
 
     llvm::Type *
     getType (basic::Type *type);

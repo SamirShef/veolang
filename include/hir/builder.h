@@ -60,12 +60,12 @@ public:
 
     Function *
     CreateFunction (
-        basic::NameObj             name,
-        basic::Type               *retType,
-        std::vector<ast::Argument> args,
-        llvm::SMLoc                start,
-        llvm::SMLoc                end,
-        symbols::Function         *base) {
+        basic::NameObj        name,
+        basic::Type          *retType,
+        std::vector<VarDef *> args,
+        llvm::SMLoc           start,
+        llvm::SMLoc           end,
+        symbols::Function    *base) {
         auto *node = _ctx.CreateNode<Function> (
             std::move (name),
             retType,
@@ -79,14 +79,14 @@ public:
 
     Function *
     CreateMethod (
-        basic::NameObj             name,
-        basic::Type               *retType,
-        std::vector<ast::Argument> args,
-        llvm::SMLoc                start,
-        llvm::SMLoc                end,
-        symbols::Method           *base,
-        basic::Type               *methodBaseType,
-        bool                       isStatic) {
+        basic::NameObj        name,
+        basic::Type          *retType,
+        std::vector<VarDef *> args,
+        llvm::SMLoc           start,
+        llvm::SMLoc           end,
+        symbols::Method      *base,
+        basic::Type          *methodBaseType,
+        bool                  isStatic) {
         auto *node = _ctx.CreateNode<Function> (
             std::move (name),
             retType,
@@ -161,8 +161,12 @@ public:
 
     LoadVar *
     CreateLoadVar (
-        size_t id, basic::Type *type, bool isGlobal, llvm::SMLoc start, llvm::SMLoc end) {
-        return _ctx.CreateNode<LoadVar> (id, type, isGlobal, start, end);
+        VarDef      *ptr,
+        basic::Type *type,
+        bool         isGlobal,
+        llvm::SMLoc  start,
+        llvm::SMLoc  end) {
+        return _ctx.CreateNode<LoadVar> (ptr, type, isGlobal, start, end);
     }
 
     LoadGlobalVarByName *

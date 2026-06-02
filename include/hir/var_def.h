@@ -29,6 +29,21 @@ public:
           _base (base),
           Node (NodeKind::VarDef, start, end) {}
 
+    bool
+    operator== (const VarDef *other) const {
+        if (this == other) {
+            return true;
+        }
+
+        return _name == other->_name && _type == other->_type
+               && _isConst == other->_isConst && *_base == *other->_base;
+    }
+
+    bool
+    operator!= (const VarDef *other) const {
+        return !(*this == other);
+    }
+
     hir_classof (VarDef);
 
     basic::NameObj

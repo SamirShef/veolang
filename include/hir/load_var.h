@@ -1,28 +1,28 @@
 #pragma once
 #include <basic/types/type.h>
-#include <cstddef>
 #include <hir/node.h>
+#include <hir/var_def.h>
 
 namespace veo::hir {
 
 class LoadVar : public Node {
-    size_t       _id;
+    VarDef      *_ptr;
     basic::Type *_type;
     bool         _isGlobal;
 
 public:
     LoadVar (
-        size_t id, basic::Type *type, bool isGlobal, llvm::SMLoc start, llvm::SMLoc end)
-        : _id (id),
+        VarDef *ptr, basic::Type *type, bool isGlobal, llvm::SMLoc start, llvm::SMLoc end)
+        : _ptr (ptr),
           _type (type),
           _isGlobal (isGlobal),
           Node (NodeKind::LoadVar, start, end) {}
 
     hir_classof (LoadVar);
 
-    size_t
-    Id () const {
-        return _id;
+    VarDef *
+    Ptr () const {
+        return _ptr;
     }
 
     basic::Type *

@@ -224,7 +224,7 @@ private:
     Type *
     resolveType (Type **type);
 
-    std::optional<symbols::Variable>
+    symbols::Variable *
     getVariable (const std::string &name);
 
     symbols::Struct *

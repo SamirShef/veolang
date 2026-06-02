@@ -115,19 +115,8 @@ Sema::analyzeVarDef (VarDef *vd) {
             return;
         }
     }
-    auto var = Variable (
-        vd->Name (),
-        type,
-        vd->IsConst (),
-        isGlobal,
-        isGlobal ? _vars.top ().Vars.size () : _localsCount++,
-        _mod,
-        val.Val);
-    _vars.top ().Vars.emplace (var.Name.Val, var);
-    if (isGlobal) {
-        _mod->Vars.emplace (var.Name.Val, var);
-    }
-    _builder.CreateVariable (
+    auto  var  = Variable (vd->Name (), type, vd->IsConst (), isGlobal, _mod, val.Val);
+    auto *node = _builder.CreateVariable (
         var.Name,
         type,
         val.Node,
@@ -136,6 +125,11 @@ Sema::analyzeVarDef (VarDef *vd) {
         vd->Start (),
         vd->End (),
         isGlobal ? &_mod->Vars.at (var.Name.Val) : nullptr);
+    var.HIR = node;
+    _vars.top ().Vars.emplace (var.Name.Val, var);
+    if (isGlobal) {
+        _mod->Vars.emplace (var.Name.Val, var);
+    }
 }
 
 void
@@ -181,10 +175,24 @@ Sema::analyzeFuncDef (FuncDef *fd) {
         }
     }
 
+    std::vector<hir::VarDef *> args;
+    args.reserve (fd->Args ().size ());
+    for (const auto &arg : fd->Args ()) {
+        auto *node = _builder.CreateVariable (
+            arg.Name,
+            arg.Type,
+            nullptr,
+            false,
+            false,
+            arg.Name.Start,
+            arg.Name.End,
+            nullptr);
+        args.emplace_back (node);
+    }
     auto *funcNode = _builder.CreateFunction (
         func->Name,
         fd->RetType (),
-        fd->Args (),
+        std::move (args),
         fd->Start (),
         fd->End (),
         func);
@@ -196,10 +204,19 @@ Sema::analyzeFuncDef (FuncDef *fd) {
 
     _localsCount = 0;
 
+    size_t index = 0;
     for (const auto &arg : fd->Args ()) {
         _vars.top ().Vars.emplace (
             arg.Name.Val,
-            Variable (arg.Name, arg.Type, false, false, _localsCount++, nullptr));
+            Variable (
+                arg.Name,
+                arg.Type,
+                false,
+                false,
+                nullptr,
+                std::nullopt,
+                funcNode->Args ()[index]));
+        ++index;
     }
 
     for (const auto &stmt : fd->Body ()) {
@@ -503,15 +520,31 @@ Sema::analyzeImplStmt (ImplStmt *is) {
             }
         }
 
-        std::vector<Argument> args;
+        std::vector<hir::VarDef *> args;
         args.reserve (fd->Args ().size () + (method.IsStatic ? 1 : 0));
         if (!method.IsStatic) {
-            args.emplace_back (
+            auto *node = _builder.CreateVariable (
                 basic::NameObj ("this", fd->Name ().Start, fd->Name ().End),
-                createType<PointerType> (is->StructType ()));
+                createType<PointerType> (is->StructType ()),
+                nullptr,
+                false,
+                false,
+                fd->Name ().Start,
+                fd->Name ().End,
+                nullptr);
+            args.emplace_back (node);
         }
         for (const auto &arg : fd->Args ()) {
-            args.emplace_back (arg);
+            auto *node = _builder.CreateVariable (
+                arg.Name,
+                arg.Type,
+                nullptr,
+                false,
+                false,
+                arg.Name.Start,
+                arg.Name.End,
+                nullptr);
+            args.emplace_back (node);
         }
         auto *methodNode = _builder.CreateMethod (
             m->Func->Name,
@@ -533,8 +566,15 @@ Sema::analyzeImplStmt (ImplStmt *is) {
 
         for (const auto &arg : args) {
             _vars.top ().Vars.emplace (
-                arg.Name.Val,
-                Variable (arg.Name, arg.Type, false, false, _localsCount++, nullptr));
+                arg->Name ().Val,
+                Variable (
+                    arg->Name (),
+                    arg->Type (),
+                    false,
+                    false,
+                    nullptr,
+                    std::nullopt,
+                    arg));
         }
 
         for (const auto &stmt : fd->Body ()) {
@@ -952,8 +992,8 @@ Sema::analyzeUnaryExpr (UnaryExpr *ue, Type *expectedType) {
 // NOLINTBEGIN(readability-convert-member-functions-to-static)
 Sema::SemanticResult
 Sema::analyzeVarExpr (VarExpr *ve, Type *expectedType) {
-    auto var = getVariable (ve->Name ().Val);
-    if (!var.has_value ()) {
+    auto *var = getVariable (ve->Name ().Val);
+    if (var == nullptr) {
         if (auto *s = getStruct (ve->Name ().Val)) {
             return { Value (ValueKind::Type, createType<StructType> (s)), nullptr };
         }
@@ -974,7 +1014,7 @@ Sema::analyzeVarExpr (VarExpr *ve, Type *expectedType) {
         node = _builder.CreateLiteral (value, ve->Start (), ve->End ());
     } else {
         node = _builder.CreateLoadVar (
-            var->Index,
+            var->HIR,
             var->Type,
             var->IsGlobal,
             ve->Start (),
@@ -1083,7 +1123,7 @@ Sema::analyzeAsgnExpr (AsgnExpr *ae, Type *expectedType) {
 Sema::SemanticResult
 Sema::analyzeAsgnVar (
     AsgnExpr *ae, Sema::SemanticResult &expr, const Sema::SemanticResult &ptr) {
-    auto var = getVariable (llvm::cast<VarExpr> (ae->Ptr ())->Name ().Val);
+    auto *var = getVariable (llvm::cast<VarExpr> (ae->Ptr ())->Name ().Val);
     if (var->IsConst) {
         _diag
             .Report (
@@ -1751,16 +1791,16 @@ Sema::resolveType (Type **type) {
 }
 // NOLINTEND(readability-convert-member-functions-to-static)
 
-std::optional<Variable>
+Variable *
 Sema::getVariable (const std::string &name) {
     auto vars = _vars;
     while (!vars.empty ()) {
         if (auto it = vars.top ().Vars.find (name); it != vars.top ().Vars.end ()) {
-            return it->second;
+            return &it->second;
         }
         vars.pop ();
     }
-    return std::nullopt;
+    return nullptr;
 }
 
 symbols::Struct *

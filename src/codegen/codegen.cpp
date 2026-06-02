@@ -50,14 +50,14 @@ CodeGen::generateVarDef (VarDef *vd) {
             llvm::GlobalValue::ExternalLinkage,
             llvm::cast<llvm::Constant> (init),
             name);
-        _globals.emplace_back (gv);
+        _globals.emplace (vd, gv);
     } else {
         auto *init   = vd->Init () != nullptr
                            ? generateExpr (vd->Init ())
                            : llvm::ConstantExpr::getNullValue (getType (vd->Type ()));
         auto *alloca = _builder.CreateAlloca (type, nullptr, name);
         _builder.CreateStore (init, alloca);
-        _curFunc->Locals.emplace_back (alloca);
+        _curFunc->Locals.emplace (vd, alloca);
     }
 }
 
@@ -70,7 +70,7 @@ CodeGen::declareFunc (Function *fd) {
                                         fd);
     std::vector<llvm::Type *> args;
     for (auto &a : fd->Args ()) {
-        args.emplace_back (getType (a.Type));
+        args.emplace_back (getType (a->Type ()));
     }
     auto *funcType = llvm::FunctionType::get (getType (fd->RetType ()), args, false);
     auto *func     = llvm::Function::Create (
@@ -97,8 +97,8 @@ CodeGen::generateFuncDef (Function *fd) {
     auto              *func = _mod->getFunction (name);
     size_t             i    = 0;
     for (auto &a : func->args ()) {
-        a.setName (fd->Args ()[i].Name.Val);
-        _curFunc->Locals.emplace_back (&a);
+        a.setName (fd->Args ()[i]->Name ().Val);
+        _curFunc->Locals.emplace (fd->Args ()[i], &a);
         ++i;
     }
 
@@ -466,9 +466,14 @@ CodeGen::generateLValue (Node *node) {
     case NodeKind::LoadVar: {
         auto *lv = llvm::cast<LoadVar> (node);
         if (lv->IsGlobal ()) {
-            return _globals[lv->Id ()];
+            return findGlobal (lv->Ptr ());
         }
-        return _curFunc->Locals[lv->Id ()];
+        return findLocal (lv->Ptr ());
+    }
+    case NodeKind::VarDef: {
+        auto *vd = llvm::cast<VarDef> (node);
+        generateVarDef (vd);
+        return findLocal (vd);
     }
     case NodeKind::FieldExpr: {
         auto *fe   = llvm::cast<FieldExpr> (node);
@@ -490,6 +495,26 @@ CodeGen::generateLValue (Node *node) {
         return tmpAlloca;
     }
     }
+}
+
+llvm::Value *
+CodeGen::findGlobal (hir::VarDef *vd) {
+    for (const auto &[var, llvmVar] : _globals) {
+        if (*var == vd) {
+            return llvmVar;
+        }
+    }
+    return nullptr;
+}
+
+llvm::Value *
+CodeGen::findLocal (hir::VarDef *vd) {
+    for (const auto &[var, llvmVar] : _curFunc->Locals) {
+        if (*var == vd) {
+            return llvmVar;
+        }
+    }
+    return nullptr;
 }
 
 llvm::Type *
