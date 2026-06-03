@@ -28,7 +28,7 @@ GetTokPrecedence (TokenKind kind) {
     switch (kind) {
         tok (Dot) prec (Member);
         tok (Eq) tok (PlusEq) tok (MinusEq) tok (StarEq) tok (SlashEq) tok (PercentEq)
-            prec (Assignment);
+            tok (AndEq) tok (OrEq) tok (CarretEq) prec (Assignment);
         tok (Question) prec (Ternary);
         tok (LogAnd) prec (LogicalAnd);
         tok (LogOr) prec (LogicalOr);

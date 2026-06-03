@@ -89,6 +89,9 @@ enum class TokenKind : uint8_t {
     StarEq,    // `*=`
     SlashEq,   // `/=`
     PercentEq, // `%=`
+    AndEq,     // `&=`
+    OrEq,      // `|=`
+    CarretEq,  // `^=`
     Bang,      // `!`
     BangEq,    // `!=`
     EqEq,      // `==`

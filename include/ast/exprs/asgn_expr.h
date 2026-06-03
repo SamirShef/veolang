@@ -4,7 +4,18 @@
 
 namespace veo::ast {
 
-enum class AsgnOp : uint8_t { Eq, PlusEq, MinusEq, MulEq, DivEq, RemEq, Invalid };
+enum class AsgnOp : uint8_t {
+    Eq,
+    PlusEq,
+    MinusEq,
+    MulEq,
+    DivEq,
+    RemEq,
+    AndEq,
+    OrEq,
+    XorEq,
+    Invalid
+};
 
 inline AsgnOp
 TokToAsgnOp (TokenKind kind) {
@@ -17,6 +28,9 @@ TokToAsgnOp (TokenKind kind) {
         variant (StarEq, MulEq);
         variant (SlashEq, DivEq);
         variant (PercentEq, RemEq);
+        variant (AndEq, AndEq);
+        variant (OrEq, OrEq);
+        variant (CarretEq, XorEq);
     default: return AsgnOp::Invalid;
     }
 #undef variant
@@ -33,6 +47,9 @@ AsgnOpToString (AsgnOp op) {
         variant (MulEq, "*=");
         variant (DivEq, "/=");
         variant (RemEq, "%=");
+        variant (AndEq, "&=");
+        variant (OrEq, "|=");
+        variant (XorEq, "^=");
         variant (Invalid, "<invalid>");
     }
 #undef variant

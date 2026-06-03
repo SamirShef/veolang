@@ -809,7 +809,8 @@ Parser::isAsgnOp (TokenKind kind) {
 #define variant(kind) case TokenKind::kind:
     switch (kind) {
         variant (Eq) variant (PlusEq) variant (MinusEq) variant (StarEq) variant (SlashEq)
-            variant (PercentEq) return true;
+            variant (PercentEq) variant (AndEq) variant (OrEq)
+                variant (CarretEq) return true;
     default: return false;
     }
 #undef variant

@@ -141,11 +141,13 @@ public:
     CreateBinary (
         ast::BinOp   op,
         basic::Type *commonType,
+        basic::Type *resType,
         Node        *lhs,
         Node        *rhs,
         llvm::SMLoc  start,
         llvm::SMLoc  end) {
-        return _ctx.CreateNode<BinaryExpr> (op, commonType, lhs, rhs, start, end);
+        return _ctx
+            .CreateNode<BinaryExpr> (op, commonType, resType, lhs, rhs, start, end);
     }
 
     UnaryExpr *

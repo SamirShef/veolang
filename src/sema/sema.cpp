@@ -42,6 +42,9 @@ AsgnOpToBinOp (AsgnOp op) {
         variant (MulEq, Mul);
         variant (DivEq, Div);
         variant (RemEq, Rem);
+        variant (AndEq, BitAnd);
+        variant (OrEq, BitOr);
+        variant (XorEq, BitXor);
     default: return BinOp::Invalid;
     }
 #undef variant
@@ -115,7 +118,14 @@ Sema::analyzeVarDef (VarDef *vd) {
             return;
         }
     }
-    auto  var  = Variable (vd->Name (), type, vd->IsConst (), isGlobal, _mod, val.Val);
+    auto var = Variable (vd->Name (), type, vd->IsConst (), isGlobal, _mod, val.Val);
+    symbols::Variable *sym = nullptr;
+    _vars.top ().Vars.emplace (var.Name.Val, var);
+    sym = &_vars.top ().Vars.at (var.Name.Val);
+    if (isGlobal) {
+        _mod->Vars.emplace (var.Name.Val, var);
+        sym = &_mod->Vars.at (var.Name.Val);
+    }
     auto *node = _builder.CreateVariable (
         var.Name,
         type,
@@ -124,12 +134,8 @@ Sema::analyzeVarDef (VarDef *vd) {
         isGlobal,
         vd->Start (),
         vd->End (),
-        isGlobal ? &_mod->Vars.at (var.Name.Val) : nullptr);
-    var.HIR = node;
-    _vars.top ().Vars.emplace (var.Name.Val, var);
-    if (isGlobal) {
-        _mod->Vars.emplace (var.Name.Val, var);
-    }
+        isGlobal ? sym : nullptr);
+    sym->HIR = node;
 }
 
 void
@@ -221,6 +227,9 @@ Sema::analyzeFuncDef (FuncDef *fd) {
 
     for (const auto &stmt : fd->Body ()) {
         analyzeStmt (stmt);
+    }
+    if (func->RetType == nullptr) {
+        _builder.CreateRet (nullptr, fd->Name ().Start, fd->Name ().End);
     }
 
     _vars.pop ();
@@ -407,6 +416,10 @@ Sema::analyzeStructDef (StructDef *sd) {
     fields.reserve (sd->Fields ().size ());
     std::vector<hir::Field> hirFields;
     hirFields.reserve (sd->Fields ().size ());
+
+    auto s = Struct (sd->Name (), {}, _mod);
+    _mod->Structs.emplace (sd->Name ().Val, std::move (s));
+
     size_t index = 0;
     for (auto &field : sd->Fields ()) {
         auto it = std::ranges::find_if (fields, [&] (const symbols::Field &f) {
@@ -427,6 +440,31 @@ Sema::analyzeStructDef (StructDef *sd) {
             continue;
         }
         resolveType (&field.Type);
+        if (field.Type->IsStruct ()) {
+            const auto *sType = field.Type->AsStruct ();
+            if (*sType->BaseSymbol () == _mod->Structs.at (sd->Name ().Val)) {
+                _diag
+                    .Report (
+                        DiagCode::ERecursiveType,
+                        "recursive type '" + sd->Name ().Val + "' has infinite size",
+                        Severity::Error)
+                    .AddSpan (
+                        sd->Name ().Start,
+                        sd->Name ().End,
+                        "recursive type has infinite size")
+                    .AddSpan (
+                        field.Name.Start,
+                        field.Name.End,
+                        "recursive without indirection",
+                        false)
+                    .AddNote (
+                        "insert an indirection (e.g., a pointer or reference) to make '"
+                            + sd->Name ().Val + "' representable:",
+                        { "change '" + field.Name.Val + ": " + sd->Name ().Val + "' to '"
+                          + field.Name.Val + ": *" + sd->Name ().Val + "'" });
+                continue;
+            }
+        }
         fields.emplace_back (
             field.Name,
             field.Type,
@@ -439,8 +477,7 @@ Sema::analyzeStructDef (StructDef *sd) {
             ++index;
         }
     }
-    auto s = Struct (sd->Name (), fields, _mod);
-    _mod->Structs.emplace (sd->Name ().Val, std::move (s));
+    _mod->Structs.at (sd->Name ().Val).Fields = std::move (fields);
     _builder.CreateStruct (
         sd->Name (),
         hirFields,
@@ -880,6 +917,7 @@ Sema::analyzeBinaryExpr (BinaryExpr *be, Type *expectedType) {
     auto *node = _builder.CreateBinary (
         op,
         commonType,
+        resType,
         lhs.Node,
         rhs.Node,
         be->Start (),
@@ -1143,6 +1181,7 @@ Sema::analyzeAsgnVar (
         expr.Node = _builder.CreateBinary (
             op,
             expr.Val->Type,
+            expr.Val->Type,
             ptr.Node,
             expr.Node,
             ae->Init ()->Start (),
@@ -1218,6 +1257,7 @@ Sema::analyzeAsgnField (
         expr.Node = _builder.CreateBinary (
             op,
             expr.Val->Type,
+            expr.Val->Type,
             ptr.Node,
             expr.Node,
             ae->Init ()->Start (),
@@ -1234,6 +1274,7 @@ Sema::analyzeAsgnPtr (
     if (ae->Op () != AsgnOp::Eq) {
         expr.Node = _builder.CreateBinary (
             op,
+            expr.Val->Type,
             expr.Val->Type,
             ptr.Node,
             expr.Node,
@@ -1908,6 +1949,9 @@ Sema::getMethod (
 
 Type *
 Sema::getCommonType (Type *lhs, Type *rhs, llvm::SMLoc start, llvm::SMLoc end) {
+    if (lhs == nullptr || rhs == nullptr) {
+        return nullptr;
+    }
     if (*lhs == *rhs) {
         return lhs;
     }
@@ -1927,7 +1971,7 @@ Sema::getCommonType (Type *lhs, Type *rhs, llvm::SMLoc start, llvm::SMLoc end) {
             "cannot find common type",
             Severity::Error)
         .AddSpan (start, end)
-        /*.AddHelp ("сonsider using an explicit cast")*/;
+        .AddNote ("сonsider using an explicit cast");
     return nullptr;
 }
 
@@ -2102,7 +2146,7 @@ Sema::canImplicitlyCast (Sema::SemanticResult val, Type **expectedType) {
     }
     resolveType (&val.Val->Type);
     resolveType (expectedType);
-    if (*expectedType == nullptr) {
+    if (val.Val->Type == nullptr || *expectedType == nullptr) {
         return false;
     }
 
@@ -2141,7 +2185,7 @@ Sema::implicitlyCast (
     }
     resolveType (&val.Val->Type);
     resolveType (expectedType);
-    if (*expectedType == nullptr) {
+    if (val.Val->Type == nullptr || *expectedType == nullptr) {
         return val;
     }
 
@@ -2543,6 +2587,9 @@ Sema::canAccessMethod (
 
 std::string
 Sema::typeToString (Type *type) {
+    if (type == nullptr) {
+        return "";
+    }
     if (type->IsPointer ()) {
         return '*' + typeToString (type->AsPointer ()->Base ());
     }

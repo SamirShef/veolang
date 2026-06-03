@@ -6,7 +6,8 @@ using namespace hir;
 
 void
 HIRLinearizer::linearizeFunc (Function *func) {
-    for (auto *bb : func->Body ()) {
+    auto body = func->Body ();
+    for (auto *bb : body) {
         linearizeBasicBlock (bb);
     }
 }
@@ -116,15 +117,57 @@ HIRLinearizer::linearizeLiteralExpr (LiteralExpr *le) {
 Node *
 HIRLinearizer::linearizeBinaryExpr (BinaryExpr *be) {
     auto *flatLhs = linearizeExpr (be->Lhs ());
+
+    if (be->Op () >= ast::BinOp::LogAnd && be->Op () <= ast::BinOp::LogOr) {
+        auto *parent  = _builder.Parent ();
+        auto *rhsBB   = _builder.CreateBasicBlock (parent, "sc.rhs");
+        auto *mergeBB = _builder.CreateBasicBlock (parent, "sc.merge");
+
+        size_t id  = getTmpId ();
+        auto  *tmp = _builder.CreateVariable (
+            basic::NameObj ("t." + std::to_string (id), {}, {}),
+            be->CommonType (),
+            flatLhs,
+            false,
+            false,
+            be->Start (),
+            be->End (),
+            nullptr);
+
+        if (be->Op () == ast::BinOp::LogAnd) {
+            _builder.CreateBr (flatLhs, rhsBB, mergeBB, be->Start (), be->End ());
+        } else {
+            _builder.CreateBr (flatLhs, mergeBB, rhsBB, be->Start (), be->End ());
+        }
+
+        _builder.SetInsertionPoint (rhsBB);
+        auto *flatRhs  = linearizeExpr (be->Rhs ());
+        auto *storeRhs = _builder.CreateStore (
+            tmp,
+            flatRhs,
+            be->CommonType (),
+            be->Rhs ()->Start (),
+            be->Rhs ()->End ());
+        _builder.CreateExprStmt (storeRhs, be->Rhs ()->Start (), be->Rhs ()->End ());
+        _builder.CreateBr (mergeBB, be->Start (), be->End ());
+
+        _builder.SetInsertionPoint (mergeBB);
+        if (_asLValue) {
+            return tmp;
+        }
+        return _builder
+            .CreateLoadVar (tmp, be->CommonType (), false, be->Start (), be->End ());
+    }
     auto *flatRhs = linearizeExpr (be->Rhs ());
     auto *flatBin = _builder.CreateBinary (
         be->Op (),
         be->CommonType (),
+        be->ResType (),
         flatLhs,
         flatRhs,
         be->Start (),
         be->End ());
-    return emitToTmp (flatBin, be->CommonType (), be->Start (), be->End ());
+    return emitToTmp (flatBin, be->ResType (), be->Start (), be->End ());
 }
 
 Node *
