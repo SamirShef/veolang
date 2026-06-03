@@ -17,7 +17,6 @@
 #include <hir/store.h>
 #include <hir/struct_def.h>
 #include <hir/struct_instance.h>
-#include <hir/ternary_expr.h>
 #include <hir/un_expr.h>
 #include <hir/var_def.h>
 #include <llvm/IR/Function.h>
