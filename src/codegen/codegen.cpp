@@ -91,18 +91,26 @@ CodeGen::generateFuncDef (Function *fd) {
                                         fd->MethodBaseType ()->AsStruct ()->BaseSymbol (),
                                         fd);
     auto              *func = _mod->getFunction (name);
-    size_t             i    = 0;
-    for (auto &a : func->args ()) {
-        a.setName (fd->Args ()[i]->Name ().Val);
-        _curFunc->Locals.emplace (fd->Args ()[i], &a);
-        ++i;
-    }
+    auto              *initBB = llvm::BasicBlock::Create (_ctx, "init", func);
 
     for (auto &bb : fd->Body ()) {
         // declaration of basic blocks
         auto *block = llvm::BasicBlock::Create (_ctx, bb->Name (), func);
         _basicBlocksMap.emplace (bb, block);
     }
+
+    _builder.SetInsertPoint (initBB);
+    size_t i = 0;
+    for (auto &a : func->args ()) {
+        a.setName (fd->Args ()[i]->Name ().Val + ".param");
+        auto *alloca
+            = _builder.CreateAlloca (a.getType (), nullptr, fd->Args ()[i]->Name ().Val);
+        _builder.CreateStore (&a, alloca);
+        _curFunc->Locals.emplace (fd->Args ()[i], alloca);
+        ++i;
+    }
+    _builder.CreateBr (_basicBlocksMap.at (fd->Body ().front ()));
+
     for (auto &bb : fd->Body ()) {
         // definition of basic blocks
         generateBasicBlock (bb);
