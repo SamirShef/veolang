@@ -38,7 +38,6 @@ class CodeGen {
     std::vector<hir::StructDef *>                            &_hirStructs;
     std::unordered_map<hir::VarDef *, llvm::GlobalVariable *> _globals;
     std::unordered_map<symbols::Function *, llvm::Function *> _funcsMap;
-    std::unordered_map<symbols::Function *, llvm::Function *> _methodsMap;
     std::vector<llvm::Function *>                             _funcs;
     llvm::LLVMContext                                         _ctx;
     llvm::IRBuilder<>                                         _builder;
@@ -155,8 +154,8 @@ private:
     llvm::Value *
     generateLoadGlobalVarByName (hir::LoadGlobalVarByName *load);
 
-    llvm::Value *
-    generateTernaryExpr (hir::TernaryExpr *te);
+    // llvm::Value *
+    // generateTernaryExpr (hir::TernaryExpr *te);
 
     llvm::Value *
     generateCast (hir::Cast *cast);

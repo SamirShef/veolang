@@ -1116,7 +1116,12 @@ Sema::analyzeAsgnExpr (AsgnExpr *ae, Type *expectedType) {
     if (!expr.Val.has_value ()) {
         return {};
     }
-    auto *node = _builder.CreateStore (ptr.Node, expr.Node, ae->Start (), ae->End ());
+    auto *node = _builder.CreateStore (
+        ptr.Node,
+        expr.Node,
+        expr.Val->Type,
+        ae->Start (),
+        ae->End ());
     return { expr.Val, node };
 }
 
@@ -1299,6 +1304,7 @@ Sema::analyzeFieldExpr (FieldExpr *fe, Type *expectedType) {
     if (!canAccessField (fe->Name (), *it, s, baseIsStatic, canAccessPrivate)) {
         return {};
     }
+    auto       val  = Value (ValueKind::Unknown, it->Type);
     hir::Node *node = nullptr;
     if (it->IsStatic) {
         node = _builder.CreateLoadGlobalVarByName (
@@ -1307,9 +1313,13 @@ Sema::analyzeFieldExpr (FieldExpr *fe, Type *expectedType) {
             fe->Start (),
             fe->End ());
     } else {
-        node = _builder.CreateFieldExpr (base.Node, it->Index, fe->Start (), fe->End ());
+        node = _builder.CreateFieldExpr (
+            base.Node,
+            it->Index,
+            val.Type,
+            fe->Start (),
+            fe->End ());
     }
-    auto val = Value (ValueKind::Unknown, it->Type);
     auto res = SemanticResult (val, node);
     res      = implicitlyCast (res, &expectedType, fe->Start (), fe->End ());
     return res;
@@ -1404,9 +1414,13 @@ Sema::analyzeStructInstance (StructInstance *si, Type *expectedType) {
         }
         fields.emplace_back (index, val.Node);
     }
-    auto *node
-        = _builder.CreateStructInstance (std::move (fields), s, si->Start (), si->End ());
-    auto val = Value (valKind, createType<StructType> (s));
+    auto  val  = Value (valKind, createType<StructType> (s));
+    auto *node = _builder.CreateStructInstance (
+        std::move (fields),
+        s,
+        val.Type,
+        si->Start (),
+        si->End ());
     auto res = SemanticResult (val, node);
     res      = implicitlyCast (res, &expectedType, si->Start (), si->End ());
     return res;
@@ -1483,15 +1497,18 @@ Sema::analyzeMethodCall (MethodCall *mc, Type *expectedType) {
     }
     std::vector<hir::Node *> hirArgs;
     if (!method->IsStatic) {
-        hirArgs.emplace_back (
-            _builder.CreateReference (base.Node, mc->Start (), mc->End ()));
+        hirArgs.emplace_back (_builder.CreateReference (
+            base.Node,
+            createType<PointerType> (base.Val->Type),
+            mc->Start (),
+            mc->End ()));
     }
     for (size_t i = 0; i < argResults.size (); ++i) {
         auto res = analyzeExpr (mc->Args ()[i], method->Func->Args[i].Type);
         hirArgs.emplace_back (res.Node);
     }
 
-    auto *node = _builder.CreateCallMethod (
+    auto *node = _builder.CreateCall (
         method->Func.get (),
         std::move (hirArgs),
         mc->Start (),
@@ -1522,6 +1539,15 @@ Sema::analyzeTernaryExpr (TernaryExpr *te, Type *expectedType) {
         }
         return std::get<0> (cond.Val->Data) == 1 ? trueVal : falseVal;
     }
+    auto *tmp = _builder.CreateVariable (
+        basic::NameObj (".tmp", {}, {}),
+        expectedType,
+        nullptr,
+        false,
+        false,
+        te->Start (),
+        te->End (),
+        nullptr);
     auto *trueBB  = _builder.CreateBasicBlock (_builder.Parent (), "cond.true");
     auto *falseBB = _builder.CreateBasicBlock (_builder.Parent (), "cond.false");
     auto *mergeBB = _builder.CreateBasicBlock (_builder.Parent (), "cond.merge");
@@ -1537,8 +1563,16 @@ Sema::analyzeTernaryExpr (TernaryExpr *te, Type *expectedType) {
     if (!trueVal.Val.has_value ()) {
         return {};
     }
+    auto *storeTrue = _builder.CreateStore (
+        tmp,
+        trueVal.Node,
+        trueVal.Val->Type,
+        te->TrueVal ()->Start (),
+        te->TrueVal ()->End ());
+    _builder.CreateExprStmt (storeTrue, te->TrueVal ()->Start (), te->TrueVal ()->End ());
     if (expectedType == nullptr) {
         expectedType = trueVal.Val->Type;
+        tmp->SetType (expectedType);
     }
     _builder.CreateBr (mergeBB, te->Start (), te->End ());
 
@@ -1547,18 +1581,22 @@ Sema::analyzeTernaryExpr (TernaryExpr *te, Type *expectedType) {
     if (!falseVal.Val.has_value ()) {
         return {};
     }
+    auto *storeFalse = _builder.CreateStore (
+        tmp,
+        falseVal.Node,
+        falseVal.Val->Type,
+        te->FalseVal ()->Start (),
+        te->FalseVal ()->End ());
+    _builder.CreateExprStmt (
+        storeFalse,
+        te->FalseVal ()->Start (),
+        te->FalseVal ()->End ());
     _builder.CreateBr (mergeBB, te->Start (), te->End ());
 
     _builder.SetInsertionPoint (mergeBB);
-    auto  val  = Value (ValueKind::Unknown, expectedType);
-    auto *node = _builder.CreateTernary (
-        expectedType,
-        trueVal.Node,
-        trueBB,
-        falseVal.Node,
-        falseBB,
-        te->Start (),
-        te->End ());
+    auto  val = Value (ValueKind::Unknown, expectedType);
+    auto *node
+        = _builder.CreateLoadVar (tmp, expectedType, false, te->Start (), te->End ());
     auto res = SemanticResult (val, node);
     res      = implicitlyCast (res, &expectedType, te->Start (), te->End ());
     return res;
@@ -1631,9 +1669,9 @@ Sema::analyzeRefExpr (RefExpr *re, Type *expectedType) {
     }
     auto *ptrType = createType<PointerType> (expr.Val->Type);
     auto  val     = Value (ValueKind::Unknown, ptrType);
-    auto *node    = _builder.CreateReference (expr.Node, re->Start (), re->End ());
-    auto  res     = SemanticResult (val, node);
-    res           = implicitlyCast (res, &expectedType, re->Start (), re->End ());
+    auto *node = _builder.CreateReference (expr.Node, ptrType, re->Start (), re->End ());
+    auto  res  = SemanticResult (val, node);
+    res        = implicitlyCast (res, &expectedType, re->Start (), re->End ());
     return res;
 }
 

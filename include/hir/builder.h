@@ -176,8 +176,9 @@ public:
     }
 
     Store *
-    CreateStore (Node *ptr, Node *expr, llvm::SMLoc start, llvm::SMLoc end) {
-        return _ctx.CreateNode<Store> (ptr, expr, start, end);
+    CreateStore (
+        Node *ptr, Node *expr, basic::Type *type, llvm::SMLoc start, llvm::SMLoc end) {
+        return _ctx.CreateNode<Store> (ptr, expr, type, start, end);
     }
 
     ExprStmt *
@@ -194,34 +195,6 @@ public:
         llvm::SMLoc         start,
         llvm::SMLoc         end) {
         return _ctx.CreateNode<FuncCall> (func, std::move (args), start, end);
-    }
-
-    FuncCall *
-    CreateCallMethod (
-        symbols::Function  *func,
-        std::vector<Node *> args,
-        llvm::SMLoc         start,
-        llvm::SMLoc         end) {
-        return _ctx.CreateNode<FuncCall> (func, std::move (args), start, end, true);
-    }
-
-    TernaryExpr *
-    CreateTernary (
-        basic::Type *type,
-        Node        *trueVal,
-        BasicBlock  *trueBB,
-        Node        *falseVal,
-        BasicBlock  *falseBB,
-        llvm::SMLoc  start,
-        llvm::SMLoc  end) {
-        return _ctx.CreateNode<TernaryExpr> (
-            type,
-            trueVal,
-            trueBB,
-            falseVal,
-            falseBB,
-            start,
-            end);
     }
 
     Branch *
@@ -259,17 +232,20 @@ public:
     }
 
     FieldExpr *
-    CreateFieldExpr (Node *base, size_t index, llvm::SMLoc start, llvm::SMLoc end) {
-        return _ctx.CreateNode<FieldExpr> (base, index, start, end);
+    CreateFieldExpr (
+        Node *base, size_t index, basic::Type *type, llvm::SMLoc start, llvm::SMLoc end) {
+        return _ctx.CreateNode<FieldExpr> (base, index, type, start, end);
     }
 
     StructInstance *
     CreateStructInstance (
         std::vector<std::pair<size_t, Node *>> fields,
         symbols::Struct                       *base,
+        basic::Type                           *type,
         llvm::SMLoc                            start,
         llvm::SMLoc                            end) {
-        return _ctx.CreateNode<StructInstance> (std::move (fields), base, start, end);
+        return _ctx
+            .CreateNode<StructInstance> (std::move (fields), base, type, start, end);
     }
 
     Cast *
@@ -283,8 +259,8 @@ public:
     }
 
     RefExpr *
-    CreateReference (Node *expr, llvm::SMLoc start, llvm::SMLoc end) {
-        return _ctx.CreateNode<RefExpr> (expr, start, end);
+    CreateReference (Node *expr, basic::Type *type, llvm::SMLoc start, llvm::SMLoc end) {
+        return _ctx.CreateNode<RefExpr> (expr, type, start, end);
     }
 
     DerefExpr *

@@ -79,11 +79,7 @@ CodeGen::declareFunc (Function *fd) {
         name,
         *_mod);
     _funcs.emplace_back (func);
-    if (fd->MethodBaseType () == nullptr) {
-        _funcsMap.emplace (fd->BaseSymbol (), func);
-    } else {
-        _methodsMap.emplace (fd->BaseSymbol (), func);
-    }
+    _funcsMap.emplace (fd->BaseSymbol (), func);
 }
 
 void
@@ -187,7 +183,7 @@ CodeGen::generateExpr (Node *node) {
         variant (FieldExpr, generateFieldExpr, FieldExpr);
         variant (StructInstance, generateStructInstance, StructInstance);
         variant (LoadGlobalVarByName, generateLoadGlobalVarByName, LoadGlobalVarByName);
-        variant (TernaryExpr, generateTernaryExpr, TernaryExpr);
+        // variant (TernaryExpr, generateTernaryExpr, TernaryExpr);
         variant (Cast, generateCast, Cast);
         variant (RefExpr, generateRefExpr, RefExpr);
         variant (DerefExpr, generateDerefExpr, DerefExpr);
@@ -342,8 +338,7 @@ CodeGen::generateLoadVar (LoadVar *lv) {
 
 llvm::Value *
 CodeGen::generateFuncCall (FuncCall *fc) {
-    auto                      *func = fc->IsMethod () ? _methodsMap.at (fc->Function ())
-                                                      : _funcsMap.at (fc->Function ());
+    auto                      *func = _funcsMap.at (fc->Function ());
     std::vector<llvm::Value *> args;
     args.reserve (fc->Args ().size ());
     for (const auto &a : fc->Args ()) {
@@ -407,15 +402,15 @@ CodeGen::generateLoadGlobalVarByName (LoadGlobalVarByName *load) {
     return _builder.CreateLoad (getType (load->Type ()), lvalue);
 }
 
-llvm::Value *
-CodeGen::generateTernaryExpr (TernaryExpr *te) {
-    auto *trueBB  = _basicBlocksMap.at (te->TrueBB ());
-    auto *falseBB = _basicBlocksMap.at (te->FalseBB ());
-    auto *phi     = _builder.CreatePHI (getType (te->Type ()), 2);
-    phi->addIncoming (generateExpr (te->TrueVal ()), trueBB);
-    phi->addIncoming (generateExpr (te->FalseVal ()), falseBB);
-    return phi;
-}
+// llvm::Value *
+// CodeGen::generateTernaryExpr (TernaryExpr *te) {
+//     auto *trueBB  = _basicBlocksMap.at (te->TrueBB ());
+//     auto *falseBB = _basicBlocksMap.at (te->FalseBB ());
+//     auto *phi     = _builder.CreatePHI (getType (te->Type ()), 2);
+//     phi->addIncoming (generateExpr (te->TrueVal ()), trueBB);
+//     phi->addIncoming (generateExpr (te->FalseVal ()), falseBB);
+//     return phi;
+// }
 
 llvm::Value *
 CodeGen::generateCast (Cast *cast) {

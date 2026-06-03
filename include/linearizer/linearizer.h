@@ -8,6 +8,7 @@ class HIRLinearizer {
     hir::Context &_ctx;     // NOLINT(cppcoreguidelines-avoid-const-or-ref-data-members)
     hir::Builder &_builder; // NOLINT(cppcoreguidelines-avoid-const-or-ref-data-members)
     size_t        _nextTmpId = 0;
+    bool          _asLValue  = false;
 
 public:
     explicit HIRLinearizer (hir::Builder &builder)
@@ -36,8 +37,20 @@ private:
     void
     linearizeRet (hir::Return *ret);
 
+    void
+    linearizeExprStmt (hir::ExprStmt *es);
+
+    void
+    linearizeBranch (hir::Branch *br);
+
+    void
+    linearizeStruct (hir::StructDef *sd);
+
     hir::Node *
     linearizeExpr (hir::Node *expr);
+
+    hir::Node *
+    linearizeLValue (hir::Node *expr);
 
     hir::Node *
     linearizeLiteralExpr (hir::LiteralExpr *le);
@@ -53,6 +66,30 @@ private:
 
     hir::Node *
     linearizeFuncCall (hir::FuncCall *fc);
+
+    hir::Node *
+    linearizeStore (hir::Store *store);
+
+    hir::Node *
+    linearizeFieldExpr (hir::FieldExpr *fe);
+
+    hir::Node *
+    linearizeStructInstance (hir::StructInstance *si);
+
+    hir::Node *
+    linearizeLoadGlobalVarByName (hir::LoadGlobalVarByName *load);
+
+    // hir::Node *
+    // linearizeTernaryExpr (hir::TernaryExpr *te);
+
+    hir::Node *
+    linearizeCast (hir::Cast *cast);
+
+    hir::Node *
+    linearizeRefExpr (hir::RefExpr *re);
+
+    hir::Node *
+    linearizeDerefExpr (hir::DerefExpr *de);
 
     hir::Node *
     linearizeNilExpr (hir::NilExpr *ne);

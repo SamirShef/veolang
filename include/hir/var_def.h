@@ -56,6 +56,11 @@ public:
         return _type;
     }
 
+    void
+    SetType (basic::Type *type) {
+        _type = type;
+    }
+
     Node *
     Init () const {
         return _expr;
