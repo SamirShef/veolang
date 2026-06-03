@@ -38,21 +38,26 @@ CodeGen::generateVarDef (VarDef *vd) {
     std::string name     = isGlobal ? Mangler::MangleGlobalVar (vd) : vd->Name ().Val;
     auto       *type     = getType (vd->Type ());
     if (isGlobal) {
+        llvm::Value *init = nullptr;
+        if (vd->IsConst ()) {
+            init = generateExpr (vd->Init ());
+        }
+        init     = init == nullptr ? llvm::ConstantExpr::getNullValue (type) : init;
         auto *gv = new llvm::GlobalVariable (
             *_mod,
             type,
             vd->IsConst (),
             llvm::GlobalValue::ExternalLinkage,
-            llvm::ConstantExpr::getNullValue (type),
+            llvm::cast<llvm::Constant> (init),
             name);
-        _globals.emplace_back (gv);
+        _globals.emplace (vd, gv);
     } else {
         auto *init   = vd->Init () != nullptr
                            ? generateExpr (vd->Init ())
                            : llvm::ConstantExpr::getNullValue (getType (vd->Type ()));
         auto *alloca = _builder.CreateAlloca (type, nullptr, name);
         _builder.CreateStore (init, alloca);
-        _curFunc->Locals.emplace_back (alloca);
+        _curFunc->Locals.emplace (vd, alloca);
     }
 }
 
@@ -65,7 +70,7 @@ CodeGen::declareFunc (Function *fd) {
                                         fd);
     std::vector<llvm::Type *> args;
     for (auto &a : fd->Args ()) {
-        args.emplace_back (getType (a.Type));
+        args.emplace_back (getType (a->Type ()));
     }
     auto *funcType = llvm::FunctionType::get (getType (fd->RetType ()), args, false);
     auto *func     = llvm::Function::Create (
@@ -74,11 +79,7 @@ CodeGen::declareFunc (Function *fd) {
         name,
         *_mod);
     _funcs.emplace_back (func);
-    if (fd->MethodBaseType () == nullptr) {
-        _funcsMap.emplace (fd->BaseSymbol (), func);
-    } else {
-        _methodsMap.emplace (fd->BaseSymbol (), func);
-    }
+    _funcsMap.emplace (fd->BaseSymbol (), func);
 }
 
 void
@@ -90,18 +91,26 @@ CodeGen::generateFuncDef (Function *fd) {
                                         fd->MethodBaseType ()->AsStruct ()->BaseSymbol (),
                                         fd);
     auto              *func = _mod->getFunction (name);
-    size_t             i    = 0;
-    for (auto &a : func->args ()) {
-        a.setName (fd->Args ()[i].Name.Val);
-        _curFunc->Locals.emplace_back (&a);
-        ++i;
-    }
+    auto              *initBB = llvm::BasicBlock::Create (_ctx, "init", func);
 
     for (auto &bb : fd->Body ()) {
         // declaration of basic blocks
         auto *block = llvm::BasicBlock::Create (_ctx, bb->Name (), func);
         _basicBlocksMap.emplace (bb, block);
     }
+
+    _builder.SetInsertPoint (initBB);
+    size_t i = 0;
+    for (auto &a : func->args ()) {
+        a.setName (fd->Args ()[i]->Name ().Val + ".param");
+        auto *alloca
+            = _builder.CreateAlloca (a.getType (), nullptr, fd->Args ()[i]->Name ().Val);
+        _builder.CreateStore (&a, alloca);
+        _curFunc->Locals.emplace (fd->Args ()[i], alloca);
+        ++i;
+    }
+    _builder.CreateBr (_basicBlocksMap.at (fd->Body ().front ()));
+
     for (auto &bb : fd->Body ()) {
         // definition of basic blocks
         generateBasicBlock (bb);
@@ -160,7 +169,6 @@ CodeGen::generateStruct (hir::StructDef *sd) {
                 llvm::GlobalValue::ExternalLinkage,
                 llvm::ConstantExpr::getNullValue (type),
                 fieldName);
-            _globals.emplace_back (gv);
         }
     }
     llvm::StructType::create (_ctx, fields, name);
@@ -183,7 +191,7 @@ CodeGen::generateExpr (Node *node) {
         variant (FieldExpr, generateFieldExpr, FieldExpr);
         variant (StructInstance, generateStructInstance, StructInstance);
         variant (LoadGlobalVarByName, generateLoadGlobalVarByName, LoadGlobalVarByName);
-        variant (TernaryExpr, generateTernaryExpr, TernaryExpr);
+        // variant (TernaryExpr, generateTernaryExpr, TernaryExpr);
         variant (Cast, generateCast, Cast);
         variant (RefExpr, generateRefExpr, RefExpr);
         variant (DerefExpr, generateDerefExpr, DerefExpr);
@@ -338,8 +346,7 @@ CodeGen::generateLoadVar (LoadVar *lv) {
 
 llvm::Value *
 CodeGen::generateFuncCall (FuncCall *fc) {
-    auto                      *func = fc->IsMethod () ? _methodsMap.at (fc->Function ())
-                                                      : _funcsMap.at (fc->Function ());
+    auto                      *func = _funcsMap.at (fc->Function ());
     std::vector<llvm::Value *> args;
     args.reserve (fc->Args ().size ());
     for (const auto &a : fc->Args ()) {
@@ -403,15 +410,15 @@ CodeGen::generateLoadGlobalVarByName (LoadGlobalVarByName *load) {
     return _builder.CreateLoad (getType (load->Type ()), lvalue);
 }
 
-llvm::Value *
-CodeGen::generateTernaryExpr (TernaryExpr *te) {
-    auto *trueBB  = _basicBlocksMap.at (te->TrueBB ());
-    auto *falseBB = _basicBlocksMap.at (te->FalseBB ());
-    auto *phi     = _builder.CreatePHI (getType (te->Type ()), 2);
-    phi->addIncoming (generateExpr (te->TrueVal ()), trueBB);
-    phi->addIncoming (generateExpr (te->FalseVal ()), falseBB);
-    return phi;
-}
+// llvm::Value *
+// CodeGen::generateTernaryExpr (TernaryExpr *te) {
+//     auto *trueBB  = _basicBlocksMap.at (te->TrueBB ());
+//     auto *falseBB = _basicBlocksMap.at (te->FalseBB ());
+//     auto *phi     = _builder.CreatePHI (getType (te->Type ()), 2);
+//     phi->addIncoming (generateExpr (te->TrueVal ()), trueBB);
+//     phi->addIncoming (generateExpr (te->FalseVal ()), falseBB);
+//     return phi;
+// }
 
 llvm::Value *
 CodeGen::generateCast (Cast *cast) {
@@ -462,9 +469,14 @@ CodeGen::generateLValue (Node *node) {
     case NodeKind::LoadVar: {
         auto *lv = llvm::cast<LoadVar> (node);
         if (lv->IsGlobal ()) {
-            return _globals[lv->Id ()];
+            return findGlobal (lv->Ptr ());
         }
-        return _curFunc->Locals[lv->Id ()];
+        return findLocal (lv->Ptr ());
+    }
+    case NodeKind::VarDef: {
+        auto *vd = llvm::cast<VarDef> (node);
+        generateVarDef (vd);
+        return findLocal (vd);
     }
     case NodeKind::FieldExpr: {
         auto *fe   = llvm::cast<FieldExpr> (node);
@@ -474,7 +486,7 @@ CodeGen::generateLValue (Node *node) {
     }
     case NodeKind::LoadGlobalVarByName: {
         auto *load = llvm::cast<LoadGlobalVarByName> (node);
-        return _mod->getNamedGlobal (load->Name ());
+        return _mod->getGlobalVariable (load->Name ());
     }
     case NodeKind::DerefExpr: {
         return generateExpr (llvm::cast<DerefExpr> (node)->Expr ());
@@ -486,6 +498,26 @@ CodeGen::generateLValue (Node *node) {
         return tmpAlloca;
     }
     }
+}
+
+llvm::Value *
+CodeGen::findGlobal (hir::VarDef *vd) {
+    for (const auto &[var, llvmVar] : _globals) {
+        if (*var == vd) {
+            return llvmVar;
+        }
+    }
+    return nullptr;
+}
+
+llvm::Value *
+CodeGen::findLocal (hir::VarDef *vd) {
+    for (const auto &[var, llvmVar] : _curFunc->Locals) {
+        if (*var == vd) {
+            return llvmVar;
+        }
+    }
+    return nullptr;
 }
 
 llvm::Type *
@@ -527,10 +559,16 @@ CodeGen::generateInitFunction () {
     for (const auto *global : _hirGlobals) {
         const std::string &name = Mangler::MangleGlobalVar (global);
         auto              *gv   = _mod->getGlobalVariable (name);
+        if (gv->isConstant ()) {
+            continue;
+        }
         if (gv->getInitializer () == nullptr) { // is declaration
             continue;
         }
         auto *val = generateExpr (global->Init ());
+        if (val == nullptr) {
+            val = llvm::ConstantExpr::getNullValue (gv->getType ());
+        }
         _builder.CreateStore (val, gv);
     }
     _builder.CreateRetVoid ();

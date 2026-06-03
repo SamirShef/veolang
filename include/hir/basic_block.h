@@ -53,6 +53,12 @@ public:
     SetParent (Function *parent) {
         _parent = parent;
     }
+
+    void
+    Clear () {
+        _nodes.clear ();
+        _terminator = nullptr;
+    }
 };
 
 }

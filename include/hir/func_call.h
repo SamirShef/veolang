@@ -8,19 +8,14 @@ namespace veo::hir {
 class FuncCall : public Node {
     symbols::Function  *_func;
     std::vector<Node *> _args;
-    bool                _isMethod;
 
 public:
     FuncCall (
         symbols::Function  *func,
         std::vector<Node *> args,
         llvm::SMLoc         start,
-        llvm::SMLoc         end,
-        bool                isMethod = false)
-        : _func (func),
-          _args (std::move (args)),
-          _isMethod (isMethod),
-          Node (NodeKind::FuncCall, start, end) {}
+        llvm::SMLoc         end)
+        : _func (func), _args (std::move (args)), Node (NodeKind::FuncCall, start, end) {}
 
     hir_classof (FuncCall);
 
@@ -32,11 +27,6 @@ public:
     std::vector<Node *> &
     Args () {
         return _args;
-    }
-
-    bool
-    IsMethod () const {
-        return _isMethod;
     }
 };
 

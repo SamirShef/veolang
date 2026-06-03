@@ -19,7 +19,6 @@
 #include <hir/store.h>
 #include <hir/struct_def.h>
 #include <hir/struct_instance.h>
-#include <hir/ternary_expr.h>
 #include <hir/un_expr.h>
 
 namespace veo::hir {
@@ -60,12 +59,12 @@ public:
 
     Function *
     CreateFunction (
-        basic::NameObj             name,
-        basic::Type               *retType,
-        std::vector<ast::Argument> args,
-        llvm::SMLoc                start,
-        llvm::SMLoc                end,
-        symbols::Function         *base) {
+        basic::NameObj        name,
+        basic::Type          *retType,
+        std::vector<VarDef *> args,
+        llvm::SMLoc           start,
+        llvm::SMLoc           end,
+        symbols::Function    *base) {
         auto *node = _ctx.CreateNode<Function> (
             std::move (name),
             retType,
@@ -79,14 +78,14 @@ public:
 
     Function *
     CreateMethod (
-        basic::NameObj             name,
-        basic::Type               *retType,
-        std::vector<ast::Argument> args,
-        llvm::SMLoc                start,
-        llvm::SMLoc                end,
-        symbols::Method           *base,
-        basic::Type               *methodBaseType,
-        bool                       isStatic) {
+        basic::NameObj        name,
+        basic::Type          *retType,
+        std::vector<VarDef *> args,
+        llvm::SMLoc           start,
+        llvm::SMLoc           end,
+        symbols::Method      *base,
+        basic::Type          *methodBaseType,
+        bool                  isStatic) {
         auto *node = _ctx.CreateNode<Function> (
             std::move (name),
             retType,
@@ -142,11 +141,13 @@ public:
     CreateBinary (
         ast::BinOp   op,
         basic::Type *commonType,
+        basic::Type *resType,
         Node        *lhs,
         Node        *rhs,
         llvm::SMLoc  start,
         llvm::SMLoc  end) {
-        return _ctx.CreateNode<BinaryExpr> (op, commonType, lhs, rhs, start, end);
+        return _ctx
+            .CreateNode<BinaryExpr> (op, commonType, resType, lhs, rhs, start, end);
     }
 
     UnaryExpr *
@@ -161,8 +162,12 @@ public:
 
     LoadVar *
     CreateLoadVar (
-        size_t id, basic::Type *type, bool isGlobal, llvm::SMLoc start, llvm::SMLoc end) {
-        return _ctx.CreateNode<LoadVar> (id, type, isGlobal, start, end);
+        VarDef      *ptr,
+        basic::Type *type,
+        bool         isGlobal,
+        llvm::SMLoc  start,
+        llvm::SMLoc  end) {
+        return _ctx.CreateNode<LoadVar> (ptr, type, isGlobal, start, end);
     }
 
     LoadGlobalVarByName *
@@ -172,8 +177,9 @@ public:
     }
 
     Store *
-    CreateStore (Node *ptr, Node *expr, llvm::SMLoc start, llvm::SMLoc end) {
-        return _ctx.CreateNode<Store> (ptr, expr, start, end);
+    CreateStore (
+        Node *ptr, Node *expr, basic::Type *type, llvm::SMLoc start, llvm::SMLoc end) {
+        return _ctx.CreateNode<Store> (ptr, expr, type, start, end);
     }
 
     ExprStmt *
@@ -190,34 +196,6 @@ public:
         llvm::SMLoc         start,
         llvm::SMLoc         end) {
         return _ctx.CreateNode<FuncCall> (func, std::move (args), start, end);
-    }
-
-    FuncCall *
-    CreateCallMethod (
-        symbols::Function  *func,
-        std::vector<Node *> args,
-        llvm::SMLoc         start,
-        llvm::SMLoc         end) {
-        return _ctx.CreateNode<FuncCall> (func, std::move (args), start, end, true);
-    }
-
-    TernaryExpr *
-    CreateTernary (
-        basic::Type *type,
-        Node        *trueVal,
-        BasicBlock  *trueBB,
-        Node        *falseVal,
-        BasicBlock  *falseBB,
-        llvm::SMLoc  start,
-        llvm::SMLoc  end) {
-        return _ctx.CreateNode<TernaryExpr> (
-            type,
-            trueVal,
-            trueBB,
-            falseVal,
-            falseBB,
-            start,
-            end);
     }
 
     Branch *
@@ -255,17 +233,20 @@ public:
     }
 
     FieldExpr *
-    CreateFieldExpr (Node *base, size_t index, llvm::SMLoc start, llvm::SMLoc end) {
-        return _ctx.CreateNode<FieldExpr> (base, index, start, end);
+    CreateFieldExpr (
+        Node *base, size_t index, basic::Type *type, llvm::SMLoc start, llvm::SMLoc end) {
+        return _ctx.CreateNode<FieldExpr> (base, index, type, start, end);
     }
 
     StructInstance *
     CreateStructInstance (
         std::vector<std::pair<size_t, Node *>> fields,
         symbols::Struct                       *base,
+        basic::Type                           *type,
         llvm::SMLoc                            start,
         llvm::SMLoc                            end) {
-        return _ctx.CreateNode<StructInstance> (std::move (fields), base, start, end);
+        return _ctx
+            .CreateNode<StructInstance> (std::move (fields), base, type, start, end);
     }
 
     Cast *
@@ -279,8 +260,8 @@ public:
     }
 
     RefExpr *
-    CreateReference (Node *expr, llvm::SMLoc start, llvm::SMLoc end) {
-        return _ctx.CreateNode<RefExpr> (expr, start, end);
+    CreateReference (Node *expr, basic::Type *type, llvm::SMLoc start, llvm::SMLoc end) {
+        return _ctx.CreateNode<RefExpr> (expr, type, start, end);
     }
 
     DerefExpr *

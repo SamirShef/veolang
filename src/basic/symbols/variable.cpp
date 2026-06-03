@@ -11,7 +11,7 @@ Variable::operator== (const Variable &other) const {
 
     return Name.Val == other.Name.Val && *Type == *other.Type && Val == other.Val
            && IsConst == other.IsConst && IsGlobal == other.IsGlobal
-           && Index == other.Index && *Parent == *other.Parent;
+           && *Parent == *other.Parent;
 }
 
 }

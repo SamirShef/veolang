@@ -3,6 +3,12 @@
 #include <basic/types/type.h>
 #include <basic/value.h>
 
+namespace veo::hir {
+
+class VarDef;
+
+}
+
 namespace veo::symbols {
 
 struct Module;
@@ -13,7 +19,7 @@ struct Variable {
     basic::OptValue Val;
     bool            IsConst;
     bool            IsGlobal;
-    size_t          Index;
+    hir::VarDef    *HIR = nullptr;
     Module         *Parent;
 
     Variable (
@@ -21,15 +27,15 @@ struct Variable {
         basic::Type    *type,
         bool            isConst,
         bool            isGlobal,
-        size_t          index,
         Module         *parent,
-        basic::OptValue val = std::nullopt)
+        basic::OptValue val = std::nullopt,
+        hir::VarDef    *hir = nullptr)
         : Name (std::move (name)),
           Type (type),
           IsConst (isConst),
           IsGlobal (isGlobal),
-          Index (index),
           Val (val),
+          HIR (hir),
           Parent (parent) {}
 
     bool

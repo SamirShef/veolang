@@ -17,7 +17,6 @@
 #include <hir/store.h>
 #include <hir/struct_def.h>
 #include <hir/struct_instance.h>
-#include <hir/ternary_expr.h>
 #include <hir/un_expr.h>
 #include <hir/var_def.h>
 #include <llvm/IR/Function.h>
@@ -36,9 +35,8 @@ class CodeGen {
     std::vector<hir::VarDef *>                               &_hirGlobals;
     std::vector<hir::Function *>                             &_hirFuncs;
     std::vector<hir::StructDef *>                            &_hirStructs;
-    std::vector<llvm::GlobalVariable *>                       _globals;
+    std::unordered_map<hir::VarDef *, llvm::GlobalVariable *> _globals;
     std::unordered_map<symbols::Function *, llvm::Function *> _funcsMap;
-    std::unordered_map<symbols::Function *, llvm::Function *> _methodsMap;
     std::vector<llvm::Function *>                             _funcs;
     llvm::LLVMContext                                         _ctx;
     llvm::IRBuilder<>                                         _builder;
@@ -48,7 +46,7 @@ class CodeGen {
     llvm::SourceMgr                                          &_srcMgr;
 
     struct CurrentFunction {
-        std::vector<llvm::Value *> Locals;
+        std::unordered_map<hir::VarDef *, llvm::Value *> Locals;
     };
     std::optional<CurrentFunction> _curFunc = std::nullopt;
 
@@ -155,8 +153,8 @@ private:
     llvm::Value *
     generateLoadGlobalVarByName (hir::LoadGlobalVarByName *load);
 
-    llvm::Value *
-    generateTernaryExpr (hir::TernaryExpr *te);
+    // llvm::Value *
+    // generateTernaryExpr (hir::TernaryExpr *te);
 
     llvm::Value *
     generateCast (hir::Cast *cast);
@@ -172,6 +170,12 @@ private:
 
     llvm::Value *
     generateLValue (hir::Node *node);
+
+    llvm::Value *
+    findGlobal (hir::VarDef *vd);
+
+    llvm::Value *
+    findLocal (hir::VarDef *vd);
 
     llvm::Type *
     getType (basic::Type *type);

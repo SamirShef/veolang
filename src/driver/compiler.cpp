@@ -1,3 +1,5 @@
+#include "linearizer/linearizer.h"
+
 #include <ast/context.h>
 #include <ast/dumper.h>
 #include <basic/types/pool.h>
@@ -254,8 +256,12 @@ Compile (
     }
 
     hir::Context ctx;
-    Sema         sema (diag, ctx, mod, pool);
+    hir::Builder builder (ctx);
+    Sema         sema (diag, builder, mod, pool);
     sema.Analyze (parseRes);
+
+    HIRLinearizer linearizer (builder);
+    linearizer.Linearize ();
 
     diag.Render ();
     if (diag.HasErrors ()) {

@@ -42,6 +42,9 @@ AsgnOpToBinOp (AsgnOp op) {
         variant (MulEq, Mul);
         variant (DivEq, Div);
         variant (RemEq, Rem);
+        variant (AndEq, BitAnd);
+        variant (OrEq, BitOr);
+        variant (XorEq, BitXor);
     default: return BinOp::Invalid;
     }
 #undef variant
@@ -99,6 +102,8 @@ Sema::analyzeVarDef (VarDef *vd) {
                     "non-constant expression");
             return;
         }
+    } else if (type != nullptr) {
+        val.Val = Value (ValueKind::Const, type);
     }
     if (type == nullptr) {
         if (val.Val.has_value ()) {
@@ -113,19 +118,15 @@ Sema::analyzeVarDef (VarDef *vd) {
             return;
         }
     }
-    auto var = Variable (
-        vd->Name (),
-        type,
-        vd->IsConst (),
-        isGlobal,
-        isGlobal ? _vars.top ().Vars.size () : _localsCount++,
-        _mod,
-        val.Val);
+    auto var = Variable (vd->Name (), type, vd->IsConst (), isGlobal, _mod, val.Val);
+    symbols::Variable *sym = nullptr;
     _vars.top ().Vars.emplace (var.Name.Val, var);
+    sym = &_vars.top ().Vars.at (var.Name.Val);
     if (isGlobal) {
         _mod->Vars.emplace (var.Name.Val, var);
+        sym = &_mod->Vars.at (var.Name.Val);
     }
-    _builder.CreateVariable (
+    auto *node = _builder.CreateVariable (
         var.Name,
         type,
         val.Node,
@@ -133,7 +134,8 @@ Sema::analyzeVarDef (VarDef *vd) {
         isGlobal,
         vd->Start (),
         vd->End (),
-        isGlobal ? &_mod->Vars.at (var.Name.Val) : nullptr);
+        isGlobal ? sym : nullptr);
+    sym->HIR = node;
 }
 
 void
@@ -179,10 +181,24 @@ Sema::analyzeFuncDef (FuncDef *fd) {
         }
     }
 
+    std::vector<hir::VarDef *> args;
+    args.reserve (fd->Args ().size ());
+    for (const auto &arg : fd->Args ()) {
+        auto *node = _builder.CreateVariable (
+            arg.Name,
+            arg.Type,
+            nullptr,
+            false,
+            false,
+            arg.Name.Start,
+            arg.Name.End,
+            nullptr);
+        args.emplace_back (node);
+    }
     auto *funcNode = _builder.CreateFunction (
         func->Name,
         fd->RetType (),
-        fd->Args (),
+        std::move (args),
         fd->Start (),
         fd->End (),
         func);
@@ -194,14 +210,26 @@ Sema::analyzeFuncDef (FuncDef *fd) {
 
     _localsCount = 0;
 
+    size_t index = 0;
     for (const auto &arg : fd->Args ()) {
         _vars.top ().Vars.emplace (
             arg.Name.Val,
-            Variable (arg.Name, arg.Type, false, false, _localsCount++, nullptr));
+            Variable (
+                arg.Name,
+                arg.Type,
+                false,
+                false,
+                nullptr,
+                std::nullopt,
+                funcNode->Args ()[index]));
+        ++index;
     }
 
     for (const auto &stmt : fd->Body ()) {
         analyzeStmt (stmt);
+    }
+    if (func->RetType == nullptr) {
+        _builder.CreateRet (nullptr, fd->Name ().Start, fd->Name ().End);
     }
 
     _vars.pop ();
@@ -388,6 +416,10 @@ Sema::analyzeStructDef (StructDef *sd) {
     fields.reserve (sd->Fields ().size ());
     std::vector<hir::Field> hirFields;
     hirFields.reserve (sd->Fields ().size ());
+
+    auto s = Struct (sd->Name (), {}, _mod);
+    _mod->Structs.emplace (sd->Name ().Val, std::move (s));
+
     size_t index = 0;
     for (auto &field : sd->Fields ()) {
         auto it = std::ranges::find_if (fields, [&] (const symbols::Field &f) {
@@ -408,6 +440,31 @@ Sema::analyzeStructDef (StructDef *sd) {
             continue;
         }
         resolveType (&field.Type);
+        if (field.Type->IsStruct ()) {
+            const auto *sType = field.Type->AsStruct ();
+            if (*sType->BaseSymbol () == _mod->Structs.at (sd->Name ().Val)) {
+                _diag
+                    .Report (
+                        DiagCode::ERecursiveType,
+                        "recursive type '" + sd->Name ().Val + "' has infinite size",
+                        Severity::Error)
+                    .AddSpan (
+                        sd->Name ().Start,
+                        sd->Name ().End,
+                        "recursive type has infinite size")
+                    .AddSpan (
+                        field.Name.Start,
+                        field.Name.End,
+                        "recursive without indirection",
+                        false)
+                    .AddNote (
+                        "insert an indirection (e.g., a pointer or reference) to make '"
+                            + sd->Name ().Val + "' representable:",
+                        { "change '" + field.Name.Val + ": " + sd->Name ().Val + "' to '"
+                          + field.Name.Val + ": *" + sd->Name ().Val + "'" });
+                continue;
+            }
+        }
         fields.emplace_back (
             field.Name,
             field.Type,
@@ -420,8 +477,7 @@ Sema::analyzeStructDef (StructDef *sd) {
             ++index;
         }
     }
-    auto s = Struct (sd->Name (), fields, _mod);
-    _mod->Structs.emplace (sd->Name ().Val, std::move (s));
+    _mod->Structs.at (sd->Name ().Val).Fields = std::move (fields);
     _builder.CreateStruct (
         sd->Name (),
         hirFields,
@@ -501,15 +557,31 @@ Sema::analyzeImplStmt (ImplStmt *is) {
             }
         }
 
-        std::vector<Argument> args;
+        std::vector<hir::VarDef *> args;
         args.reserve (fd->Args ().size () + (method.IsStatic ? 1 : 0));
         if (!method.IsStatic) {
-            args.emplace_back (
+            auto *node = _builder.CreateVariable (
                 basic::NameObj ("this", fd->Name ().Start, fd->Name ().End),
-                createType<PointerType> (is->StructType ()));
+                createType<PointerType> (is->StructType ()),
+                nullptr,
+                false,
+                false,
+                fd->Name ().Start,
+                fd->Name ().End,
+                nullptr);
+            args.emplace_back (node);
         }
         for (const auto &arg : fd->Args ()) {
-            args.emplace_back (arg);
+            auto *node = _builder.CreateVariable (
+                arg.Name,
+                arg.Type,
+                nullptr,
+                false,
+                false,
+                arg.Name.Start,
+                arg.Name.End,
+                nullptr);
+            args.emplace_back (node);
         }
         auto *methodNode = _builder.CreateMethod (
             m->Func->Name,
@@ -531,8 +603,15 @@ Sema::analyzeImplStmt (ImplStmt *is) {
 
         for (const auto &arg : args) {
             _vars.top ().Vars.emplace (
-                arg.Name.Val,
-                Variable (arg.Name, arg.Type, false, false, _localsCount++, nullptr));
+                arg->Name ().Val,
+                Variable (
+                    arg->Name (),
+                    arg->Type (),
+                    false,
+                    false,
+                    nullptr,
+                    std::nullopt,
+                    arg));
         }
 
         for (const auto &stmt : fd->Body ()) {
@@ -838,6 +917,7 @@ Sema::analyzeBinaryExpr (BinaryExpr *be, Type *expectedType) {
     auto *node = _builder.CreateBinary (
         op,
         commonType,
+        resType,
         lhs.Node,
         rhs.Node,
         be->Start (),
@@ -950,8 +1030,8 @@ Sema::analyzeUnaryExpr (UnaryExpr *ue, Type *expectedType) {
 // NOLINTBEGIN(readability-convert-member-functions-to-static)
 Sema::SemanticResult
 Sema::analyzeVarExpr (VarExpr *ve, Type *expectedType) {
-    auto var = getVariable (ve->Name ().Val);
-    if (!var.has_value ()) {
+    auto *var = getVariable (ve->Name ().Val);
+    if (var == nullptr) {
         if (auto *s = getStruct (ve->Name ().Val)) {
             return { Value (ValueKind::Type, createType<StructType> (s)), nullptr };
         }
@@ -972,7 +1052,7 @@ Sema::analyzeVarExpr (VarExpr *ve, Type *expectedType) {
         node = _builder.CreateLiteral (value, ve->Start (), ve->End ());
     } else {
         node = _builder.CreateLoadVar (
-            var->Index,
+            var->HIR,
             var->Type,
             var->IsGlobal,
             ve->Start (),
@@ -1074,14 +1154,19 @@ Sema::analyzeAsgnExpr (AsgnExpr *ae, Type *expectedType) {
     if (!expr.Val.has_value ()) {
         return {};
     }
-    auto *node = _builder.CreateStore (ptr.Node, expr.Node, ae->Start (), ae->End ());
+    auto *node = _builder.CreateStore (
+        ptr.Node,
+        expr.Node,
+        expr.Val->Type,
+        ae->Start (),
+        ae->End ());
     return { expr.Val, node };
 }
 
 Sema::SemanticResult
 Sema::analyzeAsgnVar (
     AsgnExpr *ae, Sema::SemanticResult &expr, const Sema::SemanticResult &ptr) {
-    auto var = getVariable (llvm::cast<VarExpr> (ae->Ptr ())->Name ().Val);
+    auto *var = getVariable (llvm::cast<VarExpr> (ae->Ptr ())->Name ().Val);
     if (var->IsConst) {
         _diag
             .Report (
@@ -1095,6 +1180,7 @@ Sema::analyzeAsgnVar (
     if (ae->Op () != AsgnOp::Eq) {
         expr.Node = _builder.CreateBinary (
             op,
+            expr.Val->Type,
             expr.Val->Type,
             ptr.Node,
             expr.Node,
@@ -1166,13 +1252,11 @@ Sema::analyzeAsgnField (
             .AddSpan (ae->Ptr ()->Start (), ae->Ptr ()->End ());
         return {};
     }
-    if (_insideMethod.has_value () && *_insideMethod->second == *sym) {
-        _insideMethod->first->IsConst = false;
-    }
     auto op = AsgnOpToBinOp (ae->Op ());
     if (ae->Op () != AsgnOp::Eq) {
         expr.Node = _builder.CreateBinary (
             op,
+            expr.Val->Type,
             expr.Val->Type,
             ptr.Node,
             expr.Node,
@@ -1190,6 +1274,7 @@ Sema::analyzeAsgnPtr (
     if (ae->Op () != AsgnOp::Eq) {
         expr.Node = _builder.CreateBinary (
             op,
+            expr.Val->Type,
             expr.Val->Type,
             ptr.Node,
             expr.Node,
@@ -1260,6 +1345,7 @@ Sema::analyzeFieldExpr (FieldExpr *fe, Type *expectedType) {
     if (!canAccessField (fe->Name (), *it, s, baseIsStatic, canAccessPrivate)) {
         return {};
     }
+    auto       val  = Value (ValueKind::Unknown, it->Type);
     hir::Node *node = nullptr;
     if (it->IsStatic) {
         node = _builder.CreateLoadGlobalVarByName (
@@ -1268,9 +1354,13 @@ Sema::analyzeFieldExpr (FieldExpr *fe, Type *expectedType) {
             fe->Start (),
             fe->End ());
     } else {
-        node = _builder.CreateFieldExpr (base.Node, it->Index, fe->Start (), fe->End ());
+        node = _builder.CreateFieldExpr (
+            base.Node,
+            it->Index,
+            val.Type,
+            fe->Start (),
+            fe->End ());
     }
-    auto val = Value (ValueKind::Unknown, it->Type);
     auto res = SemanticResult (val, node);
     res      = implicitlyCast (res, &expectedType, fe->Start (), fe->End ());
     return res;
@@ -1365,9 +1455,13 @@ Sema::analyzeStructInstance (StructInstance *si, Type *expectedType) {
         }
         fields.emplace_back (index, val.Node);
     }
-    auto *node
-        = _builder.CreateStructInstance (std::move (fields), s, si->Start (), si->End ());
-    auto val = Value (valKind, createType<StructType> (s));
+    auto  val  = Value (valKind, createType<StructType> (s));
+    auto *node = _builder.CreateStructInstance (
+        std::move (fields),
+        s,
+        val.Type,
+        si->Start (),
+        si->End ());
     auto res = SemanticResult (val, node);
     res      = implicitlyCast (res, &expectedType, si->Start (), si->End ());
     return res;
@@ -1444,15 +1538,18 @@ Sema::analyzeMethodCall (MethodCall *mc, Type *expectedType) {
     }
     std::vector<hir::Node *> hirArgs;
     if (!method->IsStatic) {
-        hirArgs.emplace_back (
-            _builder.CreateReference (base.Node, mc->Start (), mc->End ()));
+        hirArgs.emplace_back (_builder.CreateReference (
+            base.Node,
+            createType<PointerType> (base.Val->Type),
+            mc->Start (),
+            mc->End ()));
     }
     for (size_t i = 0; i < argResults.size (); ++i) {
         auto res = analyzeExpr (mc->Args ()[i], method->Func->Args[i].Type);
         hirArgs.emplace_back (res.Node);
     }
 
-    auto *node = _builder.CreateCallMethod (
+    auto *node = _builder.CreateCall (
         method->Func.get (),
         std::move (hirArgs),
         mc->Start (),
@@ -1483,6 +1580,15 @@ Sema::analyzeTernaryExpr (TernaryExpr *te, Type *expectedType) {
         }
         return std::get<0> (cond.Val->Data) == 1 ? trueVal : falseVal;
     }
+    auto *tmp = _builder.CreateVariable (
+        basic::NameObj (".tmp", {}, {}),
+        expectedType,
+        nullptr,
+        false,
+        false,
+        te->Start (),
+        te->End (),
+        nullptr);
     auto *trueBB  = _builder.CreateBasicBlock (_builder.Parent (), "cond.true");
     auto *falseBB = _builder.CreateBasicBlock (_builder.Parent (), "cond.false");
     auto *mergeBB = _builder.CreateBasicBlock (_builder.Parent (), "cond.merge");
@@ -1498,8 +1604,16 @@ Sema::analyzeTernaryExpr (TernaryExpr *te, Type *expectedType) {
     if (!trueVal.Val.has_value ()) {
         return {};
     }
+    auto *storeTrue = _builder.CreateStore (
+        tmp,
+        trueVal.Node,
+        trueVal.Val->Type,
+        te->TrueVal ()->Start (),
+        te->TrueVal ()->End ());
+    _builder.CreateExprStmt (storeTrue, te->TrueVal ()->Start (), te->TrueVal ()->End ());
     if (expectedType == nullptr) {
         expectedType = trueVal.Val->Type;
+        tmp->SetType (expectedType);
     }
     _builder.CreateBr (mergeBB, te->Start (), te->End ());
 
@@ -1508,18 +1622,22 @@ Sema::analyzeTernaryExpr (TernaryExpr *te, Type *expectedType) {
     if (!falseVal.Val.has_value ()) {
         return {};
     }
+    auto *storeFalse = _builder.CreateStore (
+        tmp,
+        falseVal.Node,
+        falseVal.Val->Type,
+        te->FalseVal ()->Start (),
+        te->FalseVal ()->End ());
+    _builder.CreateExprStmt (
+        storeFalse,
+        te->FalseVal ()->Start (),
+        te->FalseVal ()->End ());
     _builder.CreateBr (mergeBB, te->Start (), te->End ());
 
     _builder.SetInsertionPoint (mergeBB);
-    auto  val  = Value (ValueKind::Unknown, expectedType);
-    auto *node = _builder.CreateTernary (
-        expectedType,
-        trueVal.Node,
-        trueBB,
-        falseVal.Node,
-        falseBB,
-        te->Start (),
-        te->End ());
+    auto  val = Value (ValueKind::Unknown, expectedType);
+    auto *node
+        = _builder.CreateLoadVar (tmp, expectedType, false, te->Start (), te->End ());
     auto res = SemanticResult (val, node);
     res      = implicitlyCast (res, &expectedType, te->Start (), te->End ());
     return res;
@@ -1592,9 +1710,9 @@ Sema::analyzeRefExpr (RefExpr *re, Type *expectedType) {
     }
     auto *ptrType = createType<PointerType> (expr.Val->Type);
     auto  val     = Value (ValueKind::Unknown, ptrType);
-    auto *node    = _builder.CreateReference (expr.Node, re->Start (), re->End ());
-    auto  res     = SemanticResult (val, node);
-    res           = implicitlyCast (res, &expectedType, re->Start (), re->End ());
+    auto *node = _builder.CreateReference (expr.Node, ptrType, re->Start (), re->End ());
+    auto  res  = SemanticResult (val, node);
+    res        = implicitlyCast (res, &expectedType, re->Start (), re->End ());
     return res;
 }
 
@@ -1752,16 +1870,16 @@ Sema::resolveType (Type **type) {
 }
 // NOLINTEND(readability-convert-member-functions-to-static)
 
-std::optional<Variable>
+Variable *
 Sema::getVariable (const std::string &name) {
     auto vars = _vars;
     while (!vars.empty ()) {
         if (auto it = vars.top ().Vars.find (name); it != vars.top ().Vars.end ()) {
-            return it->second;
+            return &it->second;
         }
         vars.pop ();
     }
-    return std::nullopt;
+    return nullptr;
 }
 
 symbols::Struct *
@@ -1831,6 +1949,9 @@ Sema::getMethod (
 
 Type *
 Sema::getCommonType (Type *lhs, Type *rhs, llvm::SMLoc start, llvm::SMLoc end) {
+    if (lhs == nullptr || rhs == nullptr) {
+        return nullptr;
+    }
     if (*lhs == *rhs) {
         return lhs;
     }
@@ -1850,7 +1971,7 @@ Sema::getCommonType (Type *lhs, Type *rhs, llvm::SMLoc start, llvm::SMLoc end) {
             "cannot find common type",
             Severity::Error)
         .AddSpan (start, end)
-        /*.AddHelp ("сonsider using an explicit cast")*/;
+        .AddNote ("сonsider using an explicit cast");
     return nullptr;
 }
 
@@ -2025,7 +2146,7 @@ Sema::canImplicitlyCast (Sema::SemanticResult val, Type **expectedType) {
     }
     resolveType (&val.Val->Type);
     resolveType (expectedType);
-    if (*expectedType == nullptr) {
+    if (val.Val->Type == nullptr || *expectedType == nullptr) {
         return false;
     }
 
@@ -2064,7 +2185,7 @@ Sema::implicitlyCast (
     }
     resolveType (&val.Val->Type);
     resolveType (expectedType);
-    if (*expectedType == nullptr) {
+    if (val.Val->Type == nullptr || *expectedType == nullptr) {
         return val;
     }
 
@@ -2466,6 +2587,9 @@ Sema::canAccessMethod (
 
 std::string
 Sema::typeToString (Type *type) {
+    if (type == nullptr) {
+        return "";
+    }
     if (type->IsPointer ()) {
         return '*' + typeToString (type->AsPointer ()->Base ());
     }

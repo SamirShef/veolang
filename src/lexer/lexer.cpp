@@ -198,11 +198,15 @@ Lexer::tokenizeOp (const char *tokStart) {
         return tok (kind);                                                               \
     }
 
-#define double_op(c, kind1, kind2)                                                       \
+#define triple(c, kind1, kind2, kind3)                                                   \
     case c: {                                                                            \
         if (peek () == (c)) {                                                            \
             ++_curPtr;                                                                   \
             return tok (kind2);                                                          \
+        }                                                                                \
+        if (peek () == (c)) {                                                            \
+            ++_curPtr;                                                                   \
+            return tok (kind3);                                                          \
         }                                                                                \
         return tok (kind1);                                                              \
     }
@@ -222,7 +226,6 @@ Lexer::tokenizeOp (const char *tokStart) {
         simple ('?', Question);
         simple (':', Colon);
         simple ('$', Dollar);
-        simple ('^', Carret);
         equal ('=', Eq);
         equal ('!', Bang);
         equal ('>', Gt);
@@ -232,8 +235,9 @@ Lexer::tokenizeOp (const char *tokStart) {
         equal ('*', Star);
         equal ('/', Slash);
         equal ('%', Percent);
-        double_op ('&', BitAnd, LogAnd);
-        double_op ('|', BitOr, LogOr);
+        equal ('^', Carret);
+        triple ('&', BitAnd, LogAnd, AndEq);
+        triple ('|', BitOr, LogOr, OrEq);
     default: return tok (Unknown);
     }
 

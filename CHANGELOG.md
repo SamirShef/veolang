@@ -5,6 +5,33 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.17.11] - 2026-06-03
+
+### Added
+
+- Short-circuit evaluation `&&` and `||` operators
+- Assignment operators `&=`, `|=` and `^=`
+- Implicit `return;` statement at the end of the noth-function
+- Was allowed to use the structure type within itself
+
+## [0.17.10] - 2026-06-03
+
+### Added
+
+- Initialization function parameters to alloca
+
+## [0.17.9] - 2026-06-03
+
+### Added
+
+- HIR Linearizer
+
+## [0.17.8] - 2026-06-02
+
+### Fixed
+
+- Incorrect global variables initialization
+
 ## [0.17.7] - 2026-06-01
 
 ### Fixed

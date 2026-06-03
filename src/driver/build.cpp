@@ -1,7 +1,6 @@
-#include "driver/cli_options.h"
-
 #include <basic/symbols/module.h>
 #include <driver/build.h>
+#include <driver/cli_options.h>
 #include <driver/compiler.h>
 #include <filesystem>
 #include <llvm/Support/raw_ostream.h>

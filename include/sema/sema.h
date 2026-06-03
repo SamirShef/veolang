@@ -40,8 +40,8 @@ class Sema {
     DiagnosticEngine &_diag; // NOLINT(cppcoreguidelines-avoid-const-or-ref-data-members)
     TypePool &_typePool;     // NOLINT(cppcoreguidelines-avoid-const-or-ref-data-members)
     size_t    _localsCount = 0;
-    symbols::Module           *_mod;
-    hir::Builder               _builder;
+    symbols::Module *_mod;
+    hir::Builder &_builder; // NOLINT(cppcoreguidelines-avoid-const-or-ref-data-members)
     std::stack<symbols::Scope> _vars;
     std::stack<Type *>         _funcRetTypes;
 
@@ -67,10 +67,10 @@ class Sema {
 public:
     Sema (
         DiagnosticEngine &diag,
-        hir::Context     &ctx,
+        hir::Builder     &builder,
         symbols::Module  *mod,
         TypePool         &typePool)
-        : _diag (diag), _builder (ctx), _mod (mod), _typePool (typePool) {
+        : _diag (diag), _builder (builder), _mod (mod), _typePool (typePool) {
         _vars.emplace ();
     }
 
@@ -224,7 +224,7 @@ private:
     Type *
     resolveType (Type **type);
 
-    std::optional<symbols::Variable>
+    symbols::Variable *
     getVariable (const std::string &name);
 
     symbols::Struct *

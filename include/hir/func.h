@@ -5,28 +5,29 @@
 #include <basic/types/type.h>
 #include <hir/basic_block.h>
 #include <hir/node.h>
+#include <hir/var_def.h>
 
 namespace veo::hir {
 
 class Function : public Node {
-    basic::NameObj             _name;
-    basic::Type               *_retType;
-    std::vector<ast::Argument> _args;
-    std::vector<BasicBlock *>  _body;
-    symbols::Function         *_base;
-    basic::Type               *_methodBaseType;
-    bool                       _isStatic;
+    basic::NameObj            _name;
+    basic::Type              *_retType;
+    std::vector<VarDef *>     _args;
+    std::vector<BasicBlock *> _body;
+    symbols::Function        *_base;
+    basic::Type              *_methodBaseType;
+    bool                      _isStatic;
 
 public:
     Function (
-        basic::NameObj             name,
-        basic::Type               *retType,
-        std::vector<ast::Argument> args,
-        llvm::SMLoc                start,
-        llvm::SMLoc                end,
-        symbols::Function         *base,
-        basic::Type               *methodBaseType = nullptr,
-        bool                       isStatic       = false)
+        basic::NameObj        name,
+        basic::Type          *retType,
+        std::vector<VarDef *> args,
+        llvm::SMLoc           start,
+        llvm::SMLoc           end,
+        symbols::Function    *base,
+        basic::Type          *methodBaseType = nullptr,
+        bool                  isStatic       = false)
         : _name (std::move (name)),
           _retType (retType),
           _args (std::move (args)),
@@ -47,7 +48,7 @@ public:
         return _retType;
     }
 
-    std::vector<ast::Argument> &
+    std::vector<VarDef *> &
     Args () {
         return _args;
     }
