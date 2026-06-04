@@ -9,7 +9,7 @@ test_func (Parser, FuncVoidReturn) {
     auto          res     = context.ParseFile ("veo/test_func_void_return.veo");
     const auto   &snaphot = ParserContext::GetSnaphot (res);
     assert_eq (res.HasErrors, false);
-    const auto &expectedSnaphot = "FuncDef: pub log_message (id: u64)\n"
+    const auto &expectedSnaphot = "FuncDef: pub log_message (id: u64): noth\n"
                                   "  Return:\n";
     assert_snaphot_eq (snaphot, expectedSnaphot);
     return true;

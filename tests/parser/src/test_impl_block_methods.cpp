@@ -11,7 +11,7 @@ test_func (Parser, ImplBlockMethods) {
     assert_eq (res.HasErrors, false);
     const auto &expectedSnaphot = "ImplStmt: Point\n"
                                   "  Methods:\n"
-                                  "    pub reset ()\n"
+                                  "    pub reset (): noth\n"
                                   "      ExprStmt:\n"
                                   "        AsgnExpr: =\n"
                                   "          FieldExpr: x\n"

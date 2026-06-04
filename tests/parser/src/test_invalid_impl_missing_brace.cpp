@@ -9,7 +9,7 @@ test_func (Parser, ImplMissingBrace) {
     auto          res     = context.ParseFile ("veo/test_invalid_impl_missing_brace.veo");
     const auto   &snaphot = ParserContext::GetSnaphot (res);
     assert_eq (res.HasErrors, true);
-    const auto &expectedSnaphot = "FuncDef: priv test ()\n";
+    const auto &expectedSnaphot = "FuncDef: priv test (): noth\n";
     assert_snaphot_eq (snaphot, expectedSnaphot);
     assert_eq (context.Diag.Builders ().size (), 1);
     assert_diag (
