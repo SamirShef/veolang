@@ -52,10 +52,13 @@ CodeGen::generateVarDef (VarDef *vd) {
             name);
         _globals.emplace (vd, gv);
     } else {
-        auto *init   = vd->Init () != nullptr
-                           ? generateExpr (vd->Init ())
-                           : llvm::ConstantExpr::getNullValue (getType (vd->Type ()));
-        auto *alloca = _builder.CreateAlloca (type, nullptr, name);
+        auto *init    = vd->Init () != nullptr
+                            ? generateExpr (vd->Init ())
+                            : llvm::ConstantExpr::getNullValue (getType (vd->Type ()));
+        auto *curFunc = _builder.GetInsertBlock ()->getParent ();
+        auto &initBB  = curFunc->getEntryBlock ();
+        llvm::IRBuilder<> allocaBuilder (&initBB, initBB.begin ());
+        auto             *alloca = allocaBuilder.CreateAlloca (type, nullptr, name);
         _builder.CreateStore (init, alloca);
         _curFunc->Locals.emplace (vd, alloca);
     }

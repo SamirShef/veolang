@@ -11,13 +11,23 @@ class CharType;
 class StructType;
 class NamedType;
 class PointerType;
+class NothType;
 
 #define type_classof(kind)                                                               \
     static bool classof (const veo::basic::Type *type) {                                 \
         return type->Kind () == (veo::basic::TypeKind::kind);                            \
     }
 
-enum class TypeKind : uint8_t { Integer, Floating, Bool, Char, Struct, Named, Pointer };
+enum class TypeKind : uint8_t {
+    Integer,
+    Floating,
+    Bool,
+    Char,
+    Struct,
+    Named,
+    Pointer,
+    Noth
+};
 
 class Type {
     TypeKind _kind;
@@ -60,6 +70,8 @@ public:
     as (Named);
     is (Pointer);
     as (Pointer);
+    is (Noth);
+    as (Noth);
 
     bool
     IsNumber () const {

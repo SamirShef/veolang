@@ -163,6 +163,8 @@ Parser::parseFuncDef (ast::AccessModifier access) {
         if (retType == nullptr) {
             return nullptr;
         }
+    } else {
+        retType = createType<basic::NothType> ();
     }
     std::vector<Stmt *> body;
     if (!parseBlock (body)) {

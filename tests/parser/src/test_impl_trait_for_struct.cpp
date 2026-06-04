@@ -11,7 +11,7 @@ test_func (Parser, ImplTraitForStruct) {
     assert_eq (res.HasErrors, false);
     const auto &expectedSnaphot = "ImplStmt: TDisplayable for Point\n"
                                   "  Methods:\n"
-                                  "    pub render ()\n"
+                                  "    pub render (): noth\n"
                                   "      ExprStmt:\n"
                                   "        FuncCall: log\n"
                                   "          FieldExpr: x\n"

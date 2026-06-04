@@ -40,6 +40,11 @@ public:
         return _insertBlock->Parent ();
     }
 
+    BasicBlock *
+    InsertBlock () const {
+        return _insertBlock;
+    }
+
     void
     SetInsertionPoint (BasicBlock *bb) {
         _insertBlock = bb;
@@ -54,6 +59,9 @@ public:
 
     void
     AddToBlock (Node *node) {
+        if (_insertBlock == nullptr) {
+            return;
+        }
         _insertBlock->AddInst (node);
     }
 

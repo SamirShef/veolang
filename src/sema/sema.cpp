@@ -118,6 +118,21 @@ Sema::analyzeVarDef (VarDef *vd) {
             return;
         }
     }
+    if (type == nullptr || type->IsNoth ()) {
+        _diag
+            .Report (
+                DiagCode::EVarCannotHaveTypeNoth,
+                "variable cannot have type 'noth'",
+                Severity::Error)
+            .AddSpan (
+                vd->Name ().Start,
+                vd->Name ().End,
+                "'noth' is not a valid type for a variable")
+            .AddNote (
+                "variables must have a type that can represent data and be stored in "
+                "memory");
+        return;
+    }
     auto var = Variable (vd->Name (), type, vd->IsConst (), isGlobal, _mod, val.Val);
     symbols::Variable *sym = nullptr;
     _vars.top ().Vars.emplace (var.Name.Val, var);
@@ -242,7 +257,7 @@ Sema::analyzeRet (Return *ret) {
         return;
     }
     if (ret->RetExpr () == nullptr) {
-        if (_funcRetTypes.top () != nullptr) {
+        if (!_funcRetTypes.top ()->IsNoth ()) {
             _diag
                 .Report (
                     DiagCode::ECannotCast,
@@ -258,16 +273,16 @@ Sema::analyzeRet (Return *ret) {
         if (!res.Val.has_value ()) {
             return;
         }
-        if (_funcRetTypes.top () == nullptr) {
-            _diag
-                .Report (
-                    DiagCode::ECannotCast,
-                    "cannot implicitly cast '" + typeToString (res.Val->Type)
-                        + "' to 'noth'",
-                    Severity::Error)
-                .AddSpan (ret->RetExpr ()->Start (), ret->RetExpr ()->End ());
-            return;
-        }
+        // if (_funcRetTypes.top () == nullptr) {
+        //     _diag
+        //         .Report (
+        //             DiagCode::ECannotCast,
+        //             "cannot implicitly cast '" + typeToString (res.Val->Type)
+        //                 + "' to 'noth'",
+        //             Severity::Error)
+        //         .AddSpan (ret->RetExpr ()->Start (), ret->RetExpr ()->End ());
+        //     return;
+        // }
         res = implicitlyCast (
             res,
             &_funcRetTypes.top (),
@@ -291,15 +306,40 @@ Sema::analyzeIfElseStmt (ast::IfElseStmt *ies) {
     if (!allowInScope (ies, false)) {
         return;
     }
-    auto  cond    = analyzeExpr (ies->Cond (), createType<BoolType> ());
+    auto cond = analyzeExpr (ies->Cond (), createType<BoolType> ());
+    if (cond.Val->Kind == ValueKind::Const) {
+        bool                 condRes     = std::get<0> (cond.Val->Data) != 0;
+        std::vector<Stmt *> &realBranch  = condRes ? ies->Then () : ies->Else ();
+        std::vector<Stmt *> &otherBranch = condRes ? ies->Else () : ies->Then ();
+        _vars.emplace ();
+        for (const auto &stmt : realBranch) {
+            analyzeStmt (stmt);
+        }
+        _vars.pop ();
+
+        auto *lastBlock = _builder.InsertBlock ();
+        _builder.SetInsertionPoint (
+            nullptr); // analyze statements but do not add to the block
+
+        _vars.emplace ();
+        for (const auto &stmt : otherBranch) {
+            analyzeStmt (stmt);
+        }
+        _vars.pop ();
+
+        _builder.SetInsertionPoint (lastBlock);
+        return;
+    }
     auto *thenBB  = _builder.CreateBasicBlock (_builder.Parent (), "then");
-    auto *elseBB  = _builder.CreateBasicBlock (_builder.Parent (), "else");
+    auto *elseBB  = ies->Else ().empty ()
+                        ? nullptr
+                        : _builder.CreateBasicBlock (_builder.Parent (), "else");
     auto *mergeBB = _builder.CreateBasicBlock (_builder.Parent (), "merge");
 
     _builder.CreateBr (
         cond.Node,
         thenBB,
-        elseBB,
+        elseBB != nullptr ? elseBB : mergeBB,
         ies->Cond ()->Start (),
         ies->Cond ()->End ());
 
@@ -312,14 +352,15 @@ Sema::analyzeIfElseStmt (ast::IfElseStmt *ies) {
     _vars.pop ();
     _builder.CreateBr (mergeBB, ies->Cond ()->Start (), ies->Cond ()->End ());
 
-    // else
-    _builder.SetInsertionPoint (elseBB);
-    _vars.emplace ();
-    for (const auto &stmt : ies->Else ()) {
-        analyzeStmt (stmt);
+    if (elseBB != nullptr) { // else
+        _builder.SetInsertionPoint (elseBB);
+        _vars.emplace ();
+        for (const auto &stmt : ies->Else ()) {
+            analyzeStmt (stmt);
+        }
+        _vars.pop ();
+        _builder.CreateBr (mergeBB, ies->Cond ()->Start (), ies->Cond ()->End ());
     }
-    _vars.pop ();
-    _builder.CreateBr (mergeBB, ies->Cond ()->Start (), ies->Cond ()->End ());
 
     // merge
     _builder.SetInsertionPoint (mergeBB);
@@ -356,11 +397,20 @@ Sema::analyzeForLoop (ast::ForLoopStmt *fls) {
         if (!cond.Val.has_value ()) {
             return;
         }
+        if (cond.Val->Kind == ValueKind::Const) {
+            if (std::get<0> (cond.Val->Data) == 1) {
+                _builder.CreateBr (bodyBB, fls->Start (), fls->End ());
+            } else {
+                _builder.CreateBr (mergeBB, fls->Start (), fls->End ());
+            }
+        } else {
+            _builder.CreateBr (cond.Node, bodyBB, mergeBB, fls->Start (), fls->End ());
+        }
     } else {
         auto val = Value (ValueKind::Const, ValueData (1), boolType);
         cond     = { val, _builder.CreateLiteral (val, fls->Start (), fls->End ()) };
+        _builder.CreateBr (bodyBB, fls->Start (), fls->End ());
     }
-    _builder.CreateBr (cond.Node, bodyBB, mergeBB, fls->Start (), fls->End ());
 
     // iteration
     _builder.SetInsertionPoint (iterationBB);
