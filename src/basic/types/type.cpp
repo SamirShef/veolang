@@ -12,6 +12,7 @@ as (Char);
 as (Struct);
 as (Named);
 as (Pointer);
+as (Noth);
 
 #undef as
 
@@ -51,7 +52,7 @@ operator== (const Type &lhs, const Type &rhs) {
         const auto *prhs = rhs.AsPointer ();
         return *plhs->Base () == *prhs->Base ();
     }
-    default: return true; // BoolType and CharType
+    default: return true; // BoolType, CharType and NothType
     }
 }
 

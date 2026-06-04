@@ -1,5 +1,3 @@
-#include "linearizer/linearizer.h"
-
 #include <ast/context.h>
 #include <ast/dumper.h>
 #include <basic/types/pool.h>
@@ -8,7 +6,10 @@
 #include <driver/cli_options.h>
 #include <driver/compiler.h>
 #include <filesystem>
+#include <hir_analyze/dead_code_eliminator.h>
+#include <hir_analyze/return_checker.h>
 #include <lexer/lexer.h>
+#include <linearizer/linearizer.h>
 #include <llvm/IR/LegacyPassManager.h>
 #include <llvm/MC/TargetRegistry.h>
 #include <llvm/Passes/OptimizationLevel.h>
@@ -262,6 +263,12 @@ Compile (
 
     HIRLinearizer linearizer (builder);
     linearizer.Linearize ();
+
+    for (auto *func : ctx.Functions ()) {
+        DeadCodeEliminator::RunOnFunction (func);
+        ReturnChecker retChecker (diag);
+        retChecker.RunOnFunction (func);
+    }
 
     diag.Render ();
     if (diag.HasErrors ()) {

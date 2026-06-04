@@ -118,6 +118,21 @@ Sema::analyzeVarDef (VarDef *vd) {
             return;
         }
     }
+    if (type == nullptr || type->IsNoth ()) {
+        _diag
+            .Report (
+                DiagCode::EVarCannotHaveTypeNoth,
+                "variable cannot have type 'noth'",
+                Severity::Error)
+            .AddSpan (
+                vd->Name ().Start,
+                vd->Name ().End,
+                "'noth' is not a valid type for a variable")
+            .AddNote (
+                "variables must have a type that can represent data and be stored in "
+                "memory");
+        return;
+    }
     auto var = Variable (vd->Name (), type, vd->IsConst (), isGlobal, _mod, val.Val);
     symbols::Variable *sym = nullptr;
     _vars.top ().Vars.emplace (var.Name.Val, var);
@@ -242,7 +257,7 @@ Sema::analyzeRet (Return *ret) {
         return;
     }
     if (ret->RetExpr () == nullptr) {
-        if (_funcRetTypes.top () != nullptr) {
+        if (!_funcRetTypes.top ()->IsNoth ()) {
             _diag
                 .Report (
                     DiagCode::ECannotCast,
@@ -258,16 +273,16 @@ Sema::analyzeRet (Return *ret) {
         if (!res.Val.has_value ()) {
             return;
         }
-        if (_funcRetTypes.top () == nullptr) {
-            _diag
-                .Report (
-                    DiagCode::ECannotCast,
-                    "cannot implicitly cast '" + typeToString (res.Val->Type)
-                        + "' to 'noth'",
-                    Severity::Error)
-                .AddSpan (ret->RetExpr ()->Start (), ret->RetExpr ()->End ());
-            return;
-        }
+        // if (_funcRetTypes.top () == nullptr) {
+        //     _diag
+        //         .Report (
+        //             DiagCode::ECannotCast,
+        //             "cannot implicitly cast '" + typeToString (res.Val->Type)
+        //                 + "' to 'noth'",
+        //             Severity::Error)
+        //         .AddSpan (ret->RetExpr ()->Start (), ret->RetExpr ()->End ());
+        //     return;
+        // }
         res = implicitlyCast (
             res,
             &_funcRetTypes.top (),
@@ -356,11 +371,20 @@ Sema::analyzeForLoop (ast::ForLoopStmt *fls) {
         if (!cond.Val.has_value ()) {
             return;
         }
+        if (cond.Val->Kind == ValueKind::Const) {
+            if (std::get<0> (cond.Val->Data) == 1) {
+                _builder.CreateBr (bodyBB, fls->Start (), fls->End ());
+            } else {
+                _builder.CreateBr (mergeBB, fls->Start (), fls->End ());
+            }
+        } else {
+            _builder.CreateBr (cond.Node, bodyBB, mergeBB, fls->Start (), fls->End ());
+        }
     } else {
         auto val = Value (ValueKind::Const, ValueData (1), boolType);
         cond     = { val, _builder.CreateLiteral (val, fls->Start (), fls->End ()) };
+        _builder.CreateBr (bodyBB, fls->Start (), fls->End ());
     }
-    _builder.CreateBr (cond.Node, bodyBB, mergeBB, fls->Start (), fls->End ());
 
     // iteration
     _builder.SetInsertionPoint (iterationBB);

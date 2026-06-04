@@ -47,6 +47,8 @@ enum class DiagCode : uint8_t {
     ECannotCallMethodOnImmutableReceiver,
     EIntLitTooLarge,
     ERecursiveType,
+    ENotAllControlPathsRetValue,
+    EVarCannotHaveTypeNoth,
 
     WUnusedVar,
     WLossPrecision,

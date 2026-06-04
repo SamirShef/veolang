@@ -1,7 +1,4 @@
-#include <diagnostic/engine.h>
 #include <driver/cli_options.h>
-#include <lexer/lexer.h>
-#include <llvm/Support/raw_ostream.h>
 
 using namespace veo;
 

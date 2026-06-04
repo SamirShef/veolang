@@ -5,6 +5,29 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.17.12] - 2026-06-04
+
+### Added
+
+- CFG builder
+- Dead code elimination (DCE)
+- Return checker
+
+### Fixed
+
+- Segfault in runtime when infinite loop evaluate condition. For example code:
+
+```veo
+func main(): i32 {
+    let x = 10;
+    for x == 10 {}
+    return 0;
+}
+```
+
+Condition `x == 10` creates temporary variable `t.0` which contains expression `x == 10`. It variable creates in basic block `for.cond` and each jump to
+`for.cond` creates new local variable in stack. Now `CodeGen` creates each local variables in block `init`.
+
 ## [0.17.11] - 2026-06-03
 
 ### Added
