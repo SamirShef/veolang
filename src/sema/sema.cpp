@@ -306,15 +306,40 @@ Sema::analyzeIfElseStmt (ast::IfElseStmt *ies) {
     if (!allowInScope (ies, false)) {
         return;
     }
-    auto  cond    = analyzeExpr (ies->Cond (), createType<BoolType> ());
+    auto cond = analyzeExpr (ies->Cond (), createType<BoolType> ());
+    if (cond.Val->Kind == ValueKind::Const) {
+        bool                 condRes     = std::get<0> (cond.Val->Data) != 0;
+        std::vector<Stmt *> &realBranch  = condRes ? ies->Then () : ies->Else ();
+        std::vector<Stmt *> &otherBranch = condRes ? ies->Else () : ies->Then ();
+        _vars.emplace ();
+        for (const auto &stmt : realBranch) {
+            analyzeStmt (stmt);
+        }
+        _vars.pop ();
+
+        auto *lastBlock = _builder.InsertBlock ();
+        _builder.SetInsertionPoint (
+            nullptr); // analyze statements but do not add to the block
+
+        _vars.emplace ();
+        for (const auto &stmt : otherBranch) {
+            analyzeStmt (stmt);
+        }
+        _vars.pop ();
+
+        _builder.SetInsertionPoint (lastBlock);
+        return;
+    }
     auto *thenBB  = _builder.CreateBasicBlock (_builder.Parent (), "then");
-    auto *elseBB  = _builder.CreateBasicBlock (_builder.Parent (), "else");
+    auto *elseBB  = ies->Else ().empty ()
+                        ? nullptr
+                        : _builder.CreateBasicBlock (_builder.Parent (), "else");
     auto *mergeBB = _builder.CreateBasicBlock (_builder.Parent (), "merge");
 
     _builder.CreateBr (
         cond.Node,
         thenBB,
-        elseBB,
+        elseBB != nullptr ? elseBB : mergeBB,
         ies->Cond ()->Start (),
         ies->Cond ()->End ());
 
@@ -327,14 +352,15 @@ Sema::analyzeIfElseStmt (ast::IfElseStmt *ies) {
     _vars.pop ();
     _builder.CreateBr (mergeBB, ies->Cond ()->Start (), ies->Cond ()->End ());
 
-    // else
-    _builder.SetInsertionPoint (elseBB);
-    _vars.emplace ();
-    for (const auto &stmt : ies->Else ()) {
-        analyzeStmt (stmt);
+    if (elseBB != nullptr) { // else
+        _builder.SetInsertionPoint (elseBB);
+        _vars.emplace ();
+        for (const auto &stmt : ies->Else ()) {
+            analyzeStmt (stmt);
+        }
+        _vars.pop ();
+        _builder.CreateBr (mergeBB, ies->Cond ()->Start (), ies->Cond ()->End ());
     }
-    _vars.pop ();
-    _builder.CreateBr (mergeBB, ies->Cond ()->Start (), ies->Cond ()->End ());
 
     // merge
     _builder.SetInsertionPoint (mergeBB);
