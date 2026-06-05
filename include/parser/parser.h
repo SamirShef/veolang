@@ -143,6 +143,9 @@ private:
     parsePrimaryExpr (bool allowStruct = true);
 
     ast::Expr *
+    tryParseAsTypeExpr ();
+
+    ast::Expr *
     parseChain (ast::Expr *base, bool allowStruct = true);
 
     ast::Expr *

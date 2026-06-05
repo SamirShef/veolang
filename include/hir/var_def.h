@@ -11,6 +11,7 @@ class VarDef : public Node {
     basic::Type       *_type;
     Node              *_expr;
     bool               _isConst;
+    bool               _isGlobal;
     symbols::Variable *_base;
 
 public:
@@ -19,6 +20,7 @@ public:
         basic::Type       *type,
         Node              *expr,
         bool               isConst,
+        bool               isGlobal,
         llvm::SMLoc        start,
         llvm::SMLoc        end,
         symbols::Variable *base)
@@ -26,6 +28,7 @@ public:
           _type (type),
           _expr (expr),
           _isConst (isConst),
+          _isGlobal (isGlobal),
           _base (base),
           Node (NodeKind::VarDef, start, end) {}
 
@@ -69,6 +72,11 @@ public:
     bool
     IsConst () const {
         return _isConst;
+    }
+
+    bool
+    IsGlobal () const {
+        return _isGlobal;
     }
 
     symbols::Variable *

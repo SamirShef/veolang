@@ -11,6 +11,7 @@
 #include <ast/exprs/ref.h>
 #include <ast/exprs/struct_instance.h>
 #include <ast/exprs/ternary_expr.h>
+#include <ast/exprs/type_expr.h>
 #include <ast/exprs/un_expr.h>
 #include <ast/exprs/var_expr.h>
 #include <ast/stmts/break_continue.h>
@@ -108,6 +109,7 @@ private:
             variant (RefExpr, dumpRefExpr, RefExpr);
             variant (DerefExpr, dumpDerefExpr, DerefExpr);
             variant (NilExpr, dumpNilExpr, NilExpr);
+            variant (TypeExpr, dumpTypeExpr, TypeExpr);
         default: {
         }
         }
@@ -155,6 +157,9 @@ private:
 
     void
     dumpNilExpr (NilExpr *ne);
+
+    void
+    dumpTypeExpr (TypeExpr *te);
 
     void
     indent () {

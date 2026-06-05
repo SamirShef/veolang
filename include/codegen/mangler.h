@@ -13,7 +13,7 @@ public:
     MangleFunction (const hir::Function *func);
 
     static std::string
-    MangleMethod (const symbols::Struct *sym, hir::Function *func);
+    MangleMethod (basic::Type *base, hir::Function *func);
 
     static std::string
     MangleGlobalVar (const hir::VarDef *var);

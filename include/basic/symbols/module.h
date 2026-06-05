@@ -13,8 +13,10 @@ struct Module {
     std::unordered_map<std::string, Variable>           Vars;
     std::unordered_map<std::string, FunctionCandidates> Funcs;
     std::unordered_map<std::string, Struct>             Structs;
-    std::unordered_map<std::string, Module *>           Imports;
-    std::unordered_map<std::string, Module *>           Submods;
+    std::unordered_map<basic::Type *, std::unordered_map<std::string, MethodCandidates>>
+                                              PrimitiveMethods;
+    std::unordered_map<std::string, Module *> Imports;
+    std::unordered_map<std::string, Module *> Submods;
 
     explicit Module (std::string name, Module *parent = nullptr)
         : Name (std::move (name)), Parent (parent) {}
@@ -30,7 +32,8 @@ struct Module {
               || Parent != nullptr && other.Parent != nullptr && *Parent == *other.Parent;
         return Name == other.Name && isParentsEquals && Vars == other.Vars
                && Funcs == other.Funcs && Structs == other.Structs
-               && Imports == other.Imports && Submods == other.Submods;
+               && PrimitiveMethods == other.PrimitiveMethods && Imports == other.Imports
+               && Submods == other.Submods;
     }
 
     bool
