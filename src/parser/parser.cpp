@@ -11,6 +11,7 @@
 #include <ast/exprs/ref.h>
 #include <ast/exprs/struct_instance.h>
 #include <ast/exprs/ternary_expr.h>
+#include <ast/exprs/type_expr.h>
 #include <ast/exprs/un_expr.h>
 #include <ast/exprs/var_expr.h>
 #include <ast/stmts/break_continue.h>
@@ -519,6 +520,11 @@ Parser::parseExpr (int minPrec, bool allowStruct) {
 
 Expr *
 Parser::parsePrimaryExpr (bool allowStruct) {
+    auto *typeExpr = tryParseAsTypeExpr ();
+    if (typeExpr != nullptr) {
+        return typeExpr;
+    }
+
     const Token tok = advance ();
 #define lit(kind)                                                                        \
     case TokenKind::kind:                                                                \
@@ -555,7 +561,7 @@ Parser::parsePrimaryExpr (bool allowStruct) {
     case TokenKind::Tilde: {
         return createNode<UnaryExpr> (
             TokToUnOp (tok.Kind),
-            parsePrimaryExpr (allowStruct),
+            parseExpr ((int) Precedence::Unary, allowStruct),
             tok.Start,
             _lastTok.End);
     }
@@ -581,14 +587,14 @@ Parser::parsePrimaryExpr (bool allowStruct) {
         return createNode<VarExpr> (basic::NameObj (tok), tok.Start, tok.End);
     }
     case TokenKind::Star: {
-        Expr *expr = parseExpr ((int) Precedence::Unary);
+        Expr *expr = parseExpr ((int) Precedence::Unary, allowStruct);
         if (expr == nullptr) {
             return nullptr;
         }
         return createNode<DerefExpr> (expr, tok.Start, expr->End ());
     }
     case TokenKind::BitAnd: {
-        Expr *expr = parseExpr ((int) Precedence::Unary);
+        Expr *expr = parseExpr ((int) Precedence::Unary, allowStruct);
         if (expr == nullptr) {
             return nullptr;
         }
@@ -610,6 +616,34 @@ Parser::parsePrimaryExpr (bool allowStruct) {
         .AddSpan (tok.Start, tok.End, "expected expression here");
     synchronize ();
     return nullptr;
+}
+
+Expr *
+Parser::tryParseAsTypeExpr () {
+    switch (_curTok.Kind) {
+    case TokenKind::Bool:
+    case TokenKind::Char:
+    case TokenKind::I8:
+    case TokenKind::I16:
+    case TokenKind::I32:
+    case TokenKind::I64:
+    case TokenKind::U8:
+    case TokenKind::U16:
+    case TokenKind::U32:
+    case TokenKind::U64:
+    case TokenKind::F32:
+    case TokenKind::F64: {
+        llvm::SMLoc  start = _curTok.Start;
+        basic::Type *type  = consumeType ();
+        if (type == nullptr) {
+            return nullptr;
+        }
+        return createNode<TypeExpr> (type, start, _lastTok.End);
+    }
+    default: {
+        return nullptr;
+    }
+    }
 }
 
 Expr *

@@ -172,7 +172,7 @@ Lexer::tokenizeCharLit (const char *tokStart) {
                 Severity::Error)
             .AddSpan (loc (tokStart), loc (_curPtr));
     }
-    std::string val (tokStart + 1, _curPtr - tokStart - 1);
+    std::string val (tokStart + 1, _curPtr - tokStart - 2);
     return { TokenKind::CharLit, val, loc (tokStart), loc (_curPtr) };
 }
 

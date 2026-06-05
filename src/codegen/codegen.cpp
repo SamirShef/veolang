@@ -68,9 +68,7 @@ void
 CodeGen::declareFunc (Function *fd) {
     const std::string &name = fd->MethodBaseType () == nullptr
                                   ? Mangler::MangleFunction (fd)
-                                  : Mangler::MangleMethod (
-                                        fd->MethodBaseType ()->AsStruct ()->BaseSymbol (),
-                                        fd);
+                                  : Mangler::MangleMethod (fd->MethodBaseType (), fd);
     std::vector<llvm::Type *> args;
     for (auto &a : fd->Args ()) {
         args.emplace_back (getType (a->Type ()));
@@ -87,13 +85,11 @@ CodeGen::declareFunc (Function *fd) {
 
 void
 CodeGen::generateFuncDef (Function *fd) {
-    _curFunc                = CurrentFunction ();
-    const std::string &name = fd->MethodBaseType () == nullptr
-                                  ? Mangler::MangleFunction (fd)
-                                  : Mangler::MangleMethod (
-                                        fd->MethodBaseType ()->AsStruct ()->BaseSymbol (),
-                                        fd);
-    auto              *func = _mod->getFunction (name);
+    _curFunc                  = CurrentFunction ();
+    const std::string &name   = fd->MethodBaseType () == nullptr
+                                    ? Mangler::MangleFunction (fd)
+                                    : Mangler::MangleMethod (fd->MethodBaseType (), fd);
+    auto              *func   = _mod->getFunction (name);
     auto              *initBB = llvm::BasicBlock::Create (_ctx, "init", func);
 
     for (auto &bb : fd->Body ()) {
@@ -478,7 +474,9 @@ CodeGen::generateLValue (Node *node) {
     }
     case NodeKind::VarDef: {
         auto *vd = llvm::cast<VarDef> (node);
-        generateVarDef (vd);
+        if (vd->IsGlobal ()) {
+            return findGlobal (vd);
+        }
         return findLocal (vd);
     }
     case NodeKind::FieldExpr: {
@@ -505,6 +503,9 @@ CodeGen::generateLValue (Node *node) {
 
 llvm::Value *
 CodeGen::findGlobal (hir::VarDef *vd) {
+    if (vd == nullptr) {
+        return nullptr;
+    }
     for (const auto &[var, llvmVar] : _globals) {
         if (*var == vd) {
             return llvmVar;
@@ -515,6 +516,9 @@ CodeGen::findGlobal (hir::VarDef *vd) {
 
 llvm::Value *
 CodeGen::findLocal (hir::VarDef *vd) {
+    if (vd == nullptr) {
+        return nullptr;
+    }
     for (const auto &[var, llvmVar] : _curFunc->Locals) {
         if (*var == vd) {
             return llvmVar;

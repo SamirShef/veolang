@@ -150,7 +150,8 @@ Sema::analyzeVarDef (VarDef *vd) {
         vd->Start (),
         vd->End (),
         isGlobal ? sym : nullptr);
-    sym->HIR = node;
+    sym->HIR                                = node;
+    _vars.top ().Vars.at (var.Name.Val).HIR = node;
 }
 
 void
@@ -307,6 +308,9 @@ Sema::analyzeIfElseStmt (ast::IfElseStmt *ies) {
         return;
     }
     auto cond = analyzeExpr (ies->Cond (), createType<BoolType> ());
+    if (!cond.Val.has_value ()) {
+        return;
+    }
     if (cond.Val->Kind == ValueKind::Const) {
         bool                 condRes     = std::get<0> (cond.Val->Data) != 0;
         std::vector<Stmt *> &realBranch  = condRes ? ies->Then () : ies->Else ();
@@ -542,27 +546,20 @@ Sema::declareImplMethods (ast::ImplStmt *is) {
         return;
     }
     resolveType (&is->StructType ());
-    if (is->StructType () == nullptr) {
+    auto *targetType = is->StructType ();
+    if (targetType == nullptr) {
         return;
     }
-    if (!is->StructType ()->IsStruct ()) {
-        _diag
-            .Report (
-                DiagCode::ECannotImplForNonStructType,
-                "cannot implement methods for non-structure type '"
-                    + typeToString (is->StructType ()) + "'",
-                Severity::Error)
-            .AddSpan (is->Start (), is->End ());
-        return;
-    }
-    auto *sym = is->StructType ()->AsStruct ()->BaseSymbol ();
+    bool  isStruct = targetType->IsStruct ();
+    auto *sym      = isStruct ? targetType->AsStruct ()->BaseSymbol () : nullptr;
     for (const auto &method : is->Methods ()) {
         auto *fd = method.Func;
-        if (auto *m = getMethod (sym, fd->Name ().Val, fd->Args ()); m != nullptr) {
+        if (auto *m = getMethod (targetType, fd->Name ().Val, fd->Args ());
+            m != nullptr) {
             _diag
                 .Report (
                     DiagCode::ERedefinition,
-                    "method '" + fd->Name ().Val + "' is already defined in struct '"
+                    "method '" + fd->Name ().Val + "' is already defined in type '"
                         + sym->Name.Val + "'",
                     Severity::Error)
                 .AddSpan (
@@ -582,25 +579,34 @@ Sema::declareImplMethods (ast::ImplStmt *is) {
             std::make_unique<Function> (std::move (func)),
             fd->Access (),
             method.IsStatic);
-        auto it = sym->Methods.find (m.Func->Name.Val);
-        if (it == sym->Methods.end ()) {
-            sym->Methods.emplace (m.Func->Name.Val, MethodCandidates ());
+        std::unordered_map<std::string, MethodCandidates> *methods = nullptr;
+        if (isStruct) {
+            methods = &sym->Methods;
+        } else {
+            methods = &_mod->PrimitiveMethods[targetType];
         }
-        sym->Methods.at (m.Func->Name.Val)
+        auto it = methods->find (m.Func->Name.Val);
+        if (it == methods->end ()) {
+            methods->emplace (m.Func->Name.Val, MethodCandidates ());
+        }
+        methods->at (m.Func->Name.Val)
             .Candidates.emplace_back (std::make_unique<symbols::Method> (std::move (m)));
     }
 }
 
 void
 Sema::analyzeImplStmt (ImplStmt *is) {
-    if (!is->StructType ()->IsStruct ()) {
-        return;
-    }
-    auto *sym = is->StructType ()->AsStruct ()->BaseSymbol ();
+    auto *targetType = is->StructType ();
+    resolveType (&targetType);
+    auto *sym
+        = targetType->IsStruct () ? targetType->AsStruct ()->BaseSymbol () : nullptr;
     for (const auto &method : is->Methods ()) {
-        auto            *fd         = method.Func;
-        auto            *candidates = &sym->Methods.at (fd->Name ().Val);
-        symbols::Method *m          = nullptr;
+        auto *fd = method.Func;
+        auto *candidates
+            = sym != nullptr
+                  ? &sym->Methods.at (fd->Name ().Val)
+                  : &_mod->PrimitiveMethods.at (targetType).at (fd->Name ().Val);
+        symbols::Method *m = nullptr;
         for (auto &f : candidates->Candidates) {
             if (f->Func->Args == fd->Args ()) {
                 m = f.get ();
@@ -612,7 +618,7 @@ Sema::analyzeImplStmt (ImplStmt *is) {
         if (!method.IsStatic) {
             auto *node = _builder.CreateVariable (
                 basic::NameObj ("this", fd->Name ().Start, fd->Name ().End),
-                createType<PointerType> (is->StructType ()),
+                createType<PointerType> (targetType),
                 nullptr,
                 false,
                 false,
@@ -640,12 +646,12 @@ Sema::analyzeImplStmt (ImplStmt *is) {
             fd->Start (),
             fd->End (),
             m,
-            createType<StructType> (sym),
+            targetType,
             method.IsStatic);
         auto *entry = _builder.CreateBasicBlock (methodNode, "entry");
         _builder.SetInsertionPoint (entry);
 
-        _insideMethod = { m, sym };
+        _insideMethod = { m, targetType };
         _funcRetTypes.push (fd->RetType ());
         _vars.emplace ();
 
@@ -696,6 +702,7 @@ Sema::analyzeExpr (Expr *expr, Type *expectedType) {
         variant (RefExpr, analyzeRefExpr, RefExpr);
         variant (DerefExpr, analyzeDerefExpr, DerefExpr);
         variant (NilExpr, analyzeNilExpr, NilExpr);
+        variant (TypeExpr, analyzeTypeExpr, TypeExpr);
     default: return {};
     }
 #undef variant
@@ -1249,31 +1256,32 @@ Sema::analyzeAsgnField (
     if (!base.Val.has_value ()) {
         return {};
     }
-    while (base.Val->Type->IsPointer ()) {
-        base.Val->Type = base.Val->Type->AsPointer ()->Base ();
-        base.Node      = _builder.CreateDereference (
+    auto *targetType = base.Val->Type;
+    while (targetType->IsPointer ()) {
+        targetType = targetType->AsPointer ()->Base ();
+        base.Node  = _builder.CreateDereference (
             base.Node,
-            base.Val->Type,
+            targetType,
             fieldExpr->Start (),
             fieldExpr->End ());
     }
-    if (!base.Val->Type->IsStruct ()) {
+    if (!targetType->IsStruct ()) {
         _diag
             .Report (
                 DiagCode::ECannotAccessFromNonStruct,
                 "attempted to access a field on a non-structure type '"
-                    + typeToString (base.Val->Type) + "'",
+                    + typeToString (targetType) + "'",
                 Severity::Error)
             .AddSpan (fieldExpr->Name ().Start, fieldExpr->Name ().End);
         return {};
     }
-    auto *sym          = base.Val->Type->AsStruct ()->BaseSymbol ();
-    bool  baseIsStatic = base.Val->Kind == ValueKind::Type;
-    bool  baseIsThis
-        = !baseIsStatic && _insideMethod.has_value () && *_insideMethod->second == *sym;
-    bool canAccessPrivate
-        = baseIsThis
-          || baseIsStatic && _insideMethod.has_value () && *_insideMethod->second == *sym;
+    auto *sym              = targetType->AsStruct ()->BaseSymbol ();
+    bool  baseIsStatic     = base.Val->Kind == ValueKind::Type;
+    bool  baseIsThis       = !baseIsStatic && _insideMethod.has_value ()
+                             && *_insideMethod->second == *targetType;
+    bool  canAccessPrivate = baseIsThis
+                             || baseIsStatic && _insideMethod.has_value ()
+                                    && *_insideMethod->second == *targetType;
     if (baseIsThis) {
         // Modifying 'this' object
         _insideMethod->first->IsConst = false;
@@ -1340,15 +1348,16 @@ Sema::analyzeFieldExpr (FieldExpr *fe, Type *expectedType) {
     if (!base.Val.has_value ()) {
         return {};
     }
+    auto *targetType = base.Val->Type;
     while (base.Val->Type->IsPointer ()) {
         base.Val->Type = base.Val->Type->AsPointer ()->Base ();
         base.Node      = _builder.CreateDereference (
             base.Node,
-            base.Val->Type,
+            targetType,
             fe->Start (),
             fe->End ());
     }
-    if (!base.Val->Type->IsStruct ()) {
+    if (!targetType->IsStruct ()) {
         _diag
             .Report (
                 DiagCode::ECannotAccessFromNonStruct,
@@ -1358,14 +1367,14 @@ Sema::analyzeFieldExpr (FieldExpr *fe, Type *expectedType) {
             .AddSpan (fe->Name ().Start, fe->Name ().End);
         return {};
     }
-    auto *s            = base.Val->Type->AsStruct ()->BaseSymbol ();
-    bool  baseIsStatic = base.Val->Kind == ValueKind::Type;
-    bool  baseIsThis
-        = !baseIsStatic && _insideMethod.has_value () && *_insideMethod->second == *s;
-    bool canAccessPrivate
-        = baseIsThis
-          || baseIsStatic && _insideMethod.has_value () && *_insideMethod->second == *s;
-    auto it = std::ranges::find_if (s->Fields, [&] (const symbols::Field &field) {
+    auto *s                = targetType->AsStruct ()->BaseSymbol ();
+    bool  baseIsStatic     = base.Val->Kind == ValueKind::Type;
+    bool  baseIsThis       = !baseIsStatic && _insideMethod.has_value ()
+                             && *_insideMethod->second == *targetType;
+    bool  canAccessPrivate = baseIsThis
+                             || baseIsStatic && _insideMethod.has_value ()
+                                    && *_insideMethod->second == *targetType;
+    auto  it = std::ranges::find_if (s->Fields, [&] (const symbols::Field &field) {
         return field.Name.Val == fe->Name ().Val;
     });
     if (it == s->Fields.end ()) {
@@ -1433,7 +1442,8 @@ Sema::analyzeStructInstance (StructInstance *si, Type *expectedType) {
     std::unordered_map<size_t, NameObj>         initializedFields;
     ValueKind                                   valKind = ValueKind::Const;
     bool                                        checkAccessModifiers
-        = !_insideMethod.has_value () || *_insideMethod->second != *s;
+        = !_insideMethod.has_value ()
+          || *_insideMethod->second != *createType<basic::StructType> (s);
     if (checkAccessModifiers) {
         for (const auto &field : s->Fields) {
             if (field.Access != AccessModifier::Pub) {
@@ -1523,35 +1533,27 @@ Sema::analyzeMethodCall (MethodCall *mc, Type *expectedType) {
     if (!base.Val.has_value ()) {
         return {};
     }
-    while (base.Val->Type->IsPointer ()) {
-        base.Val->Type = base.Val->Type->AsPointer ()->Base ();
-        base.Node      = _builder.CreateDereference (
+    auto *targetType = base.Val->Type;
+    while (targetType->IsPointer ()) {
+        targetType = targetType->AsPointer ()->Base ();
+        base.Node  = _builder.CreateDereference (
             base.Node,
-            base.Val->Type,
+            targetType,
             mc->Start (),
             mc->End ());
     }
-    if (!base.Val->Type->IsStruct ()) {
-        _diag
-            .Report (
-                DiagCode::ECannotAccessFromNonStruct,
-                "attempted to access a method on a non-structure type '"
-                    + typeToString (base.Val->Type) + "'",
-                Severity::Error)
-            .AddSpan (mc->Name ().Start, mc->Name ().End);
-        return {};
-    }
-    auto *s              = base.Val->Type->AsStruct ()->BaseSymbol ();
-    bool  baseIsConstVar = base.Val->Kind == ValueKind::Const
-                           && base.Node->Kind () == hir::NodeKind::LoadVar;
-    bool  baseIsStatic   = base.Val->Kind == ValueKind::Type;
-    bool  baseIsThis
-        = !baseIsStatic && _insideMethod.has_value () && *_insideMethod->second == *s;
-    bool canAccessPrivate
-        = baseIsThis
-          || baseIsStatic && _insideMethod.has_value () && *_insideMethod->second == *s;
-    auto it = s->Methods.find (mc->Name ().Val);
-    if (it == s->Methods.end ()) {
+    auto *s = targetType->IsStruct () ? targetType->AsStruct ()->BaseSymbol () : nullptr;
+    bool  baseIsConstVar   = base.Val->Kind == ValueKind::Const
+                             && base.Node->Kind () == hir::NodeKind::LoadVar;
+    bool  baseIsStatic     = base.Val->Kind == ValueKind::Type;
+    bool  baseIsThis       = !baseIsStatic && _insideMethod.has_value ()
+                             && *_insideMethod->second == *targetType;
+    bool  canAccessPrivate = baseIsThis
+                             || baseIsStatic && _insideMethod.has_value ()
+                                    && *_insideMethod->second == *targetType;
+    auto *methods = s != nullptr ? &s->Methods : &_mod->PrimitiveMethods[targetType];
+    auto  it      = methods->find (mc->Name ().Val);
+    if (it == methods->end ()) {
         _diag
             .Report (
                 DiagCode::EUndefined,
@@ -1580,7 +1582,12 @@ Sema::analyzeMethodCall (MethodCall *mc, Type *expectedType) {
         return {};
     }
 
-    if (!canAccessMethod (mc->Name (), *method, s, baseIsStatic, canAccessPrivate)) {
+    if (!canAccessMethod (
+            mc->Name (),
+            *method,
+            targetType,
+            baseIsStatic,
+            canAccessPrivate)) {
         return {};
     }
     if (baseIsConstVar) {
@@ -1590,7 +1597,7 @@ Sema::analyzeMethodCall (MethodCall *mc, Type *expectedType) {
     if (!method->IsStatic) {
         hirArgs.emplace_back (_builder.CreateReference (
             base.Node,
-            createType<PointerType> (base.Val->Type),
+            createType<PointerType> (targetType),
             mc->Start (),
             mc->End ()));
     }
@@ -1726,6 +1733,36 @@ Sema::analyzeCastExpr (ast::CastExpr *ce, Type *expectedType) {
         canCast = true;
         kind    = dst->AsInteger ()->IsUnsigned () ? hir::CastKind::FPToUI
                                                    : hir::CastKind::FPToSI;
+    } else if (src->IsBool () && (dst->IsInteger () || dst->IsFloating ())) {
+        canCast = true;
+        kind    = dst->IsInteger () ? hir::CastKind::ZExt : hir::CastKind::UIToFP;
+    } else if ((src->IsInteger () || src->IsFloating ()) && dst->IsBool ()) {
+        canCast = true;
+        kind    = src->IsInteger () ? hir::CastKind::Trunc : hir::CastKind::FPToUI;
+    } else if (src->IsChar () && (dst->IsInteger () || dst->IsFloating ())) {
+        canCast = true;
+        if (dst->IsFloating ()) {
+            kind = hir::CastKind::UIToFP;
+        } else {
+            const auto *dstI = dst->AsInteger ();
+            if (dstI->BitWidth () < 32) {
+                kind = hir::CastKind::Trunc;
+            } else {
+                kind = hir::CastKind::ZExt;
+            }
+        }
+    } else if ((src->IsInteger () || src->IsFloating ()) && dst->IsChar ()) {
+        canCast = true;
+        if (dst->IsFloating ()) {
+            kind = hir::CastKind::FPToUI;
+        } else {
+            const auto *srcI = src->AsInteger ();
+            if (srcI->BitWidth () < 32) {
+                kind = hir::CastKind::ZExt;
+            } else {
+                kind = hir::CastKind::Trunc;
+            }
+        }
     }
 
     if (!canCast) {
@@ -1817,6 +1854,16 @@ Sema::analyzeNilExpr (NilExpr *ne, Type *expectedType) {
     auto  val  = Value (ValueKind::Unknown, expectedType);
     auto *node = _builder.CreateNil (ne->Start (), ne->End ());
     return { val, node };
+}
+
+Sema::SemanticResult
+Sema::analyzeTypeExpr (TypeExpr *te, Type *expectedType) {
+    auto *type = te->Type ();
+    resolveType (&type);
+    auto val = Value (ValueKind::Type, type);
+    auto res = SemanticResult (val, nullptr);
+    res      = implicitlyCast (res, &expectedType, te->Start (), te->End ());
+    return res;
 }
 
 hir::CastKind
@@ -1971,13 +2018,21 @@ Sema::getFunction (const std::string &name, const std::vector<Argument> &args) {
 
 symbols::Method *
 Sema::getMethod (
-    symbols::Struct                  *sym,
-    const std::string                &name,
-    const std::vector<ast::Argument> &args) {
-    if (!sym->Methods.contains (name)) {
-        return nullptr;
+    basic::Type *base, const std::string &name, const std::vector<ast::Argument> &args) {
+    std::unordered_map<std::string, MethodCandidates> *methods = nullptr;
+    if (base->IsStruct ()) {
+        auto *sym = base->AsStruct ()->BaseSymbol ();
+        methods   = &sym->Methods;
+        if (!methods->contains (name)) {
+            return nullptr;
+        }
+    } else {
+        methods = &_mod->PrimitiveMethods[base];
+        if (!methods->contains (name)) {
+            return nullptr;
+        }
     }
-    const auto &candidates = sym->Methods.at (name);
+    const auto &candidates = methods->at (name);
     for (const auto &f : candidates.Candidates) {
         unsigned coincidences = 0;
         if (f->Func->Args.size () == args.size ()) {
@@ -2601,7 +2656,7 @@ bool
 Sema::canAccessMethod (
     const basic::NameObj  &mcName,
     const symbols::Method &method,
-    const symbols::Struct *s,
+    basic::Type           *base,
     bool                   canAccessStatic,
     bool                   canAccessPrivate) {
     if (method.IsStatic && !canAccessStatic) {
@@ -2627,7 +2682,8 @@ Sema::canAccessMethod (
         _diag
             .Report (
                 DiagCode::ECannotAccessToPrivMember,
-                "method '" + mcName.Val + "' of struct '" + s->Name.Val + "' is private",
+                "method '" + mcName.Val + "' of type '" + typeToString (base)
+                    + "' is private",
                 Severity::Error)
             .AddSpan (mcName.Start, mcName.End);
         return false;

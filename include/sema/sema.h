@@ -11,6 +11,7 @@
 #include <ast/exprs/ref.h>
 #include <ast/exprs/struct_instance.h>
 #include <ast/exprs/ternary_expr.h>
+#include <ast/exprs/type_expr.h>
 #include <ast/exprs/un_expr.h>
 #include <ast/exprs/var_expr.h>
 #include <ast/stmts/break_continue.h>
@@ -61,8 +62,8 @@ class Sema {
     };
     std::stack<Loop> _loops;
 
-    std::optional<std::pair<symbols::Method *, symbols::Struct *>> _insideMethod;
-    std::vector<std::pair<ast::MethodCall *, symbols::Method *>>   _methodCallOnConstBase;
+    std::optional<std::pair<symbols::Method *, basic::Type *>>   _insideMethod;
+    std::vector<std::pair<ast::MethodCall *, symbols::Method *>> _methodCallOnConstBase;
 
 public:
     Sema (
@@ -207,6 +208,9 @@ private:
     SemanticResult
     analyzeNilExpr (ast::NilExpr *ne, Type *expectedType);
 
+    SemanticResult
+    analyzeTypeExpr (ast::TypeExpr *te, Type *expectedType);
+
     hir::CastKind
     castInts (const IntegerType *src, const IntegerType *dst);
 
@@ -233,9 +237,9 @@ private:
     std::optional<symbols::Function>
     getFunction (const std::string &name, const std::vector<ast::Argument> &args);
 
-    static symbols::Method *
+    symbols::Method *
     getMethod (
-        symbols::Struct                  *sym,
+        basic::Type                      *base,
         const std::string                &name,
         const std::vector<ast::Argument> &args);
 
@@ -335,7 +339,7 @@ private:
     canAccessMethod (
         const basic::NameObj  &mcName,
         const symbols::Method &method,
-        const symbols::Struct *s,
+        basic::Type           *base,
         bool                   canAccessStatic,
         bool                   canAccessPrivate);
 

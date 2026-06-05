@@ -88,7 +88,7 @@ HIRLinearizer::linearizeExpr (Node *expr) {
         variant (FieldExpr, linearizeFieldExpr, FieldExpr);
         variant (StructInstance, linearizeStructInstance, StructInstance);
         variant (LoadGlobalVarByName, linearizeLoadGlobalVarByName, LoadGlobalVarByName);
-        // variant (TernaryExpr, linearizeTernaryExpr, TernaryExpr);
+        variant (VarDef, linearizeVarDefExpr, VarDef);
         variant (Cast, linearizeCast, Cast);
         variant (RefExpr, linearizeRefExpr, RefExpr);
         variant (DerefExpr, linearizeDerefExpr, DerefExpr);
@@ -104,8 +104,9 @@ Node *
 HIRLinearizer::linearizeLValue (Node *expr) {
     bool oldAsLvalue = _asLValue;
     _asLValue        = true;
-    return linearizeExpr (expr);
-    _asLValue = oldAsLvalue;
+    auto *lvalue     = linearizeExpr (expr);
+    _asLValue        = oldAsLvalue;
+    return lvalue;
 }
 
 // NOLINTBEGIN(readability-convert-member-functions-to-static)
@@ -123,9 +124,8 @@ HIRLinearizer::linearizeBinaryExpr (BinaryExpr *be) {
         auto *rhsBB   = _builder.CreateBasicBlock (parent, "sc.rhs");
         auto *mergeBB = _builder.CreateBasicBlock (parent, "sc.merge");
 
-        size_t id  = getTmpId ();
-        auto  *tmp = _builder.CreateVariable (
-            basic::NameObj ("t." + std::to_string (id), {}, {}),
+        auto *tmp = _builder.CreateVariable (
+            basic::NameObj ("t." + getTmpIdStr (), {}, {}),
             be->CommonType (),
             flatLhs,
             false,
@@ -247,10 +247,10 @@ HIRLinearizer::linearizeLoadGlobalVarByName (LoadGlobalVarByName *load) {
     return load;
 }
 
-// Node *
-// HIRLinearizer::linearizeTernaryExpr (TernaryExpr *te) {
-//
-// }
+Node *
+HIRLinearizer::linearizeVarDefExpr (hir::VarDef *vd) {
+    return vd;
+}
 
 Node *
 HIRLinearizer::linearizeCast (Cast *cast) {

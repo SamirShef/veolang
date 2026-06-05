@@ -79,8 +79,8 @@ private:
     hir::Node *
     linearizeLoadGlobalVarByName (hir::LoadGlobalVarByName *load);
 
-    // hir::Node *
-    // linearizeTernaryExpr (hir::TernaryExpr *te);
+    hir::Node *
+    linearizeVarDefExpr (hir::VarDef *vd);
 
     hir::Node *
     linearizeCast (hir::Cast *cast);

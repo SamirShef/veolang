@@ -370,4 +370,9 @@ Dumper::dumpNilExpr (NilExpr *ne) {
     print ("NilExpr\n");
 }
 
+void
+Dumper::dumpTypeExpr (TypeExpr *te) {
+    print ("TypeExpr: " + te->Type ()->ToString () + '\n');
+}
+
 }

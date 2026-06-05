@@ -20,11 +20,17 @@ Mangler::MangleFunction (const hir::Function *func) {
 }
 
 std::string
-Mangler::MangleMethod (const symbols::Struct *sym, hir::Function *func) {
+Mangler::MangleMethod (basic::Type *base, hir::Function *func) {
     std::ostringstream oss;
     oss << "_VM";
-    oss << MangleModule (sym->Parent);
-    oss << "E" << sym->Name.Val.size () << sym->Name.Val;
+    if (base->IsStruct ()) {
+        auto *sym = base->AsStruct ()->BaseSymbol ();
+        oss << MangleModule (sym->Parent);
+        oss << "E" << sym->Name.Val.size () << sym->Name.Val;
+    } else {
+        const auto &name = base->ToString ();
+        oss << "E" << name.size () << name;
+    }
     oss << "E" << func->Name ().Val.size () << func->Name ().Val << "I";
     for (auto &a : func->Args ()) {
         oss << MangleType (a->Type ());

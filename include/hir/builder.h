@@ -124,14 +124,8 @@ public:
         llvm::SMLoc        start,
         llvm::SMLoc        end,
         symbols::Variable *base) {
-        auto *node = _ctx.CreateNode<VarDef> (
-            std::move (name),
-            type,
-            init,
-            isConst,
-            start,
-            end,
-            base);
+        auto *node = _ctx.CreateNode<
+            VarDef> (std::move (name), type, init, isConst, isGlobal, start, end, base);
         if (isGlobal) {
             _ctx.AddGlobal (node);
         } else {
