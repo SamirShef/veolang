@@ -65,13 +65,20 @@ class Sema {
     std::optional<std::pair<symbols::Method *, basic::Type *>>   _insideMethod;
     std::vector<std::pair<ast::MethodCall *, symbols::Method *>> _methodCallOnConstBase;
 
+    unsigned _ptrBitWidth;
+
 public:
     Sema (
         DiagnosticEngine &diag,
         hir::Builder     &builder,
         symbols::Module  *mod,
-        TypePool         &typePool)
-        : _diag (diag), _builder (builder), _mod (mod), _typePool (typePool) {
+        TypePool         &typePool,
+        unsigned          ptrBitWidth)
+        : _diag (diag),
+          _builder (builder),
+          _mod (mod),
+          _typePool (typePool),
+          _ptrBitWidth (ptrBitWidth) {
         _vars.emplace ();
     }
 
@@ -277,7 +284,10 @@ private:
         llvm::SMLoc  end);
 
     bool
-    canImplicitlyCast (SemanticResult val, Type **expectedType);
+    canImplicitCast (SemanticResult val, Type **expectedType);
+
+    static bool
+    canExplicitCast (Type *src, Type *dst);
 
     SemanticResult
     implicitlyCast (

@@ -236,7 +236,12 @@ Compile (
 
     hir::Context ctx;
     hir::Builder builder (ctx);
-    Sema         sema (diag, builder, mod, pool);
+
+    unsigned ptrBitWidth = triple.isArch64Bit () ? 64 : 32;
+    if (triple.isArch16Bit ()) {
+        ptrBitWidth = 16;
+    }
+    Sema sema (diag, builder, mod, pool, ptrBitWidth);
     sema.Analyze (parseRes);
 
     HIRLinearizer linearizer (builder);
