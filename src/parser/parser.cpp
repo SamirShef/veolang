@@ -543,6 +543,8 @@ Parser::parsePrimaryExpr (bool allowStruct) {
         lit (IntLit);
         lit (F32Lit);
         lit (F64Lit);
+        lit (ISizeLit);
+        lit (USizeLit);
 
     case TokenKind::LParen: {
         Expr *expr = parseExpr ();
@@ -632,7 +634,9 @@ Parser::tryParseAsTypeExpr () {
     case TokenKind::U32:
     case TokenKind::U64:
     case TokenKind::F32:
-    case TokenKind::F64: {
+    case TokenKind::F64:
+    case TokenKind::USize:
+    case TokenKind::ISize: {
         llvm::SMLoc  start = _curTok.Start;
         basic::Type *type  = consumeType ();
         if (type == nullptr) {
@@ -757,6 +761,9 @@ Parser::consumeType () {
             return createType<basic::NamedType> (std::move (path));
         }
         kind (Star) return createType<basic::PointerType> (consumeType ());
+        kind (ISize) kind (USize) return createType<basic::SizeType> (
+            tok.Kind == TokenKind::USize);
+
     default:
         _diag
             .Report (

@@ -708,10 +708,6 @@ Sema::analyzeExpr (Expr *expr, Type *expectedType) {
 #undef variant
 }
 
-Sema::SemanticResult
-Sema::analyzeLiteralExpr (LiteralExpr *le, Type *expectedType) {
-    std::string val = le->Value ();
-    switch (le->Kind ()) {
 #define int_lit(kind, typeName, bitWidth, isUnsigned, min, max)                          \
     case TokenKind::kind##Lit: {                                                         \
         int base = 10;                                                                   \
@@ -742,11 +738,12 @@ Sema::analyzeLiteralExpr (LiteralExpr *le, Type *expectedType) {
                     + " (max " #typeName ")");                                           \
             return {};                                                                   \
         }                                                                                \
-        auto value = Value (                                                             \
-            ValueKind::Const,                                                            \
-            ValueData (ival.value ()),                                                   \
-            createType<IntegerType> (bitWidth, isUnsigned));                             \
-        auto res = SemanticResult (                                                      \
+        auto *type  = TokenKind::kind##Lit == TokenKind::USizeLit                        \
+                              || TokenKind::kind##Lit == TokenKind::ISizeLit             \
+                          ? createType<SizeType> (isUnsigned)                            \
+                          : createType<IntegerType> (bitWidth, isUnsigned);              \
+        auto  value = Value (ValueKind::Const, ValueData (ival.value ()), type);         \
+        auto  res   = SemanticResult (                                                   \
             value,                                                                       \
             _builder.CreateLiteral (value, le->Start (), le->End ()));                   \
         if (ival < (min) || ival > (max)) {                                              \
@@ -785,15 +782,21 @@ Sema::analyzeLiteralExpr (LiteralExpr *le, Type *expectedType) {
         return res;                                                                      \
     }
 
+Sema::SemanticResult
+Sema::analyzeLiteralExpr (LiteralExpr *le, Type *expectedType) {
+    std::string val = le->Value ();
+    switch (le->Kind ()) {
         int_lit (U8, u8, 8, true, 0, UINT8_MAX);
         int_lit (U16, u16, 16, true, 0, UINT16_MAX);
         int_lit (U32, u32, 32, true, 0, UINT32_MAX);
         int_lit (U64, u64, 64, true, 0, UINT64_MAX);
+        int_lit (USize, usize, 32, true, 0, UINT32_MAX);
 
         int_lit (I8, i8, 8, false, INT8_MIN, INT8_MAX);
         int_lit (I16, i16, 16, false, INT16_MIN, INT16_MAX);
         int_lit (I32, i32, 32, false, INT32_MIN, INT32_MAX);
         int_lit (I64, i64, 64, false, INT64_MIN, INT64_MAX);
+        int_lit (ISize, isize, 32, false, INT32_MIN, INT32_MAX);
 
         float_lit (F32, Float);
         float_lit (F64, Double);
@@ -839,21 +842,23 @@ Sema::analyzeLiteralExpr (LiteralExpr *le, Type *expectedType) {
         }
         auto value = Value (
             ValueKind::Const,
-            expectedType->IsInteger () ? ValueData (ival.value ())
-                                       : ValueData (static_cast<double> (ival.value ())),
+            expectedType->IsIntOrSize ()
+                ? ValueData (ival.value ())
+                : ValueData (static_cast<double> (ival.value ())),
             expectedType);
-        if (expectedType->IsInteger () && !canFit (value, expectedType)) {
-            const auto *it  = expectedType->AsInteger ();
-            int64_t     min = it->IsUnsigned ()
-                                  ? 0
-                                  : -static_cast<int64_t> (1ULL << (it->BitWidth () - 1));
-            uint64_t    max = 0;
-            if (it->IsUnsigned ()) {
-                max = it->BitWidth () == 64
-                          ? ~0ULL
-                          : static_cast<uint64_t> (1ULL << it->BitWidth ()) - 1;
+        if (expectedType->IsIntOrSize () && !canFit (value, expectedType)) {
+            bool     isUnsigned = expectedType->IsInteger ()
+                                      ? expectedType->AsInteger ()->IsUnsigned ()
+                                      : expectedType->AsSize ()->IsUnsigned ();
+            unsigned bits       = expectedType->IsInteger ()
+                                      ? expectedType->AsInteger ()->BitWidth ()
+                                      : 32;
+            int64_t  min = isUnsigned ? 0 : -static_cast<int64_t> (1ULL << (bits - 1));
+            uint64_t max = 0;
+            if (isUnsigned) {
+                max = bits == 64 ? ~0ULL : static_cast<uint64_t> (1ULL << bits) - 1;
             } else {
-                max = static_cast<uint64_t> (1ULL << (it->BitWidth () - 1)) - 1;
+                max = static_cast<uint64_t> (1ULL << (bits - 1)) - 1;
             }
             _diag
                 .Report (
@@ -898,10 +903,11 @@ Sema::analyzeLiteralExpr (LiteralExpr *le, Type *expectedType) {
         return res;
     }
     default: return {};
-#undef float_lit
-#undef int_lit
     }
 }
+
+#undef float_lit
+#undef int_lit
 
 Sema::SemanticResult
 Sema::analyzeBinaryExpr (BinaryExpr *be, Type *expectedType) {
@@ -2333,9 +2339,13 @@ Sema::canFit (Value &val, const Type *targetType) {
         [&] (auto &&arg) -> bool {
             using T = std::decay_t<decltype (arg)>;
 
-            if (const auto *it = llvm::dyn_cast<IntegerType> (targetType)) {
-                unsigned bits       = it->BitWidth ();
-                bool     isUnsigned = it->IsUnsigned ();
+            if (targetType->IsIntOrSize ()) {
+                unsigned bits       = targetType->IsInteger ()
+                                          ? targetType->AsInteger ()->BitWidth ()
+                                          : 32;
+                bool     isUnsigned = targetType->IsInteger ()
+                                          ? targetType->AsInteger ()->IsUnsigned ()
+                                          : targetType->AsSize ()->IsUnsigned ();
 
                 if (isUnsigned) {
                     if (arg < 0) {

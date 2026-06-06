@@ -62,14 +62,19 @@ public:
         symbols::Module               *semaMod,
         std::vector<hir::VarDef *>    &globals,
         std::vector<hir::Function *>  &funcs,
-        std::vector<hir::StructDef *> &structs)
+        std::vector<hir::StructDef *> &structs,
+        const llvm::Triple            &triple,
+        const llvm::DataLayout        &dataLayout)
         : _srcMgr (srcMgr),
           _semaMod (semaMod),
           _hirGlobals (globals),
           _hirFuncs (funcs),
           _hirStructs (structs),
           _builder (_ctx),
-          _mod (std::make_unique<llvm::Module> (semaMod->Name, _ctx)) {}
+          _mod (std::make_unique<llvm::Module> (semaMod->Name, _ctx)) {
+        _mod->setTargetTriple (triple);
+        _mod->setDataLayout (dataLayout);
+    }
 
     std::unique_ptr<llvm::Module>
     Generate () {
@@ -152,9 +157,6 @@ private:
 
     llvm::Value *
     generateLoadGlobalVarByName (hir::LoadGlobalVarByName *load);
-
-    // llvm::Value *
-    // generateTernaryExpr (hir::TernaryExpr *te);
 
     llvm::Value *
     generateCast (hir::Cast *cast);

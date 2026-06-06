@@ -5,5 +5,6 @@
 #include <basic/types/named_type.h>
 #include <basic/types/noth.h>
 #include <basic/types/pointer.h>
+#include <basic/types/size.h>
 #include <basic/types/struct_type.h>
 #include <basic/types/type.h>

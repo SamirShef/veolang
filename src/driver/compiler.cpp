@@ -70,32 +70,10 @@ EmitFile (
 
 bool
 EmitObjectFile (
-    llvm::Module       *mod,
-    const std::string  &fileName,
-    const llvm::Triple &triple,
-    const fs::path     &projectPath) {
-    mod->setTargetTriple (triple);
-
-    std::string         error;
-    const llvm::Target *target = llvm::TargetRegistry::lookupTarget (triple, error);
-
-    if (target == nullptr) {
-        llvm::errs () << llvm::raw_fd_ostream::RED
-                      << "Error looking up target: " << llvm::raw_fd_ostream::RESET
-                      << error << '\n';
-        return false;
-    }
-
-    std::string cpu = "generic";
-    std::string features;
-
-    llvm::TargetOptions               opt;
-    std::optional<llvm::Reloc::Model> rm = llvm::Reloc::Model::PIC_;
-
-    auto *targetMachine = target->createTargetMachine (triple, cpu, features, opt, rm);
-
-    mod->setDataLayout (targetMachine->createDataLayout ());
-
+    llvm::Module        *mod,
+    llvm::TargetMachine *targetMachine,
+    const std::string   &fileName,
+    const fs::path      &projectPath) {
     if (EmitIROpt) {
         std::error_code ec;
         std::string     llvmFileName = fileName;
@@ -275,18 +253,44 @@ Compile (
         exit (1);
     }
 
-    CodeGen codegen (mgr, mod, ctx.Globals (), ctx.Functions (), ctx.Structs ());
-    auto    llvmMod = codegen.Generate ();
-
     InitializeLLVMTargets ();
 
-    Optimize (*llvmMod, OptimizationLevelOpt);
+    std::string         error;
+    const llvm::Target *target = llvm::TargetRegistry::lookupTarget (triple, error);
 
-    if (!EmitObjectFile (llvmMod.get (), objPath.string (), triple, projectPath)) {
+    if (target == nullptr) {
+        llvm::errs () << llvm::raw_fd_ostream::RED
+                      << "Error looking up target: " << llvm::raw_fd_ostream::RESET
+                      << error << '\n';
         return { .Success = false, .ObjPath = "" };
     }
 
-    return { .Success = !parseRes.HasErrors, .ObjPath = "" };
+    std::string cpu = "generic";
+    std::string features;
+
+    llvm::TargetOptions               opt;
+    std::optional<llvm::Reloc::Model> rm = llvm::Reloc::Model::PIC_;
+
+    auto *targetMachine = target->createTargetMachine (triple, cpu, features, opt, rm);
+    auto  dataLayout    = targetMachine->createDataLayout ();
+
+    CodeGen codegen (
+        mgr,
+        mod,
+        ctx.Globals (),
+        ctx.Functions (),
+        ctx.Structs (),
+        triple,
+        dataLayout);
+    auto llvmMod = codegen.Generate ();
+
+    Optimize (*llvmMod, OptimizationLevelOpt);
+
+    if (!EmitObjectFile (llvmMod.get (), targetMachine, objPath.string (), projectPath)) {
+        return { .Success = false, .ObjPath = "" };
+    }
+
+    return { .Success = !parseRes.HasErrors, .ObjPath = objPath };
 }
 
 }

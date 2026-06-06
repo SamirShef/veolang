@@ -26,10 +26,10 @@ EmitFile (
 
 bool
 EmitObjectFile (
-    llvm::Module       *mod,
-    const std::string  &fileName,
-    const llvm::Triple &triple,
-    const fs::path     &projectPath);
+    llvm::Module        *mod,
+    llvm::TargetMachine *targetMachine,
+    const std::string   &fileName,
+    const fs::path      &projectPath);
 
 bool
 LinkObjectFiles (
