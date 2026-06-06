@@ -48,8 +48,8 @@ Dumper::dumpVarDef (VarDef *vd) {
 void
 Dumper::dumpFuncDef (FuncDef *fd) {
     print (
-        "FuncDef: " + std::string (AccessToString (fd->Access ())) + ' ' + fd->Name ().Val
-        + " (");
+        "FuncDef: " + std::string (AccessToString (fd->Access ()))
+        + (fd->IsDeclaration () ? " decl" : "") + ' ' + fd->Name ().Val + " (");
     size_t i = 0;
     for (const auto &arg : fd->Args ()) {
         if (arg.IsValid ()) {

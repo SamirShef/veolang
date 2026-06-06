@@ -36,8 +36,6 @@ static const std::unordered_map<std::string, TokenKind> keywords{
     { "impl",     TokenKind::Impl     },
     { "trait",    TokenKind::Trait    },
     { "nil",      TokenKind::Nil      },
-    { "new",      TokenKind::New      },
-    { "del",      TokenKind::Del      },
     { "mod",      TokenKind::Mod      },
     { "import",   TokenKind::Import   },
     { "static",   TokenKind::Static   },

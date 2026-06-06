@@ -15,6 +15,7 @@ class Function : public Node {
     std::vector<VarDef *>     _args;
     std::vector<BasicBlock *> _body;
     symbols::Function        *_base;
+    bool                      _isDeclaration;
     basic::Type              *_methodBaseType;
     bool                      _isStatic;
 
@@ -23,6 +24,7 @@ public:
         basic::NameObj        name,
         basic::Type          *retType,
         std::vector<VarDef *> args,
+        bool                  isDeclaration,
         llvm::SMLoc           start,
         llvm::SMLoc           end,
         symbols::Function    *base,
@@ -31,6 +33,7 @@ public:
         : _name (std::move (name)),
           _retType (retType),
           _args (std::move (args)),
+          _isDeclaration (isDeclaration),
           _base (base),
           _methodBaseType (methodBaseType),
           _isStatic (isStatic),
@@ -61,6 +64,11 @@ public:
     symbols::Function *
     BaseSymbol () const {
         return _base;
+    }
+
+    bool
+    IsDeclaration () const {
+        return _isDeclaration;
     }
 
     basic::Type *

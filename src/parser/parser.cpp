@@ -168,14 +168,23 @@ Parser::parseFuncDef (ast::AccessModifier access) {
         retType = createType<basic::NothType> ();
     }
     std::vector<Stmt *> body;
-    if (!parseBlock (body)) {
-        return nullptr;
+    bool                isDeclaration = true;
+    if (check (TokenKind::LBrace)) {
+        isDeclaration = false;
+        if (!parseBlock (body)) {
+            return nullptr;
+        }
+    } else {
+        if (!expectSemi ()) {
+            return nullptr;
+        }
     }
     return createNode<FuncDef> (
         std::move (name),
         retType,
         std::move (args),
         std::move (body),
+        isDeclaration,
         access,
         firstTok.Start,
         _lastTok.End);
@@ -840,8 +849,7 @@ Parser::isStmtStart (TokenKind kind) {
         variant (Let) variant (Const) variant (Func) variant (Ret) variant (If)
             variant (Else) variant (For) variant (Break) variant (Continue)
                 variant (Struct) variant (Pub) variant (Impl) variant (Trait)
-                    variant (Del) variant (Mod) variant (Import)
-                        variant (Static) return true;
+                    variant (Mod) variant (Import) variant (Static) return true;
     default: return false;
     }
 #undef variant

@@ -85,28 +85,40 @@ CodeGen::declareFunc (Function *fd) {
 
 void
 CodeGen::generateFuncDef (Function *fd) {
-    _curFunc                  = CurrentFunction ();
-    const std::string &name   = fd->MethodBaseType () == nullptr
-                                    ? Mangler::MangleFunction (fd)
-                                    : Mangler::MangleMethod (fd->MethodBaseType (), fd);
-    auto              *func   = _mod->getFunction (name);
-    auto              *initBB = llvm::BasicBlock::Create (_ctx, "init", func);
+    _curFunc                = CurrentFunction ();
+    const std::string &name = fd->MethodBaseType () == nullptr
+                                  ? Mangler::MangleFunction (fd)
+                                  : Mangler::MangleMethod (fd->MethodBaseType (), fd);
+    auto              *func = _mod->getFunction (name);
+    auto              *initBB
+        = fd->IsDeclaration () ? nullptr : llvm::BasicBlock::Create (_ctx, "init", func);
 
-    for (auto &bb : fd->Body ()) {
-        // declaration of basic blocks
-        auto *block = llvm::BasicBlock::Create (_ctx, bb->Name (), func);
-        _basicBlocksMap.emplace (bb, block);
+    if (!fd->IsDeclaration ()) {
+        for (auto &bb : fd->Body ()) {
+            // declaration of basic blocks
+            auto *block = llvm::BasicBlock::Create (_ctx, bb->Name (), func);
+            _basicBlocksMap.emplace (bb, block);
+        }
     }
 
-    _builder.SetInsertPoint (initBB);
+    if (!fd->IsDeclaration ()) {
+        _builder.SetInsertPoint (initBB);
+    }
     size_t i = 0;
     for (auto &a : func->args ()) {
         a.setName (fd->Args ()[i]->Name ().Val + ".param");
-        auto *alloca
-            = _builder.CreateAlloca (a.getType (), nullptr, fd->Args ()[i]->Name ().Val);
-        _builder.CreateStore (&a, alloca);
-        _curFunc->Locals.emplace (fd->Args ()[i], alloca);
+        if (!fd->IsDeclaration ()) {
+            auto *alloca = _builder.CreateAlloca (
+                a.getType (),
+                nullptr,
+                fd->Args ()[i]->Name ().Val);
+            _builder.CreateStore (&a, alloca);
+            _curFunc->Locals.emplace (fd->Args ()[i], alloca);
+        }
         ++i;
+    }
+    if (fd->IsDeclaration ()) {
+        return;
     }
     _builder.CreateBr (_basicBlocksMap.at (fd->Body ().front ()));
 

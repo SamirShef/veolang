@@ -39,6 +39,7 @@ class FuncDef : public Stmt {
     basic::Type          *_retType;
     std::vector<Argument> _args;
     std::vector<Stmt *>   _body;
+    bool                  _isDeclaration;
 
 public:
     FuncDef (
@@ -46,6 +47,7 @@ public:
         basic::Type          *retType,
         std::vector<Argument> args,
         std::vector<Stmt *>   body,
+        bool                  isDeclaration,
         AccessModifier        access,
         llvm::SMLoc           start,
         llvm::SMLoc           end)
@@ -53,6 +55,7 @@ public:
           _retType (retType),
           _args (std::move (args)),
           _body (std::move (body)),
+          _isDeclaration (isDeclaration),
           Stmt (access, NodeKind::FuncDef, start, end) {}
 
     ast_classof (FuncDef);
@@ -75,6 +78,11 @@ public:
     const std::vector<Stmt *> &
     Body () {
         return _body;
+    }
+
+    bool
+    IsDeclaration () const {
+        return _isDeclaration;
     }
 };
 

@@ -165,7 +165,8 @@ Sema::analyzeVarDef (VarDef *vd) {
 
 void
 Sema::declareFunc (ast::FuncDef *fd) {
-    if (auto func = getFunction (fd->Name ().Val, fd->Args ()); func.has_value ()) {
+    if (auto func = getFunction (fd->Name ().Val, fd->Args ());
+        func.has_value () && !func->IsDeclaration) {
         _diag
             .Report (
                 DiagCode::ERedefinition,
@@ -183,13 +184,23 @@ Sema::declareFunc (ast::FuncDef *fd) {
     for (auto &arg : fd->Args ()) {
         resolveType (&arg.Type);
     }
-    auto func = Function (fd->Name (), fd->RetType (), fd->Args (), _mod);
-    auto it   = _mod->Funcs.find (func.Name.Val);
+    auto func
+        = Function (fd->Name (), fd->RetType (), fd->Args (), fd->IsDeclaration (), _mod);
+    auto it = _mod->Funcs.find (func.Name.Val);
     if (it == _mod->Funcs.end ()) {
         _mod->Funcs.emplace (func.Name.Val, FunctionCandidates ());
     }
-    _mod->Funcs.at (func.Name.Val)
-        .Candidates.emplace_back (std::make_unique<Function> (func));
+    auto &candidates   = _mod->Funcs.at (func.Name.Val).Candidates;
+    auto  funcPtr      = std::make_unique<Function> (func);
+    func.IsDeclaration = true;
+    auto candidatesIt
+        = std::ranges::find_if (candidates, [&] (const std::unique_ptr<Function> &f) {
+              return *f == func;
+          });
+    func.IsDeclaration = fd->IsDeclaration ();
+    if (candidatesIt == candidates.end ()) {
+        candidates.emplace_back (std::move (funcPtr));
+    }
 }
 
 void
@@ -206,6 +217,17 @@ Sema::analyzeFuncDef (FuncDef *fd) {
         }
     }
 
+    auto *funcNode = _builder.CreateFunction (
+        func->Name,
+        fd->RetType (),
+        {},
+        fd->IsDeclaration (),
+        fd->Start (),
+        fd->End (),
+        func);
+    auto *entry = _builder.CreateBasicBlock (funcNode, "entry");
+    _builder.SetInsertionPoint (entry);
+
     std::vector<hir::VarDef *> args;
     args.reserve (fd->Args ().size ());
     for (const auto &arg : fd->Args ()) {
@@ -220,16 +242,12 @@ Sema::analyzeFuncDef (FuncDef *fd) {
             nullptr);
         args.emplace_back (node);
     }
-    auto *funcNode = _builder.CreateFunction (
-        func->Name,
-        fd->RetType (),
-        std::move (args),
-        fd->Start (),
-        fd->End (),
-        func);
-    auto *entry = _builder.CreateBasicBlock (funcNode, "entry");
-    _builder.SetInsertionPoint (entry);
+    funcNode->Args () = std::move (args);
+    if (fd->IsDeclaration ()) {
+        return;
+    }
 
+    func->IsDeclaration = false;
     _funcRetTypes.push (fd->RetType ());
     _vars.emplace ();
 
@@ -253,7 +271,7 @@ Sema::analyzeFuncDef (FuncDef *fd) {
     for (const auto &stmt : fd->Body ()) {
         analyzeStmt (stmt);
     }
-    if (func->RetType == nullptr) {
+    if (func->RetType == nullptr || func->RetType->IsNoth ()) {
         _builder.CreateRet (nullptr, fd->Name ().Start, fd->Name ().End);
     }
 
@@ -564,7 +582,7 @@ Sema::declareImplMethods (ast::ImplStmt *is) {
     for (const auto &method : is->Methods ()) {
         auto *fd = method.Func;
         if (auto *m = getMethod (targetType, fd->Name ().Val, fd->Args ());
-            m != nullptr) {
+            m != nullptr && !m->Func->IsDeclaration) {
             _diag
                 .Report (
                     DiagCode::ERedefinition,
@@ -583,8 +601,13 @@ Sema::declareImplMethods (ast::ImplStmt *is) {
         for (auto &arg : fd->Args ()) {
             resolveType (&arg.Type);
         }
-        auto func = Function (fd->Name (), fd->RetType (), fd->Args (), _mod);
-        auto m    = symbols::Method (
+        auto func = Function (
+            fd->Name (),
+            fd->RetType (),
+            fd->Args (),
+            fd->IsDeclaration (),
+            _mod);
+        auto m = symbols::Method (
             std::make_unique<Function> (std::move (func)),
             fd->Access (),
             method.IsStatic);
@@ -598,8 +621,14 @@ Sema::declareImplMethods (ast::ImplStmt *is) {
         if (it == methods->end ()) {
             methods->emplace (m.Func->Name.Val, MethodCandidates ());
         }
-        methods->at (m.Func->Name.Val)
-            .Candidates.emplace_back (std::make_unique<symbols::Method> (std::move (m)));
+        auto  methodPtr  = std::make_unique<symbols::Method> (std::move (m));
+        auto &candidates = methods->at (m.Func->Name.Val).Candidates;
+        methodPtr->Func->IsDeclaration = true;
+        auto candidatesIt              = std::ranges::find_if (
+            candidates,
+            [&] (const std::unique_ptr<symbols::Method> &m) { return *m == *methodPtr; });
+        methodPtr->Func->IsDeclaration = fd->IsDeclaration ();
+        candidates.emplace_back ();
     }
 }
 
@@ -621,6 +650,19 @@ Sema::analyzeImplStmt (ImplStmt *is) {
                 m = f.get ();
             }
         }
+
+        auto *methodNode = _builder.CreateMethod (
+            m->Func->Name,
+            fd->RetType (),
+            {},
+            fd->IsDeclaration (),
+            fd->Start (),
+            fd->End (),
+            m,
+            targetType,
+            method.IsStatic);
+        auto *entry = _builder.CreateBasicBlock (methodNode, "entry");
+        _builder.SetInsertionPoint (entry);
 
         std::vector<hir::VarDef *> args;
         args.reserve (fd->Args ().size () + (method.IsStatic ? 1 : 0));
@@ -648,17 +690,11 @@ Sema::analyzeImplStmt (ImplStmt *is) {
                 nullptr);
             args.emplace_back (node);
         }
-        auto *methodNode = _builder.CreateMethod (
-            m->Func->Name,
-            fd->RetType (),
-            args,
-            fd->Start (),
-            fd->End (),
-            m,
-            targetType,
-            method.IsStatic);
-        auto *entry = _builder.CreateBasicBlock (methodNode, "entry");
-        _builder.SetInsertionPoint (entry);
+        methodNode->Args () = std::move (args);
+        if (m->Func->IsDeclaration) {
+            continue;
+        }
+        m->Func->IsDeclaration = false;
 
         _insideMethod = { m, targetType };
         _funcRetTypes.push (fd->RetType ());
@@ -666,7 +702,7 @@ Sema::analyzeImplStmt (ImplStmt *is) {
 
         _localsCount = 0;
 
-        for (const auto &arg : args) {
+        for (const auto &arg : methodNode->Args ()) {
             _vars.top ().Vars.emplace (
                 arg->Name ().Val,
                 Variable (
@@ -2451,11 +2487,13 @@ Sema::resolveBestOverload (
     }
 
     if (isAmbiguous) {
-        auto &err = _diag.Report (
-            DiagCode::ECallIsAmbiguous,
-            "call to '' is ambiguous",
-            Severity::Error);
-        size_t i = 0;
+        auto  &err = _diag
+                         .Report (
+                             DiagCode::ECallIsAmbiguous,
+                             "call to '" + bestCand->Name.Val + "' is ambiguous",
+                             Severity::Error)
+                         .AddSpan (start, end, "ambiguously call");
+        size_t i   = 1;
         for (const auto &[c, _] : viableCandidates) {
             err.AddSpan (
                 c->Name.Start,
@@ -2518,11 +2556,13 @@ Sema::resolveBestOverload (
     }
 
     if (isAmbiguous) {
-        auto &err = _diag.Report (
-            DiagCode::ECallIsAmbiguous,
-            "call to '' is ambiguous",
-            Severity::Error);
-        size_t i = 0;
+        auto  &err = _diag
+                         .Report (
+                             DiagCode::ECallIsAmbiguous,
+                             "call to '" + bestCand->Func->Name.Val + "' is ambiguous",
+                             Severity::Error)
+                         .AddSpan (start, end, "ambiguously call");
+        size_t i   = 1;
         for (const auto &[c, _] : viableCandidates) {
             err.AddSpan (
                 c->Func->Name.Start,
