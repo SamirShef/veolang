@@ -6,6 +6,7 @@ namespace veo::basic {
     const kind##Type *Type::As##kind () const { return llvm::cast<kind##Type> (this); }
 
 as (Integer);
+as (Size);
 as (Floating);
 as (Bool);
 as (Char);
@@ -52,7 +53,7 @@ operator== (const Type &lhs, const Type &rhs) {
         const auto *prhs = rhs.AsPointer ();
         return *plhs->Base () == *prhs->Base ();
     }
-    default: return true; // BoolType, CharType and NothType
+    default: return true; // BoolType, CharType, NothType and SizeType
     }
 }
 

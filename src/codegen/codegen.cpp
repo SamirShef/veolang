@@ -190,7 +190,6 @@ CodeGen::generateExpr (Node *node) {
         variant (FieldExpr, generateFieldExpr, FieldExpr);
         variant (StructInstance, generateStructInstance, StructInstance);
         variant (LoadGlobalVarByName, generateLoadGlobalVarByName, LoadGlobalVarByName);
-        // variant (TernaryExpr, generateTernaryExpr, TernaryExpr);
         variant (Cast, generateCast, Cast);
         variant (RefExpr, generateRefExpr, RefExpr);
         variant (DerefExpr, generateDerefExpr, DerefExpr);
@@ -208,6 +207,10 @@ CodeGen::generateLiteralExpr (LiteralExpr *le) {
         return _builder.getIntN (
             val.Type->AsInteger ()->BitWidth (),
             std::get<0> (val.Data));
+    case basic::TypeKind::Size: {
+        const auto &dl = _mod->getDataLayout ();
+        return _builder.getIntN (dl.getPointerSizeInBits (), std::get<0> (val.Data));
+    }
     case basic::TypeKind::Floating:
         return llvm::ConstantFP::get (
             val.Type->AsFloating ()->IsFloat () ? _builder.getFloatTy ()
@@ -409,16 +412,6 @@ CodeGen::generateLoadGlobalVarByName (LoadGlobalVarByName *load) {
     return _builder.CreateLoad (getType (load->Type ()), lvalue);
 }
 
-// llvm::Value *
-// CodeGen::generateTernaryExpr (TernaryExpr *te) {
-//     auto *trueBB  = _basicBlocksMap.at (te->TrueBB ());
-//     auto *falseBB = _basicBlocksMap.at (te->FalseBB ());
-//     auto *phi     = _builder.CreatePHI (getType (te->Type ()), 2);
-//     phi->addIncoming (generateExpr (te->TrueVal ()), trueBB);
-//     phi->addIncoming (generateExpr (te->FalseVal ()), falseBB);
-//     return phi;
-// }
-
 llvm::Value *
 CodeGen::generateCast (Cast *cast) {
     switch (cast->GetCastKind ()) {
@@ -536,6 +529,10 @@ CodeGen::getType (basic::Type *type) {
     switch (type->Kind ()) {
     case basic::TypeKind::Integer:
         return _builder.getIntNTy (type->AsInteger ()->BitWidth ());
+    case basic::TypeKind::Size: {
+        const auto &dl = _mod->getDataLayout ();
+        return dl.getIntPtrType (_ctx);
+    }
     case basic::TypeKind::Floating:
         return type->AsFloating ()->IsFloat () ? _builder.getFloatTy ()
                                                : _builder.getDoubleTy ();
@@ -547,9 +544,9 @@ CodeGen::getType (basic::Type *type) {
             Mangler::MangleStructSymbol (type->AsStruct ()->BaseSymbol ()));
     case basic::TypeKind::Pointer: return _builder.getPtrTy ();
     default: {
+        return _builder.getVoidTy ();
     }
     }
-    return nullptr;
 }
 
 void

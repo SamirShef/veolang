@@ -5,6 +5,7 @@
 namespace veo::basic {
 
 class IntegerType;
+class SizeType;
 class FloatingType;
 class BoolType;
 class CharType;
@@ -20,6 +21,7 @@ class NothType;
 
 enum class TypeKind : uint8_t {
     Integer,
+    Size,
     Floating,
     Bool,
     Char,
@@ -58,6 +60,8 @@ public:
 
     is (Integer);
     as (Integer);
+    is (Size);
+    as (Size);
     is (Floating);
     as (Floating);
     is (Bool);
@@ -74,8 +78,13 @@ public:
     as (Noth);
 
     bool
+    IsIntOrSize () const {
+        return IsInteger () || IsSize ();
+    }
+
+    bool
     IsNumber () const {
-        return IsInteger () || IsFloating ();
+        return IsInteger () || IsFloating () || IsSize ();
     }
 
 #undef as
