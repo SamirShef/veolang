@@ -168,7 +168,12 @@ Sema::analyzeVarDef (VarDef *vd) {
 void
 Sema::declareFunc (ast::FuncDef *fd) {
     if (fd->IsDeclaration ()) {
-        // TODO: report error
+        _diag
+            .Report (
+                DiagCode::EFuncOutsideTraitMustHaveBody,
+                "functions outside of traits must have a body",
+                Severity::Error)
+            .AddSpan (fd->Start (), fd->End (), "missing function body");
         return;
     }
     if (auto func = getFunction (fd->Name ().Val, fd->Args ()); func.has_value ()) {
@@ -565,6 +570,15 @@ Sema::declareImplMethods (ast::ImplStmt *is) {
     auto *sym      = isStruct ? targetType->AsStruct ()->BaseSymbol () : nullptr;
     for (const auto &method : is->Methods ()) {
         auto *fd = method.Func;
+        if (fd->IsDeclaration ()) {
+            _diag
+                .Report (
+                    DiagCode::EFuncOutsideTraitMustHaveBody,
+                    "methods outside of traits must have a body",
+                    Severity::Error)
+                .AddSpan (fd->Start (), fd->End (), "missing function body");
+            continue;
+        }
         if (auto *m = getMethod (targetType, fd->Name ().Val, fd->Args ());
             m != nullptr) {
             _diag
@@ -614,6 +628,9 @@ Sema::analyzeImplStmt (ImplStmt *is) {
         = targetType->IsStruct () ? targetType->AsStruct ()->BaseSymbol () : nullptr;
     for (const auto &method : is->Methods ()) {
         auto *fd = method.Func;
+        if (fd->IsDeclaration ()) {
+            continue;
+        }
         auto *candidates
             = sym != nullptr
                   ? &sym->Methods.at (fd->Name ().Val)

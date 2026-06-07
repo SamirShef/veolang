@@ -49,6 +49,7 @@ enum class DiagCode : uint8_t {
     ERecursiveType,
     ENotAllControlPathsRetValue,
     EVarCannotHaveTypeNoth,
+    EFuncOutsideTraitMustHaveBody,
 
     WUnusedVar,
     WLossPrecision,
