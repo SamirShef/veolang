@@ -14,9 +14,11 @@ namespace veo {
 using namespace symbols;
 using namespace ast;
 
+// NOLINTBEGIN(readability-identifier-naming)
 #define UINT64_MIN ((uint64_t) 0)
 #define UINT32_MIN ((uint32_t) 0)
 #define UINT16_MIN ((uint64_t) 0)
+// NOLINTEND(readability-identifier-naming)
 
 #define size_type_range(prefix, maxOrMin)                                                \
     (_ptrBitWidth == 64                                                                  \
@@ -165,8 +167,11 @@ Sema::analyzeVarDef (VarDef *vd) {
 
 void
 Sema::declareFunc (ast::FuncDef *fd) {
-    if (auto func = getFunction (fd->Name ().Val, fd->Args ());
-        func.has_value () && !func->IsDeclaration) {
+    if (fd->IsDeclaration ()) {
+        // TODO: report error
+        return;
+    }
+    if (auto func = getFunction (fd->Name ().Val, fd->Args ()); func.has_value ()) {
         _diag
             .Report (
                 DiagCode::ERedefinition,
@@ -184,28 +189,22 @@ Sema::declareFunc (ast::FuncDef *fd) {
     for (auto &arg : fd->Args ()) {
         resolveType (&arg.Type);
     }
-    auto func
-        = Function (fd->Name (), fd->RetType (), fd->Args (), fd->IsDeclaration (), _mod);
-    auto it = _mod->Funcs.find (func.Name.Val);
+    auto func = Function (fd->Name (), fd->RetType (), fd->Args (), _mod);
+    auto it   = _mod->Funcs.find (func.Name.Val);
     if (it == _mod->Funcs.end ()) {
         _mod->Funcs.emplace (func.Name.Val, FunctionCandidates ());
     }
-    auto &candidates   = _mod->Funcs.at (func.Name.Val).Candidates;
-    auto  funcPtr      = std::make_unique<Function> (func);
-    func.IsDeclaration = true;
-    auto candidatesIt
-        = std::ranges::find_if (candidates, [&] (const std::unique_ptr<Function> &f) {
-              return *f == func;
-          });
-    func.IsDeclaration = fd->IsDeclaration ();
-    if (candidatesIt == candidates.end ()) {
-        candidates.emplace_back (std::move (funcPtr));
-    }
+    auto &candidates = _mod->Funcs.at (func.Name.Val).Candidates;
+    auto  funcPtr    = std::make_unique<Function> (func);
+    candidates.emplace_back (std::move (funcPtr));
 }
 
 void
 Sema::analyzeFuncDef (FuncDef *fd) {
     if (!allowInScope (fd)) {
+        return;
+    }
+    if (fd->IsDeclaration ()) {
         return;
     }
 
@@ -221,7 +220,6 @@ Sema::analyzeFuncDef (FuncDef *fd) {
         func->Name,
         fd->RetType (),
         {},
-        fd->IsDeclaration (),
         fd->Start (),
         fd->End (),
         func);
@@ -243,11 +241,7 @@ Sema::analyzeFuncDef (FuncDef *fd) {
         args.emplace_back (node);
     }
     funcNode->Args () = std::move (args);
-    if (fd->IsDeclaration ()) {
-        return;
-    }
 
-    func->IsDeclaration = false;
     _funcRetTypes.push (fd->RetType ());
     _vars.emplace ();
 
@@ -301,16 +295,6 @@ Sema::analyzeRet (Return *ret) {
         if (!res.Val.has_value ()) {
             return;
         }
-        // if (_funcRetTypes.top () == nullptr) {
-        //     _diag
-        //         .Report (
-        //             DiagCode::ECannotCast,
-        //             "cannot implicitly cast '" + typeToString (res.Val->Type)
-        //                 + "' to 'noth'",
-        //             Severity::Error)
-        //         .AddSpan (ret->RetExpr ()->Start (), ret->RetExpr ()->End ());
-        //     return;
-        // }
         res = implicitlyCast (
             res,
             &_funcRetTypes.top (),
@@ -582,7 +566,7 @@ Sema::declareImplMethods (ast::ImplStmt *is) {
     for (const auto &method : is->Methods ()) {
         auto *fd = method.Func;
         if (auto *m = getMethod (targetType, fd->Name ().Val, fd->Args ());
-            m != nullptr && !m->Func->IsDeclaration) {
+            m != nullptr) {
             _diag
                 .Report (
                     DiagCode::ERedefinition,
@@ -601,13 +585,8 @@ Sema::declareImplMethods (ast::ImplStmt *is) {
         for (auto &arg : fd->Args ()) {
             resolveType (&arg.Type);
         }
-        auto func = Function (
-            fd->Name (),
-            fd->RetType (),
-            fd->Args (),
-            fd->IsDeclaration (),
-            _mod);
-        auto m = symbols::Method (
+        auto func = Function (fd->Name (), fd->RetType (), fd->Args (), _mod);
+        auto m    = symbols::Method (
             std::make_unique<Function> (std::move (func)),
             fd->Access (),
             method.IsStatic);
@@ -623,11 +602,6 @@ Sema::declareImplMethods (ast::ImplStmt *is) {
         }
         auto  methodPtr  = std::make_unique<symbols::Method> (std::move (m));
         auto &candidates = methods->at (m.Func->Name.Val).Candidates;
-        methodPtr->Func->IsDeclaration = true;
-        auto candidatesIt              = std::ranges::find_if (
-            candidates,
-            [&] (const std::unique_ptr<symbols::Method> &m) { return *m == *methodPtr; });
-        methodPtr->Func->IsDeclaration = fd->IsDeclaration ();
         candidates.emplace_back ();
     }
 }
@@ -655,7 +629,6 @@ Sema::analyzeImplStmt (ImplStmt *is) {
             m->Func->Name,
             fd->RetType (),
             {},
-            fd->IsDeclaration (),
             fd->Start (),
             fd->End (),
             m,
@@ -691,10 +664,6 @@ Sema::analyzeImplStmt (ImplStmt *is) {
             args.emplace_back (node);
         }
         methodNode->Args () = std::move (args);
-        if (m->Func->IsDeclaration) {
-            continue;
-        }
-        m->Func->IsDeclaration = false;
 
         _insideMethod = { m, targetType };
         _funcRetTypes.push (fd->RetType ());

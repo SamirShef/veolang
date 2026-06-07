@@ -169,13 +169,11 @@ Parser::parseFuncDef (ast::AccessModifier access) {
     }
     std::vector<Stmt *> body;
     bool                isDeclaration = true;
-    if (check (TokenKind::LBrace)) {
+    if (check (TokenKind::Semi)) {
+        expectSemi ();
+    } else {
         isDeclaration = false;
         if (!parseBlock (body)) {
-            return nullptr;
-        }
-    } else {
-        if (!expectSemi ()) {
             return nullptr;
         }
     }

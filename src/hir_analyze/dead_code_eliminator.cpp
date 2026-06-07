@@ -6,10 +6,6 @@ namespace veo {
 
 void
 DeadCodeEliminator::RunOnFunction (hir::Function *func) {
-    if (func->IsDeclaration ()) {
-        return;
-    }
-
     CFGBuilder::Build (func);
 
     std::unordered_set<hir::BasicBlock *> reachable;

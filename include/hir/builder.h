@@ -70,7 +70,6 @@ public:
         basic::NameObj        name,
         basic::Type          *retType,
         std::vector<VarDef *> args,
-        bool                  isDeclaration,
         llvm::SMLoc           start,
         llvm::SMLoc           end,
         symbols::Function    *base) {
@@ -78,7 +77,6 @@ public:
             std::move (name),
             retType,
             std::move (args),
-            isDeclaration,
             start,
             end,
             base);
@@ -91,7 +89,6 @@ public:
         basic::NameObj        name,
         basic::Type          *retType,
         std::vector<VarDef *> args,
-        bool                  isDeclaration,
         llvm::SMLoc           start,
         llvm::SMLoc           end,
         symbols::Method      *base,
@@ -101,7 +98,6 @@ public:
             std::move (name),
             retType,
             std::move (args),
-            isDeclaration,
             start,
             end,
             base->Func.get (),
