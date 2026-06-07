@@ -123,12 +123,13 @@ public:
         bool               isGlobal,
         llvm::SMLoc        start,
         llvm::SMLoc        end,
-        symbols::Variable *base) {
+        symbols::Variable *base,
+        bool               addToBlock = true) {
         auto *node = _ctx.CreateNode<
             VarDef> (std::move (name), type, init, isConst, isGlobal, start, end, base);
         if (isGlobal) {
             _ctx.AddGlobal (node);
-        } else {
+        } else if (addToBlock) {
             _insertBlock->AddInst (node);
         }
         return node;

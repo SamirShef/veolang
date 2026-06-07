@@ -242,7 +242,8 @@ Sema::analyzeFuncDef (FuncDef *fd) {
             false,
             arg.Name.Start,
             arg.Name.End,
-            nullptr);
+            nullptr,
+            false);
         args.emplace_back (node);
     }
     funcNode->Args () = std::move (args);
@@ -615,8 +616,8 @@ Sema::declareImplMethods (ast::ImplStmt *is) {
             methods->emplace (m.Func->Name.Val, MethodCandidates ());
         }
         auto  methodPtr  = std::make_unique<symbols::Method> (std::move (m));
-        auto &candidates = methods->at (m.Func->Name.Val).Candidates;
-        candidates.emplace_back ();
+        auto &candidates = methods->at (methodPtr->Func->Name.Val).Candidates;
+        candidates.emplace_back (std::move (methodPtr));
     }
 }
 
@@ -665,7 +666,8 @@ Sema::analyzeImplStmt (ImplStmt *is) {
                 false,
                 fd->Name ().Start,
                 fd->Name ().End,
-                nullptr);
+                nullptr,
+                false);
             args.emplace_back (node);
         }
         for (const auto &arg : fd->Args ()) {
@@ -677,7 +679,8 @@ Sema::analyzeImplStmt (ImplStmt *is) {
                 false,
                 arg.Name.Start,
                 arg.Name.End,
-                nullptr);
+                nullptr,
+                false);
             args.emplace_back (node);
         }
         methodNode->Args () = std::move (args);
@@ -1376,9 +1379,9 @@ Sema::analyzeFieldExpr (FieldExpr *fe, Type *expectedType) {
         return {};
     }
     auto *targetType = base.Val->Type;
-    while (base.Val->Type->IsPointer ()) {
-        base.Val->Type = base.Val->Type->AsPointer ()->Base ();
-        base.Node      = _builder.CreateDereference (
+    while (targetType->IsPointer ()) {
+        targetType = targetType->AsPointer ()->Base ();
+        base.Node  = _builder.CreateDereference (
             base.Node,
             targetType,
             fe->Start (),
