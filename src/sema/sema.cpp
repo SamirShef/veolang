@@ -864,7 +864,16 @@ Sema::analyzeTraitStmt (TraitStmt *ts) {
                     "previous definition was here",
                     false)
                 .AddSpan (fd->Name ().Start, fd->Name ().End, "redefined here");
-            return;
+            continue;
+        }
+        if (!fd->IsDeclaration ()) {
+            _diag
+                .Report (
+                    DiagCode::ETraitMethodsCannotHaveBody,
+                    "trait methods cannot have a body",
+                    Severity::Error)
+                .AddSpan (fd->Start (), fd->End ());
+            continue;
         }
         resolveType (&fd->RetType ());
         bool isGeneric = false;

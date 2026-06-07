@@ -52,6 +52,7 @@ enum class DiagCode : uint8_t {
     EFuncOutsideTraitMustHaveBody,
     ECannotImplNonTraitForType,
     EStructDoesNotImplementedMethod,
+    ETraitMethodsCannotHaveBody,
 
     WUnusedVar,
     WLossPrecision,
