@@ -603,6 +603,44 @@ Sema::declareImplMethods (ImplStmt *is) {
     for (auto &method : is->Methods ()) {
         declareImplMethod (method, sym, targetType);
     }
+    if (traitType != nullptr) {
+        const auto *trait           = traitType->AsTrait ();
+        const auto &traitCandidates = trait->BaseSymbol ()->Methods;
+        const auto &methods
+            = sym != nullptr ? sym->Methods : _mod->PrimitiveMethods[targetType];
+        for (const auto &[name, candidates] : traitCandidates) {
+            if (!methods.contains (name)) {
+                _diag
+                    .Report (
+                        DiagCode::EStructDoesNotImplementedMethod,
+                        "type '" + typeToString (targetType)
+                            + "' does not implement method '" + name + "' from trait '"
+                            + typeToString (traitType) + "'",
+                        Severity::Error)
+                    .AddSpan (is->Start (), is->End ());
+                continue;
+            }
+            const auto &structCandidates = methods.at (name).Candidates;
+            for (const auto &method : candidates.Candidates) {
+                auto it = std::ranges::find_if (
+                    structCandidates,
+                    [&] (const std::unique_ptr<symbols::Method> &m) {
+                        return *m == *method;
+                    });
+                if (it == structCandidates.end ()) {
+                    _diag
+                        .Report (
+                            DiagCode::EStructDoesNotImplementedMethod,
+                            "type '" + typeToString (targetType)
+                                + "' does not implement method '" + name
+                                + "' from trait '" + typeToString (traitType) + "'",
+                            Severity::Error)
+                        .AddSpan (is->Start (), is->End ());
+                    continue;
+                }
+            }
+        }
+    }
 }
 
 void
@@ -1770,8 +1808,8 @@ Sema::analyzeMethodCall (MethodCall *mc, Type *expectedType) {
         _diag
             .Report (
                 DiagCode::EUndefined,
-                "type '" + s->Name.Val + "' has no method named '" + mc->Name ().Val
-                    + "'",
+                "type '" + typeToString (targetType) + "' has no method named '"
+                    + mc->Name ().Val + "'",
                 Severity::Error)
             .AddSpan (mc->Name ().Start, mc->Name ().End);
         return {};
