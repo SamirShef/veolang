@@ -53,7 +53,9 @@ public:
     BasicBlock *
     CreateBasicBlock (Function *parent, std::string name = "") {
         auto *node = _ctx.CreateNode<BasicBlock> (parent, std::move (name));
-        parent->Body ().push_back (node);
+        if (parent != nullptr) {
+            parent->Body ().push_back (node);
+        }
         return node;
     }
 
@@ -194,10 +196,7 @@ public:
 
     FuncCall *
     CreateCall (
-        symbols::Function  *func,
-        std::vector<Node *> args,
-        llvm::SMLoc         start,
-        llvm::SMLoc         end) {
+        Function *func, std::vector<Node *> args, llvm::SMLoc start, llvm::SMLoc end) {
         return _ctx.CreateNode<FuncCall> (func, std::move (args), start, end);
     }
 

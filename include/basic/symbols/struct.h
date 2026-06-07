@@ -2,13 +2,16 @@
 #include <ast/access_modifier.h>
 #include <basic/name.h>
 #include <basic/symbols/function.h>
+#include <basic/symbols/trait.h>
 #include <basic/types/type.h>
 #include <unordered_map>
+#include <unordered_set>
 #include <vector>
 
 namespace veo::symbols {
 
 struct Module;
+struct Trait;
 
 struct Field {
     basic::NameObj      Name;
@@ -53,10 +56,18 @@ struct Method {
     std::unique_ptr<Function> Func;
     ast::AccessModifier       Access;
     bool                      IsStatic;
+    bool                      IsGeneric;
     bool                      IsConst = true;
 
-    Method (std::unique_ptr<Function> func, ast::AccessModifier access, bool isStatic)
-        : Func (std::move (func)), Access (access), IsStatic (isStatic) {}
+    Method (
+        std::unique_ptr<Function> func,
+        ast::AccessModifier       access,
+        bool                      isStatic,
+        bool                      isGeneric)
+        : Func (std::move (func)),
+          Access (access),
+          IsStatic (isStatic),
+          IsGeneric (isGeneric) {}
 
     bool
     operator== (const Method &other) const {
@@ -65,7 +76,8 @@ struct Method {
         }
 
         return *Func == *other.Func && Access == other.Access
-               && IsStatic == other.IsStatic && IsConst == other.IsConst;
+               && IsStatic == other.IsStatic && IsGeneric == other.IsGeneric
+               && IsConst == other.IsConst;
     }
 
     bool
@@ -96,6 +108,7 @@ struct Struct {
     basic::NameObj                                    Name;
     std::vector<Field>                                Fields;
     std::unordered_map<std::string, MethodCandidates> Methods;
+    std::unordered_set<Trait *>                       TraitsImplements;
     Module                                           *Parent;
 
     Struct (basic::NameObj name, std::vector<Field> fields, Module *parent)

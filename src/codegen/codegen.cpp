@@ -80,7 +80,7 @@ CodeGen::declareFunc (Function *fd) {
         name,
         *_mod);
     _funcs.emplace_back (func);
-    _funcsMap.emplace (fd->BaseSymbol (), func);
+    _funcsMap.emplace (fd, func);
 }
 
 void
@@ -348,7 +348,7 @@ CodeGen::generateLoadVar (LoadVar *lv) {
 
 llvm::Value *
 CodeGen::generateFuncCall (FuncCall *fc) {
-    auto                      *func = _funcsMap.at (fc->Function ());
+    auto                      *func = _funcsMap.at (fc->GetFunction ());
     std::vector<llvm::Value *> args;
     args.reserve (fc->Args ().size ());
     for (const auto &a : fc->Args ()) {

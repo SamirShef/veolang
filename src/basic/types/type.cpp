@@ -11,6 +11,7 @@ as (Floating);
 as (Bool);
 as (Char);
 as (Struct);
+as (Trait);
 as (Named);
 as (Pointer);
 as (Noth);

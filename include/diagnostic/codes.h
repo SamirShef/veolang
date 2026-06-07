@@ -50,6 +50,7 @@ enum class DiagCode : uint8_t {
     ENotAllControlPathsRetValue,
     EVarCannotHaveTypeNoth,
     EFuncOutsideTraitMustHaveBody,
+    ECannotImplNonTraitForType,
 
     WUnusedVar,
     WLossPrecision,

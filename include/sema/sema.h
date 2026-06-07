@@ -1,4 +1,5 @@
 #pragma once
+#include <ast/context.h>
 #include <ast/exprs/asgn_expr.h>
 #include <ast/exprs/bin_expr.h>
 #include <ast/exprs/cast_expr.h>
@@ -20,6 +21,7 @@
 #include <ast/stmts/if_else.h>
 #include <ast/stmts/impl_stmt.h>
 #include <ast/stmts/ret.h>
+#include <ast/stmts/trait_stmt.h>
 #include <ast/stmts/var_def.h>
 #include <basic/symbols/module.h>
 #include <basic/symbols/scope.h>
@@ -43,6 +45,8 @@ class Sema {
     size_t    _localsCount = 0;
     symbols::Module *_mod;
     hir::Builder &_builder; // NOLINT(cppcoreguidelines-avoid-const-or-ref-data-members)
+    ast::Context
+        &_astContext; // NOLINT(cppcoreguidelines-avoid-const-or-ref-data-members)
     std::stack<symbols::Scope> _vars;
     std::stack<Type *>         _funcRetTypes;
 
@@ -54,7 +58,12 @@ class Sema {
         SemanticResult (OptValue val, hir::Node *node) : Val (val), Node (node) {}
     };
 
-    enum class CastCost : uint16_t { Exact = 0, SafeImplicit = 1, Incompatible = 1000 };
+    enum class CastCost : uint16_t {
+        Exact        = 0,
+        TraitMatch   = 10,
+        SafeImplicit = 20,
+        Incompatible = 1000
+    };
 
     struct Loop {
         hir::BasicBlock *Break;
@@ -64,6 +73,10 @@ class Sema {
 
     std::optional<std::pair<symbols::Method *, basic::Type *>>   _insideMethod;
     std::vector<std::pair<ast::MethodCall *, symbols::Method *>> _methodCallOnConstBase;
+    std::unordered_map<symbols::Function *, hir::Function *>     _funcs;
+    std::unordered_map<symbols::Method *, hir::Function *>       _methods;
+    std::unordered_map<symbols::Function *, ast::FuncDef *>      _genericFuncs;
+    std::unordered_map<symbols::Method *, ast::FuncDef *>        _genericMethods;
 
     unsigned _ptrBitWidth;
 
@@ -71,11 +84,13 @@ public:
     Sema (
         DiagnosticEngine &diag,
         hir::Builder     &builder,
+        ast::Context     &astContext,
         symbols::Module  *mod,
         TypePool         &typePool,
         unsigned          ptrBitWidth)
         : _diag (diag),
           _builder (builder),
+          _astContext (astContext),
           _mod (mod),
           _typePool (typePool),
           _ptrBitWidth (ptrBitWidth) {
@@ -91,6 +106,8 @@ public:
             auto *stmt = llvm::cast<ast::Stmt> (res.Nodes[i]);
             if (stmt->Kind () == ast::NodeKind::StructDef) {
                 analyzeStructDef (llvm::cast<ast::StructDef> (stmt));
+            } else if (stmt->Kind () == ast::NodeKind::TraitStmt) {
+                analyzeTraitStmt (llvm::cast<ast::TraitStmt> (stmt));
             }
         }
         for (size_t i = 0; i < res.Count; ++i) {
@@ -107,7 +124,8 @@ public:
 
         for (size_t i = 0; i < res.Count; ++i) {
             auto *stmt = llvm::cast<ast::Stmt> (res.Nodes[i]);
-            if (stmt->Kind () == ast::NodeKind::StructDef) {
+            if (stmt->Kind () == ast::NodeKind::StructDef
+                || stmt->Kind () == ast::NodeKind::TraitStmt) {
                 continue;
             }
             analyzeStmt (stmt);
@@ -119,6 +137,12 @@ public:
     }
 
 private:
+    template <typename T, typename... Args>
+    T *
+    createNode (Args &&...args) {
+        return _astContext.CreateNode<T> (std::forward<Args> (args)...);
+    }
+
     template <typename T, typename... Args>
     Type *
     createType (Args &&...args) {
@@ -135,7 +159,7 @@ private:
     declareFunc (ast::FuncDef *fd);
 
     void
-    analyzeFuncDef (ast::FuncDef *fd);
+    analyzeFuncDef (ast::FuncDef *fd, bool generatingGeneric = false);
 
     void
     analyzeRet (ast::Return *ret);
@@ -159,7 +183,17 @@ private:
     declareImplMethods (ast::ImplStmt *is);
 
     void
+    declareImplMethod (ast::Method method, symbols::Struct *sym, basic::Type *targetType);
+
+    void
     analyzeImplStmt (ast::ImplStmt *is);
+
+    void
+    analyzeImplMethodDef (
+        ast::Method method, symbols::Struct *sym, basic::Type *targetType);
+
+    void
+    analyzeTraitStmt (ast::TraitStmt *ts);
 
     SemanticResult
     analyzeExpr (ast::Expr *expr, Type *expectedType);

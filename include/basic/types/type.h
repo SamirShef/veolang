@@ -10,6 +10,7 @@ class FloatingType;
 class BoolType;
 class CharType;
 class StructType;
+class TraitType;
 class NamedType;
 class PointerType;
 class NothType;
@@ -26,6 +27,7 @@ enum class TypeKind : uint8_t {
     Bool,
     Char,
     Struct,
+    Trait,
     Named,
     Pointer,
     Noth
@@ -70,6 +72,8 @@ public:
     as (Char);
     is (Struct);
     as (Struct);
+    is (Trait);
+    as (Trait);
     is (Named);
     as (Named);
     is (Pointer);

@@ -1,5 +1,4 @@
 #include <algorithm>
-#include <ast/exprs/struct_instance.h>
 #include <basic/types/all.h>
 #include <basic/value.h>
 #include <codegen/mangler.h>
@@ -166,7 +165,7 @@ Sema::analyzeVarDef (VarDef *vd) {
 }
 
 void
-Sema::declareFunc (ast::FuncDef *fd) {
+Sema::declareFunc (FuncDef *fd) {
     if (fd->IsDeclaration ()) {
         _diag
             .Report (
@@ -191,22 +190,43 @@ Sema::declareFunc (ast::FuncDef *fd) {
         return;
     }
     resolveType (&fd->RetType ());
+    bool isGeneric = false;
     for (auto &arg : fd->Args ()) {
         resolveType (&arg.Type);
+        if (arg.Type->IsTrait ()) {
+            isGeneric = true;
+        }
     }
-    auto func = Function (fd->Name (), fd->RetType (), fd->Args (), _mod);
+    auto func = Function (fd->Name (), fd->RetType (), fd->Args (), isGeneric, _mod);
     auto it   = _mod->Funcs.find (func.Name.Val);
     if (it == _mod->Funcs.end ()) {
         _mod->Funcs.emplace (func.Name.Val, FunctionCandidates ());
     }
     auto &candidates = _mod->Funcs.at (func.Name.Val).Candidates;
     auto  funcPtr    = std::make_unique<Function> (func);
+    if (!isGeneric) {
+        auto *funcNode = _builder.CreateFunction (
+            func.Name,
+            fd->RetType (),
+            {},
+            fd->Start (),
+            fd->End (),
+            funcPtr.get ());
+        _funcs.emplace (funcPtr.get (), funcNode);
+    }
     candidates.emplace_back (std::move (funcPtr));
+    if (isGeneric) {
+        auto it
+            = std::ranges::find_if (candidates, [&] (const std::unique_ptr<Function> &f) {
+                  return func == *f;
+              });
+        _genericFuncs.emplace (it->get (), fd);
+    }
 }
 
 void
-Sema::analyzeFuncDef (FuncDef *fd) {
-    if (!allowInScope (fd)) {
+Sema::analyzeFuncDef (FuncDef *fd, bool generatingGeneric) {
+    if (!generatingGeneric && !allowInScope (fd)) {
         return;
     }
     if (fd->IsDeclaration ()) {
@@ -220,15 +240,8 @@ Sema::analyzeFuncDef (FuncDef *fd) {
             func = f.get ();
         }
     }
-
-    auto *funcNode = _builder.CreateFunction (
-        func->Name,
-        fd->RetType (),
-        {},
-        fd->Start (),
-        fd->End (),
-        func);
-    auto *entry = _builder.CreateBasicBlock (funcNode, "entry");
+    auto *funcNode = func->IsGeneric ? nullptr : _funcs.at (func);
+    auto *entry    = _builder.CreateBasicBlock (funcNode, "entry");
     _builder.SetInsertionPoint (entry);
 
     std::vector<hir::VarDef *> args;
@@ -246,7 +259,9 @@ Sema::analyzeFuncDef (FuncDef *fd) {
             false);
         args.emplace_back (node);
     }
-    funcNode->Args () = std::move (args);
+    if (funcNode != nullptr) {
+        funcNode->Args () = std::move (args);
+    }
 
     _funcRetTypes.push (fd->RetType ());
     _vars.emplace ();
@@ -264,7 +279,7 @@ Sema::analyzeFuncDef (FuncDef *fd) {
                 false,
                 nullptr,
                 std::nullopt,
-                funcNode->Args ()[index]));
+                funcNode != nullptr ? funcNode->Args ()[index] : nullptr));
         ++index;
     }
 
@@ -311,7 +326,7 @@ Sema::analyzeRet (Return *ret) {
 }
 
 void
-Sema::analyzeExprStmt (ast::ExprStmt *es) {
+Sema::analyzeExprStmt (ExprStmt *es) {
     if (!allowInScope (es, false)) {
         return;
     }
@@ -320,7 +335,7 @@ Sema::analyzeExprStmt (ast::ExprStmt *es) {
 }
 
 void
-Sema::analyzeIfElseStmt (ast::IfElseStmt *ies) {
+Sema::analyzeIfElseStmt (IfElseStmt *ies) {
     if (!allowInScope (ies, false)) {
         return;
     }
@@ -388,7 +403,7 @@ Sema::analyzeIfElseStmt (ast::IfElseStmt *ies) {
 }
 
 void
-Sema::analyzeForLoop (ast::ForLoopStmt *fls) {
+Sema::analyzeForLoop (ForLoopStmt *fls) {
     if (!allowInScope (fls, false)) {
         return;
     }
@@ -529,7 +544,8 @@ Sema::analyzeStructDef (StructDef *sd) {
                         "recursive without indirection",
                         false)
                     .AddNote (
-                        "insert an indirection (e.g., a pointer or reference) to make '"
+                        "insert an indirection (e.g., a pointer or reference) to "
+                        "make '"
                             + sd->Name ().Val + "' representable:",
                         { "change '" + field.Name.Val + ": " + sd->Name ().Val + "' to '"
                           + field.Name.Val + ": *" + sd->Name ().Val + "'" });
@@ -558,7 +574,7 @@ Sema::analyzeStructDef (StructDef *sd) {
 }
 
 void
-Sema::declareImplMethods (ast::ImplStmt *is) {
+Sema::declareImplMethods (ImplStmt *is) {
     if (!allowInScope (is)) {
         return;
     }
@@ -567,19 +583,235 @@ Sema::declareImplMethods (ast::ImplStmt *is) {
     if (targetType == nullptr) {
         return;
     }
+    auto *traitType = is->TraitType ();
+    resolveType (&traitType);
+    if (traitType != nullptr && !traitType->IsTrait ()) {
+        _diag
+            .Report (
+                DiagCode::ECannotImplNonTraitForType,
+                "cannot implement non-trait '" + typeToString (traitType) + "' for type '"
+                    + typeToString (targetType) + "'",
+                Severity::Error)
+            .AddSpan (is->Start (), is->End ());
+        return;
+    }
     bool  isStruct = targetType->IsStruct ();
     auto *sym      = isStruct ? targetType->AsStruct ()->BaseSymbol () : nullptr;
-    for (const auto &method : is->Methods ()) {
-        auto *fd = method.Func;
-        if (fd->IsDeclaration ()) {
-            _diag
-                .Report (
-                    DiagCode::EFuncOutsideTraitMustHaveBody,
-                    "methods outside of traits must have a body",
-                    Severity::Error)
-                .AddSpan (fd->Start (), fd->End (), "missing function body");
-            continue;
+    if (traitType != nullptr && isStruct) {
+        sym->TraitsImplements.emplace (traitType->AsTrait ()->BaseSymbol ());
+    }
+    for (auto &method : is->Methods ()) {
+        declareImplMethod (method, sym, targetType);
+    }
+}
+
+void
+Sema::declareImplMethod (
+    ast::Method method, symbols::Struct *sym, basic::Type *targetType) {
+    auto *fd = method.Func;
+    if (fd->IsDeclaration ()) {
+        _diag
+            .Report (
+                DiagCode::EFuncOutsideTraitMustHaveBody,
+                "methods outside of traits must have a body",
+                Severity::Error)
+            .AddSpan (fd->Start (), fd->End (), "missing function body");
+        return;
+    }
+    if (auto *m = getMethod (targetType, fd->Name ().Val, fd->Args ()); m != nullptr) {
+        _diag
+            .Report (
+                DiagCode::ERedefinition,
+                "method '" + fd->Name ().Val + "' is already defined in type '"
+                    + typeToString (targetType) + "'",
+                Severity::Error)
+            .AddSpan (
+                m->Func->Name.Start,
+                m->Func->Name.End,
+                "previous definition was here",
+                false)
+            .AddSpan (fd->Name ().Start, fd->Name ().End, "redefined here");
+        return;
+    }
+    resolveType (&fd->RetType ());
+    bool isGeneric = false;
+    for (auto &arg : fd->Args ()) {
+        resolveType (&arg.Type);
+        if (arg.Type->IsTrait ()) {
+            isGeneric = true;
         }
+    }
+    auto func = Function (fd->Name (), fd->RetType (), fd->Args (), isGeneric, _mod);
+    auto m    = symbols::Method (
+        std::make_unique<Function> (func),
+        fd->Access (),
+        method.IsStatic,
+        isGeneric);
+    std::unordered_map<std::string, MethodCandidates> *methods = nullptr;
+    if (targetType->IsStruct ()) {
+        methods = &sym->Methods;
+    } else {
+        methods = &_mod->PrimitiveMethods[targetType];
+    }
+    auto it = methods->find (m.Func->Name.Val);
+    if (it == methods->end ()) {
+        methods->emplace (m.Func->Name.Val, MethodCandidates ());
+    }
+    auto methodPtr = std::make_unique<symbols::Method> (std::move (m));
+    if (!isGeneric) {
+        auto *methodNode = _builder.CreateMethod (
+            methodPtr->Func->Name,
+            fd->RetType (),
+            {},
+            fd->Start (),
+            fd->End (),
+            methodPtr.get (),
+            targetType,
+            method.IsStatic);
+        _methods.emplace (methodPtr.get (), methodNode);
+    }
+    auto &candidates = methods->at (methodPtr->Func->Name.Val).Candidates;
+    candidates.emplace_back (std::move (methodPtr));
+    if (isGeneric) {
+        auto it = std::ranges::find_if (
+            candidates,
+            [&] (const std::unique_ptr<symbols::Method> &method) {
+                return *method == *candidates.back ();
+            });
+        _genericMethods.emplace (it->get (), fd);
+    }
+}
+
+void
+Sema::analyzeImplStmt (ImplStmt *is) {
+    auto *targetType = is->StructType ();
+    resolveType (&targetType);
+    auto *sym
+        = targetType->IsStruct () ? targetType->AsStruct ()->BaseSymbol () : nullptr;
+    for (auto &method : is->Methods ()) {
+        analyzeImplMethodDef (method, sym, targetType);
+    }
+}
+
+void
+Sema::analyzeImplMethodDef (
+    ast::Method method, symbols::Struct *sym, basic::Type *targetType) {
+    auto *fd = method.Func;
+    if (fd->IsDeclaration ()) {
+        return;
+    }
+    auto *candidates = sym != nullptr
+                           ? &sym->Methods.at (fd->Name ().Val)
+                           : &_mod->PrimitiveMethods.at (targetType).at (fd->Name ().Val);
+    symbols::Method *m = nullptr;
+    for (auto &f : candidates->Candidates) {
+        if (f->Func->Args == fd->Args ()) {
+            m = f.get ();
+        }
+    }
+
+    auto *methodNode = m->IsGeneric ? nullptr : _methods.at (m);
+    auto *entry      = _builder.CreateBasicBlock (methodNode, "entry");
+    _builder.SetInsertionPoint (entry);
+
+    std::vector<hir::VarDef *> args;
+    args.reserve (fd->Args ().size () + (method.IsStatic ? 1 : 0));
+    if (!method.IsStatic) {
+        auto *node = _builder.CreateVariable (
+            basic::NameObj ("this", fd->Name ().Start, fd->Name ().End),
+            createType<PointerType> (targetType),
+            nullptr,
+            false,
+            false,
+            fd->Name ().Start,
+            fd->Name ().End,
+            nullptr,
+            false);
+        args.emplace_back (node);
+    }
+    for (const auto &arg : fd->Args ()) {
+        auto *node = _builder.CreateVariable (
+            arg.Name,
+            arg.Type,
+            nullptr,
+            false,
+            false,
+            arg.Name.Start,
+            arg.Name.End,
+            nullptr,
+            false);
+        args.emplace_back (node);
+    }
+    if (methodNode != nullptr) {
+        methodNode->Args () = std::move (args);
+    }
+
+    _insideMethod = { m, targetType };
+    _funcRetTypes.push (fd->RetType ());
+    _vars.emplace ();
+
+    _localsCount = 0;
+
+    auto index = static_cast<size_t> (!m->IsStatic);
+    if (methodNode != nullptr && !method.IsStatic) {
+        auto *thisArg = methodNode->Args ()[0];
+        _vars.top ().Vars.emplace (
+            thisArg->Name ().Val,
+            Variable (
+                thisArg->Name (),
+                thisArg->Type (),
+                false,
+                false,
+                nullptr,
+                std::nullopt,
+                thisArg));
+    }
+    for (const auto &arg : fd->Args ()) {
+        _vars.top ().Vars.emplace (
+            arg.Name.Val,
+            Variable (
+                arg.Name,
+                arg.Type,
+                false,
+                false,
+                nullptr,
+                std::nullopt,
+                m->IsGeneric ? nullptr : methodNode->Args ()[index]));
+        ++index;
+    }
+
+    for (const auto &stmt : fd->Body ()) {
+        analyzeStmt (stmt);
+    }
+
+    _vars.pop ();
+    _funcRetTypes.pop ();
+    _insideMethod = std::nullopt;
+}
+
+void
+Sema::analyzeTraitStmt (TraitStmt *ts) {
+    if (!allowInScope (ts)) {
+        return;
+    }
+    if (auto it = _mod->Traits.find (ts->Name ().Val); it != _mod->Traits.end ()) {
+        auto &t = it->second; // trait
+        _diag
+            .Report (
+                DiagCode::ERedefinition,
+                "trait '" + ts->Name ().Val + "' is already defined",
+                Severity::Error)
+            .AddSpan (t.Name.Start, t.Name.End, "previous definition was here", false)
+            .AddSpan (ts->Name ().Start, ts->Name ().End, "redefined here");
+        return;
+    }
+    auto trait = symbols::Trait (ts->Name (), _mod);
+    _mod->Traits.emplace (ts->Name ().Val, std::move (trait));
+    auto *targetType = createType<TraitType> (&_mod->Traits.at (ts->Name ().Val));
+
+    std::unordered_map<std::string, MethodCandidates> methods;
+    for (const auto &method : ts->Methods ()) {
+        auto *fd = method.Func;
         if (auto *m = getMethod (targetType, fd->Name ().Val, fd->Args ());
             m != nullptr) {
             _diag
@@ -597,121 +829,28 @@ Sema::declareImplMethods (ast::ImplStmt *is) {
             return;
         }
         resolveType (&fd->RetType ());
+        bool isGeneric = false;
         for (auto &arg : fd->Args ()) {
             resolveType (&arg.Type);
+            if (arg.Type->IsTrait ()) {
+                isGeneric = true;
+            }
         }
-        auto func = Function (fd->Name (), fd->RetType (), fd->Args (), _mod);
+        auto func = Function (fd->Name (), fd->RetType (), fd->Args (), isGeneric, _mod);
         auto m    = symbols::Method (
             std::make_unique<Function> (func),
             fd->Access (),
-            method.IsStatic);
-        std::unordered_map<std::string, MethodCandidates> *methods = nullptr;
-        if (isStruct) {
-            methods = &sym->Methods;
-        } else {
-            methods = &_mod->PrimitiveMethods[targetType];
-        }
-        auto it = methods->find (m.Func->Name.Val);
-        if (it == methods->end ()) {
-            methods->emplace (m.Func->Name.Val, MethodCandidates ());
+            method.IsStatic,
+            isGeneric);
+        auto it = methods.find (m.Func->Name.Val);
+        if (it == methods.end ()) {
+            methods.emplace (m.Func->Name.Val, MethodCandidates ());
         }
         auto  methodPtr  = std::make_unique<symbols::Method> (std::move (m));
-        auto &candidates = methods->at (methodPtr->Func->Name.Val).Candidates;
+        auto &candidates = methods.at (methodPtr->Func->Name.Val).Candidates;
         candidates.emplace_back (std::move (methodPtr));
     }
-}
-
-void
-Sema::analyzeImplStmt (ImplStmt *is) {
-    auto *targetType = is->StructType ();
-    resolveType (&targetType);
-    auto *sym
-        = targetType->IsStruct () ? targetType->AsStruct ()->BaseSymbol () : nullptr;
-    for (const auto &method : is->Methods ()) {
-        auto *fd = method.Func;
-        if (fd->IsDeclaration ()) {
-            continue;
-        }
-        auto *candidates
-            = sym != nullptr
-                  ? &sym->Methods.at (fd->Name ().Val)
-                  : &_mod->PrimitiveMethods.at (targetType).at (fd->Name ().Val);
-        symbols::Method *m = nullptr;
-        for (auto &f : candidates->Candidates) {
-            if (f->Func->Args == fd->Args ()) {
-                m = f.get ();
-            }
-        }
-
-        auto *methodNode = _builder.CreateMethod (
-            m->Func->Name,
-            fd->RetType (),
-            {},
-            fd->Start (),
-            fd->End (),
-            m,
-            targetType,
-            method.IsStatic);
-        auto *entry = _builder.CreateBasicBlock (methodNode, "entry");
-        _builder.SetInsertionPoint (entry);
-
-        std::vector<hir::VarDef *> args;
-        args.reserve (fd->Args ().size () + (method.IsStatic ? 1 : 0));
-        if (!method.IsStatic) {
-            auto *node = _builder.CreateVariable (
-                basic::NameObj ("this", fd->Name ().Start, fd->Name ().End),
-                createType<PointerType> (targetType),
-                nullptr,
-                false,
-                false,
-                fd->Name ().Start,
-                fd->Name ().End,
-                nullptr,
-                false);
-            args.emplace_back (node);
-        }
-        for (const auto &arg : fd->Args ()) {
-            auto *node = _builder.CreateVariable (
-                arg.Name,
-                arg.Type,
-                nullptr,
-                false,
-                false,
-                arg.Name.Start,
-                arg.Name.End,
-                nullptr,
-                false);
-            args.emplace_back (node);
-        }
-        methodNode->Args () = std::move (args);
-
-        _insideMethod = { m, targetType };
-        _funcRetTypes.push (fd->RetType ());
-        _vars.emplace ();
-
-        _localsCount = 0;
-
-        for (const auto &arg : methodNode->Args ()) {
-            _vars.top ().Vars.emplace (
-                arg->Name ().Val,
-                Variable (
-                    arg->Name (),
-                    arg->Type (),
-                    false,
-                    false,
-                    nullptr,
-                    std::nullopt,
-                    arg));
-        }
-
-        for (const auto &stmt : fd->Body ()) {
-            analyzeStmt (stmt);
-        }
-
-        _vars.pop ();
-        _funcRetTypes.pop ();
-        _insideMethod = std::nullopt;
-    }
+    _mod->Traits.at (ts->Name ().Val).Methods = std::move (methods);
 }
 
 Sema::SemanticResult
@@ -1177,9 +1316,43 @@ Sema::analyzeFuncCall (FuncCall *fc, Type *expectedType) {
         argTypes.emplace_back (argRes.Val->Type);
     }
 
-    Function *func = resolveBestOverload (candidates, argTypes, fc->Start (), fc->End ());
+    auto *func = resolveBestOverload (candidates, argTypes, fc->Start (), fc->End ());
     if (func == nullptr) {
         return {};
+    }
+
+    if (func->IsGeneric) {
+        auto                 *lastBB  = _builder.InsertBlock ();
+        auto                 *oldFunc = _genericFuncs.at (func);
+        std::vector<Argument> args;
+        args.reserve (oldFunc->Args ().size ());
+        size_t i = 0;
+        for (const auto &a : oldFunc->Args ()) {
+            Type *type = nullptr;
+            if (a.Type->IsTrait ()) {
+                type = argTypes[i];
+            } else {
+                type = a.Type;
+            }
+            args.emplace_back (a.Name, type);
+            ++i;
+        }
+        auto *newFunc = createNode<FuncDef> (
+            oldFunc->Name (),
+            oldFunc->RetType (),
+            std::move (args),
+            oldFunc->Body (),
+            false,
+            oldFunc->Access (),
+            oldFunc->Start (),
+            oldFunc->End ());
+        declareFunc (newFunc);
+        analyzeFuncDef (newFunc, true);
+        _builder.SetInsertionPoint (lastBB);
+        func = resolveBestOverload (candidates, argTypes, fc->Start (), fc->End ());
+        if (func == nullptr) {
+            return {};
+        }
     }
 
     std::vector<hir::Node *> hirArgs;
@@ -1190,7 +1363,11 @@ Sema::analyzeFuncCall (FuncCall *fc, Type *expectedType) {
 
     auto res = SemanticResult (
         Value (ValueKind::Unknown, func->RetType),
-        _builder.CreateCall (func, std::move (hirArgs), fc->Start (), fc->End ()));
+        _builder.CreateCall (
+            _funcs.at (func),
+            std::move (hirArgs),
+            fc->Start (),
+            fc->End ()));
     res = implicitlyCast (res, &expectedType, fc->Start (), fc->End ());
     return res;
 }
@@ -1356,8 +1533,7 @@ Sema::analyzeAsgnField (
 }
 
 Sema::SemanticResult
-Sema::analyzeAsgnPtr (
-    ast::AsgnExpr *ae, SemanticResult &expr, const SemanticResult &ptr) {
+Sema::analyzeAsgnPtr (AsgnExpr *ae, SemanticResult &expr, const SemanticResult &ptr) {
     auto op = AsgnOpToBinOp (ae->Op ());
     if (ae->Op () != AsgnOp::Eq) {
         expr.Node = _builder.CreateBinary (
@@ -1581,8 +1757,15 @@ Sema::analyzeMethodCall (MethodCall *mc, Type *expectedType) {
     bool  canAccessPrivate = baseIsThis
                              || baseIsStatic && _insideMethod.has_value ()
                                     && *_insideMethod->second == *targetType;
-    auto *methods = s != nullptr ? &s->Methods : &_mod->PrimitiveMethods[targetType];
-    auto  it      = methods->find (mc->Name ().Val);
+    std::unordered_map<std::string, MethodCandidates> *methods = nullptr;
+    if (s != nullptr) {
+        methods = &s->Methods;
+    } else if (targetType->IsTrait ()) {
+        methods = &targetType->AsTrait ()->BaseSymbol ()->Methods;
+    } else {
+        methods = &_mod->PrimitiveMethods[targetType];
+    }
+    auto it = methods->find (mc->Name ().Val);
     if (it == methods->end ()) {
         _diag
             .Report (
@@ -1606,8 +1789,7 @@ Sema::analyzeMethodCall (MethodCall *mc, Type *expectedType) {
         argTypes.emplace_back (argRes.Val->Type);
     }
 
-    symbols::Method *method
-        = resolveBestOverload (candidates, argTypes, mc->Start (), mc->End ());
+    auto *method = resolveBestOverload (candidates, argTypes, mc->Start (), mc->End ());
     if (method == nullptr) {
         return {};
     }
@@ -1623,6 +1805,40 @@ Sema::analyzeMethodCall (MethodCall *mc, Type *expectedType) {
     if (baseIsConstVar) {
         _methodCallOnConstBase.emplace_back (mc, method);
     }
+    if (method->Func->IsGeneric) {
+        auto                 *lastBB    = _builder.InsertBlock ();
+        auto                 *oldMethod = _genericMethods.at (method);
+        std::vector<Argument> args;
+        args.reserve (oldMethod->Args ().size ());
+        size_t i = 0;
+        for (const auto &a : oldMethod->Args ()) {
+            Type *type = nullptr;
+            if (a.Type->IsTrait ()) {
+                type = argTypes[i];
+            } else {
+                type = a.Type;
+            }
+            args.emplace_back (a.Name, type);
+            ++i;
+        }
+        auto *newFunc = createNode<FuncDef> (
+            oldMethod->Name (),
+            oldMethod->RetType (),
+            std::move (args),
+            oldMethod->Body (),
+            false,
+            oldMethod->Access (),
+            oldMethod->Start (),
+            oldMethod->End ());
+        auto newMethod = ast::Method (newFunc, method->IsStatic);
+        declareImplMethod (newMethod, s, targetType);
+        analyzeImplMethodDef (newMethod, s, targetType);
+        _builder.SetInsertionPoint (lastBB);
+        method = resolveBestOverload (candidates, argTypes, mc->Start (), mc->End ());
+        if (method == nullptr) {
+            return {};
+        }
+    }
     std::vector<hir::Node *> hirArgs;
     if (!method->IsStatic) {
         hirArgs.emplace_back (_builder.CreateReference (
@@ -1636,14 +1852,15 @@ Sema::analyzeMethodCall (MethodCall *mc, Type *expectedType) {
         hirArgs.emplace_back (res.Node);
     }
 
-    auto *node = _builder.CreateCall (
-        method->Func.get (),
-        std::move (hirArgs),
-        mc->Start (),
-        mc->End ());
-    auto val = Value (ValueKind::Unknown, method->Func->RetType);
-    auto res = SemanticResult (val, node);
-    res      = implicitlyCast (res, &expectedType, mc->Start (), mc->End ());
+    auto *node = targetType->IsTrait () ? nullptr
+                                        : _builder.CreateCall (
+                                              _methods.at (method),
+                                              std::move (hirArgs),
+                                              mc->Start (),
+                                              mc->End ());
+    auto  val  = Value (ValueKind::Unknown, method->Func->RetType);
+    auto  res  = SemanticResult (val, node);
+    res        = implicitlyCast (res, &expectedType, mc->Start (), mc->End ());
     return res;
 }
 
@@ -1731,7 +1948,7 @@ Sema::analyzeTernaryExpr (TernaryExpr *te, Type *expectedType) {
 }
 
 Sema::SemanticResult
-Sema::analyzeCastExpr (ast::CastExpr *ce, Type *expectedType) {
+Sema::analyzeCastExpr (CastExpr *ce, Type *expectedType) {
     auto  val  = analyzeExpr (ce->GetExpr (), nullptr);
     auto *type = ce->Type ();
     if (!val.Val.has_value () || type == nullptr) {
@@ -1996,18 +2213,25 @@ Sema::resolveType (Type **type) {
         }
     }
     const auto &typeName = path.back ();
-    if (!curMod->Structs.contains (typeName.Val)) {
-        _diag
-            .Report (
-                DiagCode::ECannotFindType,
-                "cannot find type '" + typeName.Val + "' in "
-                    + (path.size () == 1 ? "this scope" : curMod->ToString ()),
-                Severity::Error)
-            .AddSpan (typeName.Start, typeName.End, "not found");
-        return nullptr;
+    auto        structIt = curMod->Structs.find (typeName.Val);
+    if (structIt != curMod->Structs.end ()) {
+        *type = createType<StructType> (&structIt->second);
+        return *type;
     }
-    *type = createType<StructType> (&curMod->Structs.at (typeName.Val));
-    return *type;
+    auto traitIt = curMod->Traits.find (typeName.Val);
+    if (traitIt != curMod->Traits.end ()) {
+        *type = createType<TraitType> (&traitIt->second);
+        return *type;
+    }
+
+    _diag
+        .Report (
+            DiagCode::ECannotFindType,
+            "cannot find type '" + typeName.Val + "' in "
+                + (path.size () == 1 ? "this scope" : curMod->ToString ()),
+            Severity::Error)
+        .AddSpan (typeName.Start, typeName.End, "not found");
+    return nullptr;
 }
 // NOLINTEND(readability-convert-member-functions-to-static)
 
@@ -2062,10 +2286,16 @@ Sema::getFunction (const std::string &name, const std::vector<Argument> &args) {
 
 symbols::Method *
 Sema::getMethod (
-    basic::Type *base, const std::string &name, const std::vector<ast::Argument> &args) {
+    basic::Type *base, const std::string &name, const std::vector<Argument> &args) {
     std::unordered_map<std::string, MethodCandidates> *methods = nullptr;
     if (base->IsStruct ()) {
         auto *sym = base->AsStruct ()->BaseSymbol ();
+        methods   = &sym->Methods;
+        if (!methods->contains (name)) {
+            return nullptr;
+        }
+    } else if (base->IsTrait ()) {
+        auto *sym = base->AsTrait ()->BaseSymbol ();
         methods   = &sym->Methods;
         if (!methods->contains (name)) {
             return nullptr;
@@ -2228,7 +2458,7 @@ Sema::foldBinary (
 }
 
 int64_t
-Sema::foldBinaryBitwise (ValueData lhs, ValueData rhs, Type *commonType, ast::BinOp op) {
+Sema::foldBinaryBitwise (ValueData lhs, ValueData rhs, Type *commonType, BinOp op) {
     auto    lVal       = std::get<0> (lhs);
     auto    rVal       = std::get<0> (rhs);
     bool    isUnsigned = commonType->AsInteger ()->IsUnsigned ();
@@ -2323,6 +2553,11 @@ Sema::canImplicitCast (Sema::SemanticResult val, Type **expectedType) {
     if (src->IsInteger () && dst->IsFloating ()) {
         return true;
     }
+    if (src->IsStruct () && dst->IsTrait ()) {
+        auto *sSym = src->AsStruct ()->BaseSymbol ();
+        auto *tSym = dst->AsTrait ()->BaseSymbol ();
+        return sSym->TraitsImplements.contains (tSym);
+    }
     return false;
 }
 
@@ -2381,7 +2616,7 @@ Sema::implicitlyCast (
         return {};
     }
 
-    auto kind = hir::CastKind::Invalid;
+    auto kind = hir::CastKind::BitCast;
     if (src->IsInteger () && dst->IsInteger ()) {
         kind = castInts (src->AsInteger (), dst->AsInteger ());
     } else if (src->IsFloating () && dst->IsFloating ()) {
@@ -2636,12 +2871,18 @@ Sema::checkCastCost (Type *src, Type *dst) {
             return CastCost::Exact;
         }
     }
+    if (src->IsStruct () && dst->IsTrait ()) {
+        auto *sSym = src->AsStruct ()->BaseSymbol ();
+        auto *tSym = dst->AsTrait ()->BaseSymbol ();
+        return sSym->TraitsImplements.contains (tSym) ? CastCost::TraitMatch
+                                                      : CastCost::Incompatible;
+    }
 
     return CastCost::Incompatible;
 }
 
 bool
-Sema::canApplyAsgnOp (ast::AsgnOp op, Type *type) {
+Sema::canApplyAsgnOp (AsgnOp op, Type *type) {
     if (op == AsgnOp::Eq) {
         return true;
     }
@@ -2672,7 +2913,7 @@ Sema::inGlobalScope () const {
 }
 
 bool
-Sema::allowInScope (ast::Stmt *stmt, bool allowInGlobal) {
+Sema::allowInScope (Stmt *stmt, bool allowInGlobal) {
     if (inGlobalScope () != allowInGlobal) {
         _diag
             .Report (
@@ -2776,12 +3017,13 @@ Sema::typeToString (Type *type) {
     if (type->IsPointer ()) {
         return '*' + typeToString (type->AsPointer ()->Base ());
     }
-    if (!type->IsStruct ()) {
+    if (!type->IsStruct () && !type->IsTrait ()) {
         return type->ToString ();
     }
-    const auto *sType  = type->AsStruct ();
-    std::string res    = sType->BaseSymbol ()->Name.Val;
-    Module     *curMod = sType->BaseSymbol ()->Parent;
+    std::string res    = type->IsStruct () ? type->AsStruct ()->BaseSymbol ()->Name.Val
+                                           : type->AsTrait ()->BaseSymbol ()->Name.Val;
+    Module     *curMod = type->IsStruct () ? type->AsStruct ()->BaseSymbol ()->Parent
+                                           : type->AsTrait ()->BaseSymbol ()->Parent;
     while (curMod != nullptr) {
         if (*curMod == *_mod) {
             break;
@@ -2804,5 +3046,4 @@ Sema::analyzeMethodCallOnConstBase (MethodCall *mc, symbols::Method *method) {
         return;
     }
 }
-
 }

@@ -195,14 +195,14 @@ HIRLinearizer::linearizeFuncCall (FuncCall *fc) {
         args.emplace_back (linearizeExpr (a));
     }
     auto *call = _builder.CreateCall (
-        fc->Function (),
+        fc->GetFunction (),
         std::move (args),
         fc->Start (),
         fc->End ());
-    if (fc->Function ()->RetType->IsNoth ()) {
+    if (fc->GetFunction ()->RetType ()->IsNoth ()) {
         return _builder.CreateExprStmt (call, fc->Start (), fc->End ());
     }
-    return emitToTmp (call, fc->Function ()->RetType, fc->Start (), fc->End ());
+    return emitToTmp (call, fc->GetFunction ()->RetType (), fc->Start (), fc->End ());
 }
 
 Node *

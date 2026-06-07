@@ -208,9 +208,9 @@ Compile (
     unsigned bufferId = mgr.AddNewSourceBuffer (std::move (*bufferOrErr), llvm::SMLoc ());
 
     TypePool     pool;
-    ast::Context context;
+    ast::Context astContext;
     Lexer        lex (diag, mgr, bufferId);
-    Parser       parser (diag, lex, pool, context);
+    Parser       parser (diag, lex, pool, astContext);
     ParseResult  parseRes = parser.Parse ();
     if (diag.HasErrors ()) {
         parseRes.HasErrors = true;
@@ -234,20 +234,20 @@ Compile (
         dumper.Dump (parseRes);
     }
 
-    hir::Context ctx;
-    hir::Builder builder (ctx);
+    hir::Context hirContext;
+    hir::Builder builder (hirContext);
 
     unsigned ptrBitWidth = triple.isArch64Bit () ? 64 : 32;
     if (triple.isArch16Bit ()) {
         ptrBitWidth = 16;
     }
-    Sema sema (diag, builder, mod, pool, ptrBitWidth);
+    Sema sema (diag, builder, astContext, mod, pool, ptrBitWidth);
     sema.Analyze (parseRes);
 
     HIRLinearizer linearizer (builder);
     linearizer.Linearize ();
 
-    for (auto *func : ctx.Functions ()) {
+    for (auto *func : hirContext.Functions ()) {
         DeadCodeEliminator::RunOnFunction (func);
         ReturnChecker retChecker (diag);
         retChecker.RunOnFunction (func);
@@ -282,9 +282,9 @@ Compile (
     CodeGen codegen (
         mgr,
         mod,
-        ctx.Globals (),
-        ctx.Functions (),
-        ctx.Structs (),
+        hirContext.Globals (),
+        hirContext.Functions (),
+        hirContext.Structs (),
         triple,
         dataLayout);
     auto llvmMod = codegen.Generate ();
