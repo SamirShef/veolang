@@ -22,6 +22,7 @@
 #include <ast/stmts/impl_stmt.h>
 #include <ast/stmts/ret.h>
 #include <ast/stmts/struct_def.h>
+#include <ast/stmts/trait_stmt.h>
 #include <ast/stmts/var_def.h>
 #include <basic/name.h>
 #include <basic/types/all.h>
@@ -68,6 +69,9 @@ Parser::parseStmt (bool expectSemi) {
     }
     case TokenKind::Impl: {
         return parseImplStmt ();
+    }
+    case TokenKind::Trait: {
+        return parseTraitStmt ();
     }
     default: {
         Expr *expr = parseExpr ();
@@ -331,16 +335,39 @@ Parser::parseImplStmt () {
         auto *fd      = parseFuncDef (access);
         if (fd != nullptr) {
             auto *method = llvm::cast<FuncDef> (fd);
-            if (method != nullptr) {
-                methods.emplace_back (method, isStatic);
-            } else {
-                synchronize ();
-            }
+            methods.emplace_back (method, isStatic);
         }
     }
     return createNode<ImplStmt> (
         structType,
         traitType,
+        std::move (methods),
+        firstTok.Start,
+        _lastTok.End);
+}
+
+ast::Stmt *
+Parser::parseTraitStmt () {
+    const Token    firstTok = advance ();
+    basic::NameObj name;
+    if (!expectName (name)) {
+        return nullptr;
+    }
+    if (!expectTok (TokenKind::LBrace, "{")) {
+        return nullptr;
+    }
+    std::vector<Method> methods;
+    while (!isAtEnd () && !match (TokenKind::RBrace)) {
+        auto access = match (TokenKind::Pub) ? AccessModifier::Pub : AccessModifier::Priv;
+        bool isStatic = match (TokenKind::Static);
+        auto *fd      = parseFuncDef (access);
+        if (fd != nullptr) {
+            auto *method = llvm::cast<FuncDef> (fd);
+            methods.emplace_back (method, isStatic);
+        }
+    }
+    return createNode<TraitStmt> (
+        std::move (name),
         std::move (methods),
         firstTok.Start,
         _lastTok.End);

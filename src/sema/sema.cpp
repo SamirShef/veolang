@@ -601,7 +601,7 @@ Sema::declareImplMethods (ast::ImplStmt *is) {
         }
         auto func = Function (fd->Name (), fd->RetType (), fd->Args (), _mod);
         auto m    = symbols::Method (
-            std::make_unique<Function> (std::move (func)),
+            std::make_unique<Function> (func),
             fd->Access (),
             method.IsStatic);
         std::unordered_map<std::string, MethodCandidates> *methods = nullptr;

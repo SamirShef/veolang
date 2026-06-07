@@ -219,6 +219,44 @@ Dumper::dumpImplStmt (ImplStmt *is) {
 }
 
 void
+Dumper::dumpTraitStmt (TraitStmt *ts) {
+    print ("TraitStmt: " + ts->Name ().Val + '\n');
+    ++_indentLvl;
+
+    print ("Methods:\n");
+    ++_indentLvl;
+    for (const auto &method : ts->Methods ()) {
+        auto *func = method.Func;
+        print (
+            std::string (AccessToString (func->Access ())) + ' '
+            + (method.IsStatic ? "static " : "") + func->Name ().Val + " (");
+
+        size_t i = 0;
+        for (const auto &arg : func->Args ()) {
+            if (arg.IsValid ()) {
+                _os << arg.Name.Val << ": " << arg.Type->ToString ();
+            }
+            if (i < func->Args ().size () - 1) {
+                _os << ", ";
+            }
+            ++i;
+        }
+        _os << ')';
+        if (func->RetType () != nullptr) {
+            _os << ": " << func->RetType ()->ToString ();
+        }
+        _os << '\n';
+        ++_indentLvl;
+        for (const auto &stmt : func->Body ()) {
+            dumpStmt (stmt);
+        }
+        --_indentLvl;
+    }
+    --_indentLvl;
+    --_indentLvl;
+}
+
+void
 Dumper::dumpLiteralExpr (LiteralExpr *le) {
     print ("LiteralExpr: " + le->Value () + '\n');
 }
