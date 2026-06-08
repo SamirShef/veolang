@@ -213,6 +213,13 @@ private:
     SemanticResult
     analyzeFuncCall (ast::FuncCall *fc, Type *expectedType);
 
+    bool
+    generateGenericFunc (
+        symbols::Function           *func,
+        std::vector<Type *>         &argTypes,
+        symbols::FunctionCandidates *candidates,
+        ast::FuncCall               *fc);
+
     SemanticResult
     analyzeAsgnExpr (ast::AsgnExpr *ae, Type *expectedType);
 
@@ -234,11 +241,26 @@ private:
     SemanticResult
     analyzeMethodCall (ast::MethodCall *mc, Type *expectedType);
 
+    bool
+    generateGenericMethod (
+        symbols::Method           *method,
+        std::vector<Type *>       &argTypes,
+        symbols::Struct           *s,
+        basic::Type               *targetType,
+        symbols::MethodCandidates *candidates,
+        ast::MethodCall           *mc);
+
     SemanticResult
     analyzeTernaryExpr (ast::TernaryExpr *te, Type *expectedType);
 
     SemanticResult
     analyzeCastExpr (ast::CastExpr *ce, Type *expectedType);
+
+    void
+    getIntegralProps (Type *t, bool &isUnsigned, unsigned &width) const;
+
+    hir::CastKind
+    castIntegrals (Type *src, Type *dst);
 
     SemanticResult
     analyzeRefExpr (ast::RefExpr *re, Type *expectedType);
@@ -252,10 +274,10 @@ private:
     SemanticResult
     analyzeTypeExpr (ast::TypeExpr *te, Type *expectedType);
 
-    hir::CastKind
+    static hir::CastKind
     castInts (const IntegerType *src, const IntegerType *dst);
 
-    hir::CastKind
+    static hir::CastKind
     castFloats (const FloatingType *src, const FloatingType *dst);
 
     SemanticResult
@@ -357,6 +379,15 @@ private:
 
     static CastCost
     checkCastCost (Type *src, Type *dst);
+
+    static CastCost
+    checkCastCostIntegers (Type *src, Type *dst);
+
+    static CastCost
+    checkCastCostFloatings (Type *src, Type *dst);
+
+    static CastCost
+    checkCastCostTraitMatch (Type *src, Type *dst);
 
     static bool
     canApplyAsgnOp (ast::AsgnOp op, Type *type);
