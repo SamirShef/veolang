@@ -6,7 +6,10 @@
 #include <diagnostic/engine.h>
 #include <filesystem>
 #include <hir/builder.h>
+#include <hir_analyze/dead_code_eliminator.h>
+#include <hir_analyze/return_checker.h>
 #include <lexer/lexer.h>
+#include <linearizer/linearizer.h>
 #include <llvm/Support/SourceMgr.h>
 #include <llvm/TargetParser/Host.h>
 #include <llvm/TargetParser/Triple.h>
@@ -74,6 +77,16 @@ public:
         auto *mod = new symbols::Module (path.stem ().string ());
         Sema  sema (diag, builder, astContext, mod, pool, ptrBitWidth);
         sema.Analyze (parseRes);
+
+        HIRLinearizer linearizer (builder);
+        linearizer.Linearize ();
+
+        for (auto *func : hirContext.Functions ()) {
+            DeadCodeEliminator::RunOnFunction (func);
+            ReturnChecker retChecker (diag);
+            retChecker.RunOnFunction (func);
+        }
+
         diag.SortDiagSpans ();
 
         auto getBuilderLine = [&] (diagnostic::DiagnosticBuilder &b) -> unsigned {

@@ -92,6 +92,16 @@ Sema::analyzeVarDef (VarDef *vd) {
                 "memory");
         return;
     }
+    if (type->IsTrait ()) {
+        _diag
+            .Report (
+                DiagCode::ECannotUseTraitForVar,
+                "cannot use trait '" + typeToString (type)
+                    + "' as a concrete type for variable",
+                Severity::Error)
+            .AddSpan (vd->Start (), vd->End ());
+        return;
+    }
     auto var = Variable (vd->Name (), type, vd->IsConst (), isGlobal, _mod, val.Val);
     symbols::Variable *sym = nullptr;
     _vars.top ().Vars.emplace (var.Name.Val, var);
@@ -261,15 +271,10 @@ Sema::analyzeRet (Return *ret) {
         }
         _builder.CreateRet (nullptr, ret->Start (), ret->End ());
     } else {
-        auto res = analyzeExpr (ret->RetExpr (), nullptr);
+        auto res = analyzeExpr (ret->RetExpr (), _funcRetTypes.top ());
         if (!res.Val.has_value ()) {
             return;
         }
-        res = implicitlyCast (
-            res,
-            &_funcRetTypes.top (),
-            ret->RetExpr ()->Start (),
-            ret->RetExpr ()->End ());
         _builder.CreateRet (res.Node, ret->Start (), ret->End ());
     }
 }
@@ -500,6 +505,16 @@ Sema::analyzeStructDef (StructDef *sd) {
                           + field.Name.Val + ": *" + sd->Name ().Val + "'" });
                 continue;
             }
+        }
+        if (field.Type->IsTrait ()) {
+            _diag
+                .Report (
+                    DiagCode::ECannotUseTraitForVar,
+                    "cannot use trait '" + typeToString (field.Type)
+                        + "' as a concrete type for field",
+                    Severity::Error)
+                .AddSpan (field.Name.Start, field.Name.End);
+            continue;
         }
         fields.emplace_back (
             field.Name,
