@@ -128,7 +128,7 @@ Sema::declareFunc (FuncDef *fd) {
         _diag
             .Report (
                 DiagCode::ERedefinition,
-                "funcion '" + fd->Name ().Val + "' is already defined",
+                "function '" + fd->Name ().Val + "' is already defined",
                 Severity::Error)
             .AddSpan (
                 func->Name.Start,
@@ -769,6 +769,9 @@ Sema::analyzeImplMethodDef (
 
     for (const auto &stmt : fd->Body ()) {
         analyzeStmt (stmt);
+    }
+    if (fd->RetType () == nullptr || fd->RetType ()->IsNoth ()) {
+        _builder.CreateRet (nullptr, fd->Name ().Start, fd->Name ().End);
     }
 
     _vars.pop ();

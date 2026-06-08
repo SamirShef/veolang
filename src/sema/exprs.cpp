@@ -383,9 +383,8 @@ Sema::analyzeUnaryExpr (UnaryExpr *ue, Type *expectedType) {
             _diag
                 .Report (
                     DiagCode::ECannotApplyOp,
-                    "unary operator '" + std::string (UnOpToString (op))
-                        + "' cannot be applied to type '" + typeToString (rhs.Val->Type)
-                        + "'",
+                    "cannot apply operator '" + std::string (UnOpToString (op))
+                        + "' with type '" + typeToString (rhs.Val->Type) + "'",
                     Severity::Error)
                 .AddSpan (ue->Start (), ue->End ());
             return {};
@@ -395,16 +394,14 @@ Sema::analyzeUnaryExpr (UnaryExpr *ue, Type *expectedType) {
 
     case UnOp::Not:
         if (!rhs.Val->Type->IsBool ()) {
-            Type *boolType = createType<BoolType> ();
-            rhs            = implicitlyCast (
-                rhs,
-                &boolType,
-                ue->Rhs ()->Start (),
-                ue->Rhs ()->End ());
-            if (!rhs.Val.has_value ()) {
-                return {};
-            }
-            resType = boolType;
+            _diag
+                .Report (
+                    DiagCode::ECannotApplyOp,
+                    "cannot apply operator '" + std::string (UnOpToString (op))
+                        + "' with type '" + typeToString (rhs.Val->Type) + "'",
+                    Severity::Error)
+                .AddSpan (ue->Start (), ue->End ());
+            return {};
         } else {
             resType = rhs.Val->Type;
         }
@@ -1018,6 +1015,15 @@ Sema::analyzeMethodCall (MethodCall *mc, Type *expectedType) {
             baseIsStatic,
             canAccessPrivate)) {
         return {};
+    }
+    if (baseIsThis && _insideMethod.has_value ()) {
+        auto it = _methodCallFromAnotherMethod.find (_insideMethod->first);
+        if (it == _methodCallFromAnotherMethod.end ()) {
+            _methodCallFromAnotherMethod.emplace (
+                _insideMethod->first,
+                std::move (std::vector<symbols::Method *>{}));
+        }
+        _methodCallFromAnotherMethod.at (_insideMethod->first).push_back (method);
     }
     if (baseIsConstVar) {
         _methodCallOnConstBase.emplace_back (mc, method);

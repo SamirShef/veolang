@@ -73,10 +73,12 @@ class Sema {
 
     std::optional<std::pair<symbols::Method *, basic::Type *>>   _insideMethod;
     std::vector<std::pair<ast::MethodCall *, symbols::Method *>> _methodCallOnConstBase;
-    std::unordered_map<symbols::Function *, hir::Function *>     _funcs;
-    std::unordered_map<symbols::Method *, hir::Function *>       _methods;
-    std::unordered_map<symbols::Function *, ast::FuncDef *>      _genericFuncs;
-    std::unordered_map<symbols::Method *, ast::FuncDef *>        _genericMethods;
+    std::unordered_map<symbols::Method *, std::vector<symbols::Method *>>
+                                                             _methodCallFromAnotherMethod;
+    std::unordered_map<symbols::Function *, hir::Function *> _funcs;
+    std::unordered_map<symbols::Method *, hir::Function *>   _methods;
+    std::unordered_map<symbols::Function *, ast::FuncDef *>  _genericFuncs;
+    std::unordered_map<symbols::Method *, ast::FuncDef *>    _genericMethods;
 
     unsigned _ptrBitWidth;
 
@@ -131,6 +133,9 @@ public:
             analyzeStmt (stmt);
         }
 
+        for (auto &[method, methods] : _methodCallFromAnotherMethod) {
+            analyzeMethodCallFromAnotherMethod (method, methods);
+        }
         for (auto &[node, method] : _methodCallOnConstBase) {
             analyzeMethodCallOnConstBase (node, method);
         }
@@ -420,6 +425,10 @@ private:
 
     std::string
     typeToString (Type *type);
+
+    void
+    analyzeMethodCallFromAnotherMethod (
+        symbols::Method *method, const std::vector<symbols::Method *> &methods);
 
     void
     analyzeMethodCallOnConstBase (ast::MethodCall *mc, symbols::Method *method);

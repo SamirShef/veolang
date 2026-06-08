@@ -191,6 +191,26 @@ Sema::typeToString (Type *type) {
 }
 
 void
+Sema::analyzeMethodCallFromAnotherMethod (
+    symbols::Method *method, const std::vector<symbols::Method *> &methods) {
+    if (!_methodCallFromAnotherMethod.contains (method)) {
+        return;
+    }
+
+    bool isConst = true;
+    for (const auto &m : methods) {
+        if (auto it = _methodCallFromAnotherMethod.find (m);
+            it != _methodCallFromAnotherMethod.end ()) {
+            analyzeMethodCallFromAnotherMethod (m, it->second);
+        }
+        if (!m->IsConst) {
+            isConst = false;
+        }
+    }
+    method->IsConst = isConst;
+}
+
+void
 Sema::analyzeMethodCallOnConstBase (MethodCall *mc, symbols::Method *method) {
     if (!method->IsConst) {
         _diag
@@ -203,4 +223,5 @@ Sema::analyzeMethodCallOnConstBase (MethodCall *mc, symbols::Method *method) {
         return;
     }
 }
+
 }

@@ -76,6 +76,23 @@ public:
         sema.Analyze (parseRes);
         diag.SortDiagSpans ();
 
+        auto getBuilderLine = [&] (diagnostic::DiagnosticBuilder &b) -> unsigned {
+            for (const auto &span : b.Spans ()) {
+                if (span.IsPrimary) {
+                    return mgr.FindLineNumber (span.Span.Start, bufferId);
+                }
+            }
+            if (!b.Spans ().empty ()) {
+                return mgr.FindLineNumber (b.Spans ()[0].Span.Start, bufferId);
+            }
+            return 0;
+        };
+        std::ranges::sort (
+            diag.Builders (),
+            [&] (diagnostic::DiagnosticBuilder &a, diagnostic::DiagnosticBuilder &b) {
+                return getBuilderLine (a) < getBuilderLine (b);
+            });
+
         if (!commands.empty () && commands[0].Kind == CommandKind::NoErrors) {
             if (diag.HasErrors ()) {
                 llvm::errs () << "Expected success running, but got errors\n";
@@ -136,7 +153,7 @@ private:
         bool        ok       = true;
         auto        severity = diag.GetSeverity ();
         const auto &span     = diag.Spans ()[0];
-        auto        line     = mgr.FindLineNumber (span.Span.Start, bufferId);
+        auto        line     = calculateLine (mgr, diag, bufferId, command.Line);
         switch (command.Kind) {
             variant (Error);
             variant (Warning);
@@ -146,6 +163,32 @@ private:
         }
 
         return ok;
+    }
+
+    static unsigned
+    calculateLine (
+        const llvm::SourceMgr &mgr,
+        DiagnosticBuilder     &diag,
+        unsigned               bufferId,
+        unsigned               commandLine) {
+        unsigned line = 0;
+        for (const auto &span : diag.Spans ()) {
+            if (span.IsPrimary) {
+                unsigned currentSpanLine = mgr.FindLineNumber (span.Span.Start, bufferId);
+                if (currentSpanLine == commandLine) {
+                    line = currentSpanLine;
+                    break;
+                }
+                if (line == 0) {
+                    line = currentSpanLine;
+                }
+            }
+        }
+
+        if (line == 0 && !diag.Spans ().empty ()) {
+            line = mgr.FindLineNumber (diag.Spans ()[0].Span.Start, bufferId);
+        }
+        return line;
     }
 
 #undef variant

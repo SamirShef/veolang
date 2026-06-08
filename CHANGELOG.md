@@ -14,6 +14,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 
 - Segfault when calling method
+- Allowed compile code with mutating constant
 
 ## [0.19.0] - 2026-06-06
 
