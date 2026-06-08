@@ -130,8 +130,8 @@ private:
 
         const auto &valView = view.substr (idx);
 
-        size_t start = valView.find_first_not_of (" \t\n");
-        size_t end   = valView.find_last_not_of (" \t\n");
+        size_t start = valView.find_first_not_of (" \t\r\n");
+        size_t end   = valView.find_last_not_of (" \t\r\n");
 
         std::string finalVal;
         if (start != std::string_view::npos && end != std::string_view::npos) {
