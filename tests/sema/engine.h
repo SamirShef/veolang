@@ -121,8 +121,8 @@ private:
         }                                                                                \
         if (command.Val != diag.Message ()) {                                            \
             ok = false;                                                                  \
-            llvm::errs () << "Expected '" << command.Val << "', but got '" << span.Label \
-                          << "'\n";                                                      \
+            llvm::errs () << "Expected \"" << command.Val << "\", but got \""            \
+                          << diag.Message () << "\"\n";                                  \
         }                                                                                \
         break;                                                                           \
     }
