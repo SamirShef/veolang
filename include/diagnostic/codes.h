@@ -63,6 +63,6 @@ constexpr inline DiagCode errCodeLast
     = static_cast<DiagCode> (static_cast<uint8_t> (DiagCode::WUnusedVar) - 1);
 
 constexpr inline DiagCode warnCodeStart = DiagCode::WUnusedVar;
-constexpr inline DiagCode warnCodeLast  = DiagCode::WUnusedVar;
+constexpr inline DiagCode warnCodeLast  = DiagCode::WLossPrecision;
 
 }
