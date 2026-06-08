@@ -71,7 +71,7 @@ public:
         if (triple.isArch16Bit ()) {
             ptrBitWidth = 16;
         }
-        auto *mod = new symbols::Module (path.stem ());
+        auto *mod = new symbols::Module (path.stem ().string ());
         Sema  sema (diag, builder, astContext, mod, pool, ptrBitWidth);
         sema.Analyze (parseRes);
         diag.SortDiagSpans ();
