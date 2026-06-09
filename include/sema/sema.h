@@ -260,6 +260,9 @@ private:
     SemanticResult
     analyzeBinaryExpr (ast::BinaryExpr *be, Type *expectedType);
 
+    std::pair<SemanticResult, SemanticResult>
+    analyzeBinaryExprOperands (ast::BinaryExpr *be);
+
     SemanticResult
     analyzeUnaryExpr (ast::UnaryExpr *ue, Type *expectedType);
 

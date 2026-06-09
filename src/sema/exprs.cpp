@@ -1,11 +1,4 @@
-#include <basic/types/bool.h>
-#include <basic/types/char.h>
-#include <basic/types/floating.h>
-#include <basic/types/integer.h>
-#include <basic/types/pointer.h>
-#include <basic/types/size.h>
-#include <basic/types/struct.h>
-#include <basic/types/trait.h>
+#include <basic/types/all.h>
 #include <codegen/mangler.h>
 #include <sema/sema.h>
 
@@ -283,8 +276,7 @@ Sema::analyzeLiteralExpr (LiteralExpr *le, Type *expectedType) {
 
 Sema::SemanticResult
 Sema::analyzeBinaryExpr (BinaryExpr *be, Type *expectedType) {
-    auto lhs = analyzeExpr (be->Lhs (), nullptr);
-    auto rhs = analyzeExpr (be->Rhs (), nullptr);
+    auto [lhs, rhs] = analyzeBinaryExprOperands (be);
     if (!lhs.Val.has_value () || !rhs.Val.has_value ()) {
         return {};
     }
@@ -365,6 +357,31 @@ Sema::analyzeBinaryExpr (BinaryExpr *be, Type *expectedType) {
     }
 
     return res;
+}
+
+std::pair<Sema::SemanticResult, Sema::SemanticResult>
+Sema::analyzeBinaryExprOperands (BinaryExpr *be) {
+    SemanticResult lhs;
+    SemanticResult rhs;
+    if (be->Lhs ()->Kind () == NodeKind::NilExpr
+        && be->Rhs ()->Kind () != NodeKind::NilExpr) {
+        rhs = analyzeExpr (be->Rhs (), nullptr);
+        if (rhs.Val.has_value ()) {
+            resolveType (&rhs.Val->Type);
+            lhs = analyzeExpr (be->Lhs (), rhs.Val->Type);
+        }
+    } else if (be->Rhs ()->Kind () == NodeKind::NilExpr
+               && be->Lhs ()->Kind () != NodeKind::NilExpr) {
+        lhs = analyzeExpr (be->Lhs (), nullptr);
+        if (lhs.Val.has_value ()) {
+            resolveType (&lhs.Val->Type);
+            rhs = analyzeExpr (be->Rhs (), lhs.Val->Type);
+        }
+    } else {
+        lhs = analyzeExpr (be->Lhs (), nullptr);
+        rhs = analyzeExpr (be->Rhs (), nullptr);
+    }
+    return { lhs, rhs };
 }
 
 Sema::SemanticResult
@@ -464,6 +481,10 @@ Sema::SemanticResult
 Sema::analyzeVarExpr (VarExpr *ve, Type *expectedType) {
     auto *var = getVariable (ve->Name ().Val);
     if (var == nullptr) {
+        if (auto *alias = lookupLocalType (ve->Name ().Val)) {
+            return { Value (ValueKind::Type, createType<AliasType> (ve->Name (), alias)),
+                     nullptr };
+        }
         if (auto *s = getStruct (ve->Name ().Val)) {
             return { Value (ValueKind::Type, createType<StructType> (s)), nullptr };
         }
@@ -1366,5 +1387,4 @@ Sema::analyzeTypeExpr (TypeExpr *te, Type *expectedType) {
     res      = implicitlyCast (res, &expectedType, te->Start (), te->End ());
     return res;
 }
-
 }
