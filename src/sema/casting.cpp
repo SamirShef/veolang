@@ -67,8 +67,8 @@ Sema::canImplicitCast (Sema::SemanticResult val, Type **expectedType) {
         return false;
     }
 
-    Type *src = val.Val->Type;
-    Type *dst = *expectedType;
+    auto *src = val.Val->Type->CanonicalType ();
+    auto *dst = (*expectedType)->CanonicalType ();
 
     if (*src == *dst) {
         return true;
@@ -136,18 +136,19 @@ Sema::implicitlyCast (
         return val;
     }
 
-    Type *src = val.Val->Type;
-    Type *dst = *expectedType;
+    auto *src = val.Val->Type->CanonicalType ();
+    auto *dst = (*expectedType)->CanonicalType ();
 
     if (*src == *dst) {
+        val.Val->Type = src;
         return val;
     }
     if (!canImplicitCast (val, expectedType)) {
         _diag
             .Report (
                 DiagCode::ECannotCast,
-                "cannot implicitly cast '" + typeToString (src) + "' to '"
-                    + typeToString (dst) + "'",
+                "cannot implicitly cast '" + typeToString (val.Val->Type) + "' to '"
+                    + typeToString (*expectedType) + "'",
                 Severity::Error)
             .AddSpan (start, end);
 
@@ -171,6 +172,13 @@ Sema::implicitlyCast (
 
 Sema::CastCost
 Sema::checkCastCost (Type *src, Type *dst) {
+    if (src == nullptr || dst == nullptr) {
+        return CastCost::Incompatible;
+    }
+
+    src = src->CanonicalType ();
+    dst = dst->CanonicalType ();
+
     if (*src == *dst) {
         return CastCost::Exact;
     }

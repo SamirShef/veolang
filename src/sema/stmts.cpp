@@ -1,7 +1,4 @@
-#include <basic/types/bool.h>
-#include <basic/types/pointer.h>
-#include <basic/types/struct.h>
-#include <basic/types/trait.h>
+#include <basic/types/all.h>
 #include <sema/sema.h>
 
 namespace veo {
@@ -156,6 +153,16 @@ Sema::declareFunc (FuncDef *fd) {
             isGeneric = true;
         }
     }
+    if (fd->RetType ()->IsTrait ()) {
+        _diag
+            .Report (
+                DiagCode::ECannotUseTraitForFunc,
+                "cannot use trait '" + typeToString (fd->RetType ())
+                    + "' as a concrete return type",
+                Severity::Error)
+            .AddSpan (fd->Start (), fd->End ());
+        return;
+    }
     auto func = Function (fd->Name (), fd->RetType (), fd->Args (), isGeneric, _mod);
     auto it   = _mod->Funcs.find (func.Name.Val);
     if (it == _mod->Funcs.end ()) {
@@ -192,7 +199,11 @@ Sema::analyzeFuncDef (FuncDef *fd, bool generatingGeneric) {
         return;
     }
 
-    auto     *candidates = &_mod->Funcs.at (fd->Name ().Val);
+    auto it = _mod->Funcs.find (fd->Name ().Val);
+    if (it == _mod->Funcs.end ()) {
+        return;
+    }
+    auto     *candidates = &it->second;
     Function *func       = nullptr;
     for (auto &f : candidates->Candidates) {
         if (f->Args == fd->Args ()) {
@@ -561,12 +572,18 @@ Sema::declareImplMethods (ImplStmt *is) {
     }
     bool  isStruct = targetType->IsStruct ();
     auto *sym      = isStruct ? targetType->AsStruct ()->BaseSymbol () : nullptr;
+    pushTypeScope ();
+    auto *thisAlias
+        = createType<AliasType> (NameObj ("This", is->Start (), is->End ()), targetType);
+    registerLocalType ("This", thisAlias);
     if (traitType != nullptr && isStruct) {
         sym->TraitsImplements.emplace (traitType->AsTrait ()->BaseSymbol ());
     }
     for (auto &method : is->Methods ()) {
         declareImplMethod (method, sym, targetType);
     }
+
+    popTypeScope ();
     if (traitType != nullptr) {
         const auto *trait           = traitType->AsTrait ();
         const auto &traitCandidates = trait->BaseSymbol ()->Methods;
@@ -585,22 +602,73 @@ Sema::declareImplMethods (ImplStmt *is) {
                 continue;
             }
             const auto &structCandidates = methods.at (name).Candidates;
-            for (const auto &method : candidates.Candidates) {
-                auto it = std::ranges::find_if (
-                    structCandidates,
-                    [&] (const std::unique_ptr<symbols::Method> &m) {
-                        return *m == *method;
-                    });
-                if (it == structCandidates.end ()) {
-                    _diag
-                        .Report (
-                            DiagCode::EStructDoesNotImplementedMethod,
-                            "type '" + typeToString (targetType)
-                                + "' does not implement method '" + name
-                                + "' from trait '" + typeToString (traitType) + "'",
-                            Severity::Error)
-                        .AddSpan (is->Start (), is->End ());
+            for (const auto &traitMethod : candidates.Candidates) {
+                bool             foundExactMatch = false;
+                symbols::Method *looseMatch      = nullptr;
+                MatchResult      bestResult;
+
+                for (const auto &implMethod : structCandidates) {
+                    auto res = checkMethodSignature (
+                        traitMethod.get (),
+                        implMethod.get (),
+                        targetType);
+                    if (res.Status == SignatureMatchResult::Success) {
+                        foundExactMatch = true;
+                        break;
+                    }
+                    looseMatch = implMethod.get ();
+                    bestResult = res;
+                }
+
+                if (foundExactMatch) {
                     continue;
+                }
+
+                auto &err = _diag
+                                .Report (
+                                    DiagCode::EMethodSignatureMismatch,
+                                    "method '" + name
+                                        + "' has a mismatched signature compared to the "
+                                          "trait definition",
+                                    Severity::Error)
+
+                                .AddSpan (
+                                    looseMatch->Func->Name.Start,
+                                    looseMatch->Func->Name.End,
+                                    "mismatched method implementation here");
+
+                switch (bestResult.Status) {
+                case SignatureMatchResult::StaticMismatch:
+                    err.AddNote (
+                        traitMethod->IsStatic
+                            ? "expected method to be 'static'"
+                            : "method cannot be 'static' as defined in the trait");
+                    break;
+                case SignatureMatchResult::ArgCountMismatch:
+                    err.AddNote (
+                        "expected " + std::to_string (traitMethod->Func->Args.size ())
+                        + " arguments, but found "
+                        + std::to_string (looseMatch->Func->Args.size ()));
+                    break;
+                case SignatureMatchResult::ArgTypeMismatch: {
+                    size_t      idx = bestResult.ErrorArgIndex;
+                    std::string expectedName
+                        = typeToString (traitMethod->Func->Args[idx].Type);
+                    err.AddNote (
+                        "argument " + std::to_string (idx + 1) + " ('"
+                        + looseMatch->Func->Args[idx].Name.Val + "') expects type '"
+                        + expectedName + "', but got '"
+                        + typeToString (looseMatch->Func->Args[idx].Type) + "'");
+                    break;
+                }
+                case SignatureMatchResult::RetTypeMismatch: {
+                    std::string expectedRet = typeToString (traitMethod->Func->RetType);
+                    err.AddNote (
+                        "expected return type '" + expectedRet + "', but got '"
+                        + typeToString (looseMatch->Func->RetType) + "'");
+                    break;
+                }
+                default: break;
                 }
             }
         }
@@ -643,6 +711,16 @@ Sema::declareImplMethod (
             isGeneric = true;
         }
     }
+    if (fd->RetType ()->IsTrait ()) {
+        _diag
+            .Report (
+                DiagCode::ECannotUseTraitForFunc,
+                "cannot use trait '" + typeToString (fd->RetType ())
+                    + "' as a concrete return type",
+                Severity::Error)
+            .AddSpan (fd->Start (), fd->End ());
+        return;
+    }
     auto func = Function (fd->Name (), fd->RetType (), fd->Args (), isGeneric, _mod);
     auto m    = symbols::Method (
         std::make_unique<Function> (func),
@@ -684,15 +762,50 @@ Sema::declareImplMethod (
     }
 }
 
+Sema::MatchResult
+Sema::checkMethodSignature (
+    symbols::Method *traitMethod, symbols::Method *implMethod, Type *concreteTarget) {
+    if (traitMethod->IsStatic != implMethod->IsStatic) {
+        return MatchResult (SignatureMatchResult::StaticMismatch);
+    }
+
+    auto *traitFunc = traitMethod->Func.get ();
+    auto *implFunc  = implMethod->Func.get ();
+
+    if (traitFunc->Args.size () != implFunc->Args.size ()) {
+        return MatchResult (SignatureMatchResult::ArgCountMismatch);
+    }
+
+    for (size_t i = 0; i < traitFunc->Args.size (); ++i) {
+        if (!compareTypesWithThis (
+                traitFunc->Args[i].Type,
+                implFunc->Args[i].Type,
+                concreteTarget)) {
+            return MatchResult (SignatureMatchResult::ArgTypeMismatch, i);
+        }
+    }
+
+    if (!compareTypesWithThis (traitFunc->RetType, implFunc->RetType, concreteTarget)) {
+        return MatchResult (SignatureMatchResult::RetTypeMismatch);
+    }
+
+    return MatchResult (SignatureMatchResult::Success);
+}
+
 void
 Sema::analyzeImplStmt (ImplStmt *is) {
     auto *targetType = is->StructType ();
     resolveType (&targetType);
     auto *sym
         = targetType->IsStruct () ? targetType->AsStruct ()->BaseSymbol () : nullptr;
+    pushTypeScope ();
+    auto *thisAlias
+        = createType<AliasType> (NameObj ("This", is->Start (), is->End ()), targetType);
+    registerLocalType ("This", thisAlias);
     for (auto &method : is->Methods ()) {
         analyzeImplMethodDef (method, sym, targetType);
     }
+    popTypeScope ();
 }
 
 void
@@ -702,9 +815,24 @@ Sema::analyzeImplMethodDef (
     if (fd->IsDeclaration ()) {
         return;
     }
-    auto *candidates = sym != nullptr
-                           ? &sym->Methods.at (fd->Name ().Val)
-                           : &_mod->PrimitiveMethods.at (targetType).at (fd->Name ().Val);
+    symbols::MethodCandidates *candidates = nullptr;
+    if (sym != nullptr) {
+        auto it = sym->Methods.find (fd->Name ().Val);
+        if (it == sym->Methods.end ()) {
+            return;
+        }
+        candidates = &it->second;
+    } else {
+        auto methodsIt = _mod->PrimitiveMethods.find (targetType);
+        if (methodsIt == _mod->PrimitiveMethods.end ()) {
+            return;
+        }
+        auto it = methodsIt->second.find (fd->Name ().Val);
+        if (it == methodsIt->second.end ()) {
+            return;
+        }
+        candidates = &it->second;
+    }
     symbols::Method *m = nullptr;
     for (auto &f : candidates->Candidates) {
         if (f->Func->Args == fd->Args ()) {
@@ -813,6 +941,10 @@ Sema::analyzeTraitStmt (TraitStmt *ts) {
     auto trait = symbols::Trait (ts->Name (), _mod);
     _mod->Traits.emplace (ts->Name ().Val, std::move (trait));
     auto *targetType = createType<TraitType> (&_mod->Traits.at (ts->Name ().Val));
+    pushTypeScope ();
+    auto *traitSymbol  = &_mod->Traits.at (ts->Name ().Val);
+    auto *abstractThis = createType<TraitThisType> (traitSymbol);
+    registerLocalType ("This", abstractThis);
 
     std::unordered_map<std::string, MethodCandidates> methods;
     for (const auto &method : ts->Methods ()) {
@@ -865,6 +997,7 @@ Sema::analyzeTraitStmt (TraitStmt *ts) {
         candidates.emplace_back (std::move (methodPtr));
     }
     _mod->Traits.at (ts->Name ().Val).Methods = std::move (methods);
+    popTypeScope ();
 }
 
 }

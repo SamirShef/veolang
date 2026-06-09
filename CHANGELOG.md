@@ -10,6 +10,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 
 - Traits
+- `This` alias in implementations and traits body
 
 ### Fixed
 

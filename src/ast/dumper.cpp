@@ -317,7 +317,7 @@ Dumper::dumpFieldExpr (FieldExpr *fe) {
 
 void
 Dumper::dumpStructInstance (StructInstance *si) {
-    print ("StructInstance: " + si->Path ().Val + '\n');
+    print ("StructInstance: " + si->StructType ()->ToString () + '\n');
     ++_indentLvl;
 
     print ("Fields:\n");

@@ -186,6 +186,7 @@ Sema::analyzeLiteralExpr (LiteralExpr *le, Type *expectedType) {
             expectedType = createType<IntegerType> (
                 32); // NOLINT(cppcoreguidelines-avoid-magic-numbers)
         }
+        expectedType = expectedType->CanonicalType ();
         if (!expectedType->IsNumber ()) {
             _diag
                 .Report (
@@ -527,7 +528,7 @@ Sema::analyzeFuncCall (FuncCall *fc, Type *expectedType) {
     }
 
     if (func->IsGeneric) {
-        if (!generateGenericFunc (func, argTypes, candidates, fc)) {
+        if (!generateGenericFunc (&func, argTypes, candidates, fc)) {
             return {};
         }
     }
@@ -551,21 +552,21 @@ Sema::analyzeFuncCall (FuncCall *fc, Type *expectedType) {
 
 bool
 Sema::generateGenericFunc (
-    symbols::Function           *func,
+    symbols::Function          **func,
     std::vector<Type *>         &argTypes,
     symbols::FunctionCandidates *candidates,
     ast::FuncCall               *fc) {
     auto                 *lastBB  = _builder.InsertBlock ();
-    auto                 *oldFunc = _genericFuncs.at (func);
+    auto                 *oldFunc = _genericFuncs.at (*func);
     std::vector<Argument> args;
     args.reserve (oldFunc->Args ().size ());
     size_t i = 0;
     for (const auto &a : oldFunc->Args ()) {
         Type *type = nullptr;
         if (a.Type->IsTrait ()) {
-            type = argTypes[i];
+            type = argTypes[i]->CanonicalType ();
         } else {
-            type = a.Type;
+            type = a.Type->CanonicalType ();
         }
         args.emplace_back (a.Name, type);
         ++i;
@@ -582,7 +583,7 @@ Sema::generateGenericFunc (
     declareFunc (newFunc);
     analyzeFuncDef (newFunc, true);
     _builder.SetInsertionPoint (lastBB);
-    func = resolveBestOverload (candidates, argTypes, fc->Start (), fc->End ());
+    *func = resolveBestOverload (candidates, argTypes, fc->Start (), fc->End ());
     return func != nullptr;
 }
 
@@ -677,9 +678,9 @@ Sema::analyzeAsgnField (
     if (!base.Val.has_value ()) {
         return {};
     }
-    auto *targetType = base.Val->Type;
+    auto *targetType = base.Val->Type->CanonicalType ();
     while (targetType->IsPointer ()) {
-        targetType = targetType->AsPointer ()->Base ();
+        targetType = targetType->AsPointer ()->Base ()->CanonicalType ();
         base.Node  = _builder.CreateDereference (
             base.Node,
             targetType,
@@ -768,9 +769,9 @@ Sema::analyzeFieldExpr (FieldExpr *fe, Type *expectedType) {
     if (!base.Val.has_value ()) {
         return {};
     }
-    auto *targetType = base.Val->Type;
+    auto *targetType = base.Val->Type->CanonicalType ();
     while (targetType->IsPointer ()) {
-        targetType = targetType->AsPointer ()->Base ();
+        targetType = targetType->AsPointer ()->Base ()->CanonicalType ();
         base.Node  = _builder.CreateDereference (
             base.Node,
             targetType,
@@ -782,7 +783,7 @@ Sema::analyzeFieldExpr (FieldExpr *fe, Type *expectedType) {
             .Report (
                 DiagCode::ECannotAccessFromNonStruct,
                 "attempted to access a field on a non-structure type '"
-                    + typeToString (base.Val->Type) + "'",
+                    + typeToString (targetType) + "'",
                 Severity::Error)
             .AddSpan (fe->Name ().Start, fe->Name ().End);
         return {};
@@ -847,17 +848,18 @@ Sema::analyzeFieldExpr (FieldExpr *fe, Type *expectedType) {
 
 Sema::SemanticResult
 Sema::analyzeStructInstance (StructInstance *si, Type *expectedType) {
-    auto it = _mod->Structs.find (si->Path ().Val);
-    if (it == _mod->Structs.end ()) {
+    resolveType (&si->StructType ());
+    Type *structType = si->StructType ()->CanonicalType ();
+    if (!structType->IsStruct ()) {
         _diag
             .Report (
                 DiagCode::EUndefined,
-                "struct '" + si->Path ().Val + "' is not defined",
+                "struct '" + typeToString (structType) + "' is not defined",
                 Severity::Error)
-            .AddSpan (si->Path ().Start, si->Path ().End);
+            .AddSpan (si->Start (), si->End ());
         return {};
     }
-    auto                                       *s = &it->second;
+    auto *s = structType->AsStruct ()->BaseSymbol ();
     std::vector<std::pair<size_t, hir::Node *>> fields;
     std::unordered_map<size_t, NameObj>         initializedFields;
     ValueKind                                   valKind = ValueKind::Const;
@@ -874,10 +876,10 @@ Sema::analyzeStructInstance (StructInstance *si, Type *expectedType) {
                             + "' outside of its implementation because it contains "
                               "private fields",
                         Severity::Error)
-                    .AddSpan (si->Path ().Start, si->Path ().End)
+                    .AddSpan (si->Start (), si->End ())
                     .AddNote (
                         "use the constructor function '" + s->Name.Val
-                        + ".New()' instead if available");
+                        + ".new()' instead if available");
                 return {};
             }
         }
@@ -953,9 +955,9 @@ Sema::analyzeMethodCall (MethodCall *mc, Type *expectedType) {
     if (!base.Val.has_value ()) {
         return {};
     }
-    auto *targetType = base.Val->Type;
+    auto *targetType = base.Val->Type->CanonicalType ();
     while (targetType->IsPointer ()) {
-        targetType = targetType->AsPointer ()->Base ();
+        targetType = targetType->AsPointer ()->Base ()->CanonicalType ();
         base.Node  = _builder.CreateDereference (
             base.Node,
             targetType,
@@ -1029,7 +1031,7 @@ Sema::analyzeMethodCall (MethodCall *mc, Type *expectedType) {
         _methodCallOnConstBase.emplace_back (mc, method);
     }
     if (method->Func->IsGeneric) {
-        if (!generateGenericMethod (method, argTypes, s, targetType, candidates, mc)) {
+        if (!generateGenericMethod (&method, argTypes, s, targetType, candidates, mc)) {
             return {};
         }
     }
@@ -1060,23 +1062,23 @@ Sema::analyzeMethodCall (MethodCall *mc, Type *expectedType) {
 
 bool
 Sema::generateGenericMethod (
-    symbols::Method           *method,
+    symbols::Method          **method,
     std::vector<Type *>       &argTypes,
     symbols::Struct           *s,
     basic::Type               *targetType,
     symbols::MethodCandidates *candidates,
     ast::MethodCall           *mc) {
     auto                 *lastBB    = _builder.InsertBlock ();
-    auto                 *oldMethod = _genericMethods.at (method);
+    auto                 *oldMethod = _genericMethods.at (*method);
     std::vector<Argument> args;
     args.reserve (oldMethod->Args ().size ());
     size_t i = 0;
     for (const auto &a : oldMethod->Args ()) {
         Type *type = nullptr;
         if (a.Type->IsTrait ()) {
-            type = argTypes[i];
+            type = argTypes[i]->CanonicalType ();
         } else {
-            type = a.Type;
+            type = a.Type->CanonicalType ();
         }
         args.emplace_back (a.Name, type);
         ++i;
@@ -1090,11 +1092,11 @@ Sema::generateGenericMethod (
         oldMethod->Access (),
         oldMethod->Start (),
         oldMethod->End ());
-    auto newMethod = ast::Method (newFunc, method->IsStatic);
+    auto newMethod = ast::Method (newFunc, (*method)->IsStatic);
     declareImplMethod (newMethod, s, targetType);
     analyzeImplMethodDef (newMethod, s, targetType);
     _builder.SetInsertionPoint (lastBB);
-    method = resolveBestOverload (candidates, argTypes, mc->Start (), mc->End ());
+    *method = resolveBestOverload (candidates, argTypes, mc->Start (), mc->End ());
     return method != nullptr;
 }
 

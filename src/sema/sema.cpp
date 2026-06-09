@@ -167,12 +167,16 @@ Sema::canAccessMethod (
 }
 
 std::string
-Sema::typeToString (Type *type) {
+Sema::typeToString (const Type *type) {
     if (type == nullptr) {
         return "";
     }
     if (type->IsPointer ()) {
         return '*' + typeToString (type->AsPointer ()->Base ());
+    }
+    if (type->IsAlias ()) {
+        const auto *alias = type->AsAlias ();
+        return alias->Name ().Val + " (aka " + typeToString (alias->Base ()) + ")";
     }
     if (!type->IsStruct () && !type->IsTrait ()) {
         return type->ToString ();

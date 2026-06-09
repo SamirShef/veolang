@@ -32,7 +32,9 @@
 #include <diagnostic/engine.h>
 #include <hir/builder.h>
 #include <parser/parser.h>
+#include <ranges>
 #include <stack>
+#include <vector>
 
 namespace veo {
 
@@ -79,8 +81,27 @@ class Sema {
     std::unordered_map<symbols::Method *, hir::Function *>   _methods;
     std::unordered_map<symbols::Function *, ast::FuncDef *>  _genericFuncs;
     std::unordered_map<symbols::Method *, ast::FuncDef *>    _genericMethods;
+    std::vector<std::unordered_map<std::string, Type *>>     _localTypes;
 
     unsigned _ptrBitWidth;
+
+    enum class SignatureMatchResult : uint8_t {
+        Success,
+        StaticMismatch,
+        ArgCountMismatch,
+        ArgTypeMismatch,
+        RetTypeMismatch
+    };
+
+    struct MatchResult {
+        SignatureMatchResult Status;
+        size_t               ErrorArgIndex = 0;
+
+        explicit MatchResult (SignatureMatchResult status, size_t index = 0)
+            : Status (status), ErrorArgIndex (index) {}
+
+        MatchResult () : MatchResult (SignatureMatchResult::Success, 0) {}
+    };
 
 public:
     Sema (
@@ -155,6 +176,32 @@ private:
     }
 
     void
+    pushTypeScope () {
+        _localTypes.emplace_back ();
+    }
+    void
+    popTypeScope () {
+        _localTypes.pop_back ();
+    }
+
+    void
+    registerLocalType (const std::string &name, Type *type) {
+        if (!_localTypes.empty ()) {
+            _localTypes.back ()[name] = type;
+        }
+    }
+
+    Type *
+    lookupLocalType (const std::string &name) {
+        for (auto &types : std::views::reverse (_localTypes)) {
+            if (auto f = types.find (name); f != types.end ()) {
+                return f->second;
+            }
+        }
+        return nullptr;
+    }
+
+    void
     analyzeStmt (ast::Stmt *stmt);
 
     void
@@ -190,6 +237,10 @@ private:
     void
     declareImplMethod (ast::Method method, symbols::Struct *sym, basic::Type *targetType);
 
+    MatchResult
+    checkMethodSignature (
+        symbols::Method *traitMethod, symbols::Method *implMethod, Type *concreteTarget);
+
     void
     analyzeImplStmt (ast::ImplStmt *is);
 
@@ -220,7 +271,7 @@ private:
 
     bool
     generateGenericFunc (
-        symbols::Function           *func,
+        symbols::Function          **func,
         std::vector<Type *>         &argTypes,
         symbols::FunctionCandidates *candidates,
         ast::FuncCall               *fc);
@@ -248,7 +299,7 @@ private:
 
     bool
     generateGenericMethod (
-        symbols::Method           *method,
+        symbols::Method          **method,
         std::vector<Type *>       &argTypes,
         symbols::Struct           *s,
         basic::Type               *targetType,
@@ -323,6 +374,9 @@ private:
     Type *
     getCommonFloatingAndInteger (
         Type *lhs, Type *rhs, llvm::SMLoc start, llvm::SMLoc end);
+
+    bool
+    compareTypesWithThis (Type *traitTy, Type *implTy, Type *concreteTarget);
 
     OptValue
     foldBinary (
@@ -424,7 +478,7 @@ private:
         bool                   canAccessPrivate);
 
     std::string
-    typeToString (Type *type);
+    typeToString (const Type *type);
 
     void
     analyzeMethodCallFromAnotherMethod (

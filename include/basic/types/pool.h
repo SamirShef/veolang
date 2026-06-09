@@ -17,7 +17,7 @@ public:
         // NOLINTNEXTLINE(cppcoreguidelines-owning-memory)
         auto *obj = new (mem) T (std::forward<Args> (args)...);
         for (Type *existing : _types) {
-            if (*existing == *obj) {
+            if (existing->Kind () == obj->Kind () && *existing == *obj) {
                 obj->~T ();
                 return llvm::cast<T> (existing);
             }

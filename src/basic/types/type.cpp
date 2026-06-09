@@ -15,44 +15,74 @@ as (Trait);
 as (Named);
 as (Pointer);
 as (Noth);
+as (Alias);
+as (TraitThis);
 
 #undef as
 
+const Type *
+Type::CanonicalType () const {
+    if (IsAlias ()) {
+        return AsAlias ()->Base ()->CanonicalType ();
+    }
+    return this;
+}
+
+Type *
+Type::CanonicalType () {
+    if (IsAlias ()) {
+        return AsAlias ()->Base ()->CanonicalType ();
+    }
+    return this;
+}
+
 bool
 operator== (const Type &lhs, const Type &rhs) {
-    if (&lhs == &rhs) {
+    const auto *lAnon = lhs.CanonicalType ();
+    const auto *rAnon = rhs.CanonicalType ();
+    if (lAnon == rAnon) {
         return true;
     }
-    if (lhs.Kind () != rhs.Kind ()) {
+    if (lAnon->Kind () != rAnon->Kind ()) {
         return false;
     }
 
-    switch (rhs.Kind ()) {
+    switch (lAnon->Kind ()) {
     case TypeKind::Integer: {
-        const auto *ilhs = lhs.AsInteger ();
-        const auto *irhs = rhs.AsInteger ();
+        const auto *ilhs = lAnon->AsInteger ();
+        const auto *irhs = rAnon->AsInteger ();
         return ilhs->BitWidth () == irhs->BitWidth ()
                && ilhs->IsUnsigned () == irhs->IsUnsigned ();
     }
     case TypeKind::Floating: {
-        const auto *flhs = lhs.AsFloating ();
-        const auto *frhs = rhs.AsFloating ();
+        const auto *flhs = lAnon->AsFloating ();
+        const auto *frhs = rAnon->AsFloating ();
         return flhs->GetFloatingKind () == frhs->GetFloatingKind ();
     }
     case TypeKind::Struct: {
-        const auto *slhs = lhs.AsStruct ();
-        const auto *srhs = rhs.AsStruct ();
+        const auto *slhs = lAnon->AsStruct ();
+        const auto *srhs = rAnon->AsStruct ();
         return *slhs->BaseSymbol () == *srhs->BaseSymbol ();
     }
     case TypeKind::Named: {
-        const auto *nlhs = lhs.AsNamed ();
-        const auto *nrhs = rhs.AsNamed ();
+        const auto *nlhs = lAnon->AsNamed ();
+        const auto *nrhs = rAnon->AsNamed ();
         return nlhs->Path () == nrhs->Path ();
     }
     case TypeKind::Pointer: {
-        const auto *plhs = lhs.AsPointer ();
-        const auto *prhs = rhs.AsPointer ();
+        const auto *plhs = lAnon->AsPointer ();
+        const auto *prhs = rAnon->AsPointer ();
         return *plhs->Base () == *prhs->Base ();
+    }
+    case TypeKind::Alias: {
+        const auto *alhs = lAnon->AsAlias ();
+        const auto *arhs = rAnon->AsAlias ();
+        return alhs->Name ().Val == arhs->Name ().Val && *alhs->Base () == *arhs->Base ();
+    }
+    case TypeKind::TraitThis: {
+        const auto *tlhs = lAnon->AsTraitThis ();
+        const auto *trhs = rAnon->AsTraitThis ();
+        return *tlhs->Trait () == *trhs->Trait ();
     }
     default: return true; // BoolType, CharType, NothType and SizeType
     }

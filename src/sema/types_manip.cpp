@@ -1,3 +1,4 @@
+#include <basic/types/alias.h>
 #include <basic/types/floating.h>
 #include <basic/types/integer.h>
 #include <basic/types/named.h>
@@ -28,6 +29,12 @@ Sema::resolveType (Type **type) {
     const auto *named  = (*type)->AsNamed ();
     Module     *curMod = _mod;
     const auto &path   = named->Path ();
+    if (path.size () == 1) {
+        if (Type *localType = lookupLocalType (path[0].Val)) {
+            *type = localType;
+            return *type;
+        }
+    }
     for (size_t i = 0; i < path.size () - 1; ++i) {
         const auto &name = path[i];
         if (auto it = curMod->Submods.find (name.Val); it != curMod->Submods.end ()) {
@@ -147,6 +154,26 @@ Sema::getCommonFloatingAndInteger (
             .AddSpan (start, end);
     }
     return lhs->IsFloating () ? lhs : rhs;
+}
+
+bool
+Sema::compareTypesWithThis (Type *traitTy, Type *implTy, Type *concreteTarget) {
+    if (traitTy == nullptr || implTy == nullptr) {
+        return traitTy == implTy;
+    }
+
+    if (traitTy->IsTraitThis ()) {
+        Type *unwrappedImpl = implTy->CanonicalType ();
+        return unwrappedImpl == concreteTarget;
+    }
+
+    if (traitTy->IsPointer () && implTy->IsPointer ()) {
+        return compareTypesWithThis (
+            traitTy->AsPointer ()->Base (),
+            implTy->AsPointer ()->Base (),
+            concreteTarget);
+    }
+    return *traitTy == *implTy;
 }
 
 }

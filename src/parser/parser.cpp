@@ -605,7 +605,8 @@ Parser::parsePrimaryExpr (bool allowStruct) {
         if (allowStruct && match (TokenKind::LBrace)) { // StructInstance
             auto fields = parseFieldsForInstance ();
             return createNode<StructInstance> (
-                basic::NameObj (tok),
+                createType<basic::NamedType> (
+                    std::vector<basic::NameObj>{ basic::NameObj (tok) }),
                 std::move (fields),
                 tok.Start,
                 _lastTok.End);
@@ -686,6 +687,7 @@ Parser::tryParseAsTypeExpr () {
 
 Expr *
 Parser::parseChain (Expr *base, bool allowStruct) {
+    std::vector<basic::NameObj> path;
     while (true) {
         if (match (TokenKind::Dot)) {
             if (match (TokenKind::LParen)) { // cast
@@ -698,11 +700,12 @@ Parser::parseChain (Expr *base, bool allowStruct) {
             if (!expectName (name)) {
                 return nullptr;
             }
+            path.emplace_back (name);
 
             if (allowStruct && match (TokenKind::LBrace)) { // StructInstance
                 auto fields = parseFieldsForInstance ();
                 return createNode<StructInstance> (
-                    std::move (name),
+                    createType<basic::NamedType> (std::move (path)),
                     std::move (fields),
                     tok.Start,
                     _lastTok.End);

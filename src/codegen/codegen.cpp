@@ -522,26 +522,27 @@ CodeGen::findLocal (hir::VarDef *vd) {
 
 llvm::Type *
 CodeGen::getType (basic::Type *type) {
-    if (type == nullptr) {
+    const auto *t = type->CanonicalType ();
+    if (t == nullptr) {
         return _builder.getVoidTy ();
     }
 
-    switch (type->Kind ()) {
+    switch (t->Kind ()) {
     case basic::TypeKind::Integer:
-        return _builder.getIntNTy (type->AsInteger ()->BitWidth ());
+        return _builder.getIntNTy (t->AsInteger ()->BitWidth ());
     case basic::TypeKind::Size: {
         const auto &dl = _mod->getDataLayout ();
         return dl.getIntPtrType (_ctx);
     }
     case basic::TypeKind::Floating:
-        return type->AsFloating ()->IsFloat () ? _builder.getFloatTy ()
-                                               : _builder.getDoubleTy ();
+        return t->AsFloating ()->IsFloat () ? _builder.getFloatTy ()
+                                            : _builder.getDoubleTy ();
     case basic::TypeKind::Bool: return _builder.getInt1Ty ();
     case basic::TypeKind::Char: return _builder.getInt32Ty ();
     case basic::TypeKind::Struct:
         return llvm::StructType::getTypeByName (
             _ctx,
-            Mangler::MangleStructSymbol (type->AsStruct ()->BaseSymbol ()));
+            Mangler::MangleStructSymbol (t->AsStruct ()->BaseSymbol ()));
     case basic::TypeKind::Pointer: return _builder.getPtrTy ();
     default: {
         return _builder.getVoidTy ();
