@@ -707,7 +707,7 @@ Parser::parseChain (Expr *base, bool allowStruct) {
                 return createNode<StructInstance> (
                     createType<basic::NamedType> (std::move (path)),
                     std::move (fields),
-                    tok.Start,
+                    path.front ().Start,
                     _lastTok.End);
             }
 
@@ -718,7 +718,7 @@ Parser::parseChain (Expr *base, bool allowStruct) {
                     base,
                     basic::NameObj (tok),
                     std::move (args),
-                    tok.Start,
+                    base->Start (),
                     _lastTok.End);
             } else {
                 base = createNode<FieldExpr> (
