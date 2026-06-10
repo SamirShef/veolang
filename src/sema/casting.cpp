@@ -91,10 +91,14 @@ Sema::canImplicitCast (Sema::SemanticResult val, Type **expectedType) {
     if (src->IsInteger () && dst->IsFloating ()) {
         return true;
     }
-    if (src->IsStruct () && dst->IsTrait ()) {
-        auto *sSym = src->AsStruct ()->BaseSymbol ();
+    if (dst->IsTrait ()) {
         auto *tSym = dst->AsTrait ()->BaseSymbol ();
-        return sSym->TraitsImplements.contains (tSym);
+        if (src->IsStruct ()) {
+            auto *sSym = src->AsStruct ()->BaseSymbol ();
+            return sSym->TraitsImplements.contains (tSym);
+        }
+        return std::ranges::find (_mod->PrimitiveTraitsImplement[src], tSym)
+               != _mod->PrimitiveTraitsImplement[src].end ();
     }
     return false;
 }
@@ -194,7 +198,7 @@ Sema::checkCastCost (Type *src, Type *dst) {
     if (src->IsFloating () && dst->IsFloating ()) {
         return checkCastCostFloatings (src, dst);
     }
-    if (src->IsStruct () && dst->IsTrait ()) {
+    if (dst->IsTrait ()) {
         return checkCastCostTraitMatch (src, dst);
     }
 
@@ -234,10 +238,16 @@ Sema::checkCastCostFloatings (Type *src, Type *dst) {
 
 Sema::CastCost
 Sema::checkCastCostTraitMatch (Type *src, Type *dst) {
-    auto *sSym = src->AsStruct ()->BaseSymbol ();
     auto *tSym = dst->AsTrait ()->BaseSymbol ();
-    return sSym->TraitsImplements.contains (tSym) ? CastCost::TraitMatch
-                                                  : CastCost::Incompatible;
+    if (src->IsStruct ()) {
+        auto *sSym = src->AsStruct ()->BaseSymbol ();
+        return sSym->TraitsImplements.contains (tSym) ? CastCost::TraitMatch
+                                                      : CastCost::Incompatible;
+    }
+    return std::ranges::find (_mod->PrimitiveTraitsImplement[src], tSym)
+                   != _mod->PrimitiveTraitsImplement[src].end ()
+               ? CastCost::TraitMatch
+               : CastCost::Incompatible;
 }
 
 }

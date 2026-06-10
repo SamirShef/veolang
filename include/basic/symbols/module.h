@@ -16,9 +16,10 @@ struct Module {
     std::unordered_map<std::string, Struct>             Structs;
     std::unordered_map<std::string, Trait>              Traits;
     std::unordered_map<basic::Type *, std::unordered_map<std::string, MethodCandidates>>
-                                              PrimitiveMethods;
-    std::unordered_map<std::string, Module *> Imports;
-    std::unordered_map<std::string, Module *> Submods;
+                                                            PrimitiveMethods;
+    std::unordered_map<basic::Type *, std::vector<Trait *>> PrimitiveTraitsImplement;
+    std::unordered_map<std::string, Module *>               Imports;
+    std::unordered_map<std::string, Module *>               Submods;
 
     explicit Module (std::string name, Module *parent = nullptr)
         : Name (std::move (name)), Parent (parent) {}
@@ -35,6 +36,7 @@ struct Module {
         return Name == other.Name && isParentsEquals && Vars == other.Vars
                && Funcs == other.Funcs && Structs == other.Structs
                && Traits == other.Traits && PrimitiveMethods == other.PrimitiveMethods
+               && PrimitiveTraitsImplement == other.PrimitiveTraitsImplement
                && Imports == other.Imports && Submods == other.Submods;
     }
 

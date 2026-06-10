@@ -439,7 +439,7 @@ private:
     std::string
     funcCandidateToString (symbols::Function *func);
 
-    static CastCost
+    CastCost
     checkCastCost (Type *src, Type *dst);
 
     static CastCost
@@ -448,13 +448,13 @@ private:
     static CastCost
     checkCastCostFloatings (Type *src, Type *dst);
 
-    static CastCost
+    CastCost
     checkCastCostTraitMatch (Type *src, Type *dst);
 
     static bool
     canApplyAsgnOp (ast::AsgnOp op, Type *type);
 
-    static bool
+    bool
     viableFuncCandidate (
         symbols::Function *func, const std::vector<Type *> &args, size_t &costSum);
 

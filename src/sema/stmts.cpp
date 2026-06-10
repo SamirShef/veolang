@@ -576,8 +576,13 @@ Sema::declareImplMethods (ImplStmt *is) {
     auto *thisAlias
         = createType<AliasType> (NameObj ("This", is->Start (), is->End ()), targetType);
     registerLocalType ("This", thisAlias);
-    if (traitType != nullptr && isStruct) {
-        sym->TraitsImplements.emplace (traitType->AsTrait ()->BaseSymbol ());
+    if (traitType != nullptr) {
+        if (isStruct) {
+            sym->TraitsImplements.emplace (traitType->AsTrait ()->BaseSymbol ());
+        } else {
+            _mod->PrimitiveTraitsImplement[targetType].emplace_back (
+                traitType->AsTrait ()->BaseSymbol ());
+        }
     }
     for (auto &method : is->Methods ()) {
         declareImplMethod (method, sym, targetType);
