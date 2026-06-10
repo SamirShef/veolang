@@ -1,10 +1,13 @@
+#include <basic/types/alias.h>
 #include <basic/types/bool.h>
 #include <basic/types/char.h>
 #include <basic/types/floating.h>
 #include <basic/types/integer.h>
-#include <basic/types/named_type.h>
+#include <basic/types/named.h>
 #include <basic/types/noth.h>
 #include <basic/types/pointer.h>
 #include <basic/types/size.h>
-#include <basic/types/struct_type.h>
+#include <basic/types/struct.h>
+#include <basic/types/trait.h>
+#include <basic/types/trait_this.h>
 #include <basic/types/type.h>

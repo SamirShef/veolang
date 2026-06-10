@@ -1,4 +1,5 @@
 #pragma once
+#include <ast/context.h>
 #include <ast/exprs/asgn_expr.h>
 #include <ast/exprs/bin_expr.h>
 #include <ast/exprs/cast_expr.h>
@@ -20,6 +21,7 @@
 #include <ast/stmts/if_else.h>
 #include <ast/stmts/impl_stmt.h>
 #include <ast/stmts/ret.h>
+#include <ast/stmts/trait_stmt.h>
 #include <ast/stmts/var_def.h>
 #include <basic/symbols/module.h>
 #include <basic/symbols/scope.h>
@@ -30,7 +32,9 @@
 #include <diagnostic/engine.h>
 #include <hir/builder.h>
 #include <parser/parser.h>
+#include <ranges>
 #include <stack>
+#include <vector>
 
 namespace veo {
 
@@ -43,6 +47,8 @@ class Sema {
     size_t    _localsCount = 0;
     symbols::Module *_mod;
     hir::Builder &_builder; // NOLINT(cppcoreguidelines-avoid-const-or-ref-data-members)
+    ast::Context
+        &_astContext; // NOLINT(cppcoreguidelines-avoid-const-or-ref-data-members)
     std::stack<symbols::Scope> _vars;
     std::stack<Type *>         _funcRetTypes;
 
@@ -54,7 +60,12 @@ class Sema {
         SemanticResult (OptValue val, hir::Node *node) : Val (val), Node (node) {}
     };
 
-    enum class CastCost : uint16_t { Exact = 0, SafeImplicit = 1, Incompatible = 1000 };
+    enum class CastCost : uint16_t {
+        Exact        = 0,
+        TraitMatch   = 10,
+        SafeImplicit = 20,
+        Incompatible = 1000
+    };
 
     struct Loop {
         hir::BasicBlock *Break;
@@ -64,18 +75,45 @@ class Sema {
 
     std::optional<std::pair<symbols::Method *, basic::Type *>>   _insideMethod;
     std::vector<std::pair<ast::MethodCall *, symbols::Method *>> _methodCallOnConstBase;
+    std::unordered_map<symbols::Method *, std::vector<symbols::Method *>>
+                                                             _methodCallFromAnotherMethod;
+    std::unordered_map<symbols::Function *, hir::Function *> _funcs;
+    std::unordered_map<symbols::Method *, hir::Function *>   _methods;
+    std::unordered_map<symbols::Function *, ast::FuncDef *>  _genericFuncs;
+    std::unordered_map<symbols::Method *, ast::FuncDef *>    _genericMethods;
+    std::vector<std::unordered_map<std::string, Type *>>     _localTypes;
 
     unsigned _ptrBitWidth;
+
+    enum class SignatureMatchResult : uint8_t {
+        Success,
+        StaticMismatch,
+        ArgCountMismatch,
+        ArgTypeMismatch,
+        RetTypeMismatch
+    };
+
+    struct MatchResult {
+        SignatureMatchResult Status;
+        size_t               ErrorArgIndex = 0;
+
+        explicit MatchResult (SignatureMatchResult status, size_t index = 0)
+            : Status (status), ErrorArgIndex (index) {}
+
+        MatchResult () : MatchResult (SignatureMatchResult::Success, 0) {}
+    };
 
 public:
     Sema (
         DiagnosticEngine &diag,
         hir::Builder     &builder,
+        ast::Context     &astContext,
         symbols::Module  *mod,
         TypePool         &typePool,
         unsigned          ptrBitWidth)
         : _diag (diag),
           _builder (builder),
+          _astContext (astContext),
           _mod (mod),
           _typePool (typePool),
           _ptrBitWidth (ptrBitWidth) {
@@ -91,6 +129,8 @@ public:
             auto *stmt = llvm::cast<ast::Stmt> (res.Nodes[i]);
             if (stmt->Kind () == ast::NodeKind::StructDef) {
                 analyzeStructDef (llvm::cast<ast::StructDef> (stmt));
+            } else if (stmt->Kind () == ast::NodeKind::TraitStmt) {
+                analyzeTraitStmt (llvm::cast<ast::TraitStmt> (stmt));
             }
         }
         for (size_t i = 0; i < res.Count; ++i) {
@@ -107,12 +147,16 @@ public:
 
         for (size_t i = 0; i < res.Count; ++i) {
             auto *stmt = llvm::cast<ast::Stmt> (res.Nodes[i]);
-            if (stmt->Kind () == ast::NodeKind::StructDef) {
+            if (stmt->Kind () == ast::NodeKind::StructDef
+                || stmt->Kind () == ast::NodeKind::TraitStmt) {
                 continue;
             }
             analyzeStmt (stmt);
         }
 
+        for (auto &[method, methods] : _methodCallFromAnotherMethod) {
+            analyzeMethodCallFromAnotherMethod (method, methods);
+        }
         for (auto &[node, method] : _methodCallOnConstBase) {
             analyzeMethodCallOnConstBase (node, method);
         }
@@ -120,9 +164,41 @@ public:
 
 private:
     template <typename T, typename... Args>
+    T *
+    createNode (Args &&...args) {
+        return _astContext.CreateNode<T> (std::forward<Args> (args)...);
+    }
+
+    template <typename T, typename... Args>
     Type *
     createType (Args &&...args) {
         return _typePool.GetOrCreate<T> (std::forward<Args> (args)...);
+    }
+
+    void
+    pushTypeScope () {
+        _localTypes.emplace_back ();
+    }
+    void
+    popTypeScope () {
+        _localTypes.pop_back ();
+    }
+
+    void
+    registerLocalType (const std::string &name, Type *type) {
+        if (!_localTypes.empty ()) {
+            _localTypes.back ()[name] = type;
+        }
+    }
+
+    Type *
+    lookupLocalType (const std::string &name) {
+        for (auto &types : std::views::reverse (_localTypes)) {
+            if (auto f = types.find (name); f != types.end ()) {
+                return f->second;
+            }
+        }
+        return nullptr;
     }
 
     void
@@ -135,7 +211,7 @@ private:
     declareFunc (ast::FuncDef *fd);
 
     void
-    analyzeFuncDef (ast::FuncDef *fd);
+    analyzeFuncDef (ast::FuncDef *fd, bool generatingGeneric = false);
 
     void
     analyzeRet (ast::Return *ret);
@@ -159,7 +235,21 @@ private:
     declareImplMethods (ast::ImplStmt *is);
 
     void
+    declareImplMethod (ast::Method method, symbols::Struct *sym, basic::Type *targetType);
+
+    MatchResult
+    checkMethodSignature (
+        symbols::Method *traitMethod, symbols::Method *implMethod, Type *concreteTarget);
+
+    void
     analyzeImplStmt (ast::ImplStmt *is);
+
+    void
+    analyzeImplMethodDef (
+        ast::Method method, symbols::Struct *sym, basic::Type *targetType);
+
+    void
+    analyzeTraitStmt (ast::TraitStmt *ts);
 
     SemanticResult
     analyzeExpr (ast::Expr *expr, Type *expectedType);
@@ -170,6 +260,9 @@ private:
     SemanticResult
     analyzeBinaryExpr (ast::BinaryExpr *be, Type *expectedType);
 
+    std::pair<SemanticResult, SemanticResult>
+    analyzeBinaryExprOperands (ast::BinaryExpr *be);
+
     SemanticResult
     analyzeUnaryExpr (ast::UnaryExpr *ue, Type *expectedType);
 
@@ -178,6 +271,13 @@ private:
 
     SemanticResult
     analyzeFuncCall (ast::FuncCall *fc, Type *expectedType);
+
+    bool
+    generateGenericFunc (
+        symbols::Function          **func,
+        std::vector<Type *>         &argTypes,
+        symbols::FunctionCandidates *candidates,
+        ast::FuncCall               *fc);
 
     SemanticResult
     analyzeAsgnExpr (ast::AsgnExpr *ae, Type *expectedType);
@@ -200,11 +300,26 @@ private:
     SemanticResult
     analyzeMethodCall (ast::MethodCall *mc, Type *expectedType);
 
+    bool
+    generateGenericMethod (
+        symbols::Method          **method,
+        std::vector<Type *>       &argTypes,
+        symbols::Struct           *s,
+        basic::Type               *targetType,
+        symbols::MethodCandidates *candidates,
+        ast::MethodCall           *mc);
+
     SemanticResult
     analyzeTernaryExpr (ast::TernaryExpr *te, Type *expectedType);
 
     SemanticResult
     analyzeCastExpr (ast::CastExpr *ce, Type *expectedType);
+
+    void
+    getIntegralProps (Type *t, bool &isUnsigned, unsigned &width) const;
+
+    hir::CastKind
+    castIntegrals (Type *src, Type *dst);
 
     SemanticResult
     analyzeRefExpr (ast::RefExpr *re, Type *expectedType);
@@ -218,10 +333,10 @@ private:
     SemanticResult
     analyzeTypeExpr (ast::TypeExpr *te, Type *expectedType);
 
-    hir::CastKind
+    static hir::CastKind
     castInts (const IntegerType *src, const IntegerType *dst);
 
-    hir::CastKind
+    static hir::CastKind
     castFloats (const FloatingType *src, const FloatingType *dst);
 
     SemanticResult
@@ -262,6 +377,9 @@ private:
     Type *
     getCommonFloatingAndInteger (
         Type *lhs, Type *rhs, llvm::SMLoc start, llvm::SMLoc end);
+
+    bool
+    compareTypesWithThis (Type *traitTy, Type *implTy, Type *concreteTarget);
 
     OptValue
     foldBinary (
@@ -321,13 +439,22 @@ private:
     std::string
     funcCandidateToString (symbols::Function *func);
 
-    static CastCost
+    CastCost
     checkCastCost (Type *src, Type *dst);
+
+    static CastCost
+    checkCastCostIntegers (Type *src, Type *dst);
+
+    static CastCost
+    checkCastCostFloatings (Type *src, Type *dst);
+
+    CastCost
+    checkCastCostTraitMatch (Type *src, Type *dst);
 
     static bool
     canApplyAsgnOp (ast::AsgnOp op, Type *type);
 
-    static bool
+    bool
     viableFuncCandidate (
         symbols::Function *func, const std::vector<Type *> &args, size_t &costSum);
 
@@ -354,7 +481,11 @@ private:
         bool                   canAccessPrivate);
 
     std::string
-    typeToString (Type *type);
+    typeToString (const Type *type);
+
+    void
+    analyzeMethodCallFromAnotherMethod (
+        symbols::Method *method, const std::vector<symbols::Method *> &methods);
 
     void
     analyzeMethodCallOnConstBase (ast::MethodCall *mc, symbols::Method *method);

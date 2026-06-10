@@ -20,6 +20,7 @@
 #include <ast/stmts/if_else.h>
 #include <ast/stmts/impl_stmt.h>
 #include <ast/stmts/ret.h>
+#include <ast/stmts/trait_stmt.h>
 #include <ast/stmts/var_def.h>
 #include <llvm/Support/raw_ostream.h>
 #include <parser/parser.h>
@@ -54,6 +55,7 @@ private:
             variant (BreakContinue, dumpBreakContinue, BreakContinue);
             variant (StructDef, dumpStructDef, StructDef);
             variant (ImplStmt, dumpImplStmt, ImplStmt);
+            variant (TraitStmt, dumpTraitStmt, TraitStmt);
         default: {
         }
         }
@@ -86,6 +88,9 @@ private:
 
     void
     dumpImplStmt (ImplStmt *is);
+
+    void
+    dumpTraitStmt (TraitStmt *ts);
 
     void
     dumpExpr (Expr *expr) {

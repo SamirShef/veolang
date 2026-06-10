@@ -14,6 +14,7 @@ enum class NodeKind : uint8_t {
     BreakContinue,
     StructDef,
     ImplStmt,
+    TraitStmt,
     StmtEnd,
 
     ExprStart,

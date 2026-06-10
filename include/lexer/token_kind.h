@@ -35,8 +35,6 @@ enum class TokenKind : uint8_t {
     Impl,     // keyword `impl`
     Trait,    // keyword `trait`
     Nil,      // keyword `nil`
-    New,      // keyword `new`
-    Del,      // keyword `del`
     Mod,      // keyword `mod`
     Import,   // keyword `import`
     Static,   // keyword `static`

@@ -10,9 +10,12 @@ class FloatingType;
 class BoolType;
 class CharType;
 class StructType;
+class TraitType;
 class NamedType;
 class PointerType;
 class NothType;
+class AliasType;
+class TraitThisType;
 
 #define type_classof(kind)                                                               \
     static bool classof (const veo::basic::Type *type) {                                 \
@@ -26,9 +29,12 @@ enum class TypeKind : uint8_t {
     Bool,
     Char,
     Struct,
+    Trait,
     Named,
     Pointer,
-    Noth
+    Noth,
+    Alias,
+    TraitThis,
 };
 
 class Type {
@@ -70,12 +76,18 @@ public:
     as (Char);
     is (Struct);
     as (Struct);
+    is (Trait);
+    as (Trait);
     is (Named);
     as (Named);
     is (Pointer);
     as (Pointer);
     is (Noth);
     as (Noth);
+    is (Alias);
+    as (Alias);
+    is (TraitThis);
+    as (TraitThis);
 
     bool
     IsIntOrSize () const {
@@ -86,6 +98,12 @@ public:
     IsNumber () const {
         return IsInteger () || IsFloating () || IsSize ();
     }
+
+    const Type *
+    CanonicalType () const;
+
+    Type *
+    CanonicalType ();
 
 #undef as
 #undef is

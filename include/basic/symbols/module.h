@@ -1,6 +1,7 @@
 #pragma once
 #include <basic/symbols/function.h>
 #include <basic/symbols/struct.h>
+#include <basic/symbols/trait.h>
 #include <basic/symbols/variable.h>
 #include <sstream>
 #include <unordered_map>
@@ -13,10 +14,12 @@ struct Module {
     std::unordered_map<std::string, Variable>           Vars;
     std::unordered_map<std::string, FunctionCandidates> Funcs;
     std::unordered_map<std::string, Struct>             Structs;
+    std::unordered_map<std::string, Trait>              Traits;
     std::unordered_map<basic::Type *, std::unordered_map<std::string, MethodCandidates>>
-                                              PrimitiveMethods;
-    std::unordered_map<std::string, Module *> Imports;
-    std::unordered_map<std::string, Module *> Submods;
+                                                            PrimitiveMethods;
+    std::unordered_map<basic::Type *, std::vector<Trait *>> PrimitiveTraitsImplement;
+    std::unordered_map<std::string, Module *>               Imports;
+    std::unordered_map<std::string, Module *>               Submods;
 
     explicit Module (std::string name, Module *parent = nullptr)
         : Name (std::move (name)), Parent (parent) {}
@@ -32,8 +35,9 @@ struct Module {
               || Parent != nullptr && other.Parent != nullptr && *Parent == *other.Parent;
         return Name == other.Name && isParentsEquals && Vars == other.Vars
                && Funcs == other.Funcs && Structs == other.Structs
-               && PrimitiveMethods == other.PrimitiveMethods && Imports == other.Imports
-               && Submods == other.Submods;
+               && Traits == other.Traits && PrimitiveMethods == other.PrimitiveMethods
+               && PrimitiveTraitsImplement == other.PrimitiveTraitsImplement
+               && Imports == other.Imports && Submods == other.Submods;
     }
 
     bool

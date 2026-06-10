@@ -36,7 +36,7 @@ class CodeGen {
     std::vector<hir::Function *>                             &_hirFuncs;
     std::vector<hir::StructDef *>                            &_hirStructs;
     std::unordered_map<hir::VarDef *, llvm::GlobalVariable *> _globals;
-    std::unordered_map<symbols::Function *, llvm::Function *> _funcsMap;
+    std::unordered_map<hir::Function *, llvm::Function *>     _funcsMap;
     std::vector<llvm::Function *>                             _funcs;
     llvm::LLVMContext                                         _ctx;
     llvm::IRBuilder<>                                         _builder;

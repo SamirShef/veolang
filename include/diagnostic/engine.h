@@ -45,7 +45,17 @@ public:
         return _builders;
     }
 
+    void
+    SortDiagSpans () {
+        for (auto &diag : _builders) {
+            sortDiagSpans (diag);
+        }
+    }
+
 private:
+    void
+    sortDiagSpans (DiagnosticBuilder &diag);
+
     void
     renderDiag (DiagnosticBuilder &diag);
 

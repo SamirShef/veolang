@@ -12,16 +12,19 @@ struct Function {
     basic::NameObj             Name;
     basic::Type               *RetType;
     std::vector<ast::Argument> Args;
+    bool                       IsGeneric;
     Module                    *Parent;
 
     Function (
         basic::NameObj             name,
         basic::Type               *retType,
         std::vector<ast::Argument> args,
+        bool                       isGeneric,
         Module                    *parent)
         : Name (std::move (name)),
           RetType (retType),
           Args (std::move (args)),
+          IsGeneric (isGeneric),
           Parent (parent) {}
 
     bool

@@ -22,6 +22,7 @@
 #include <ast/stmts/impl_stmt.h>
 #include <ast/stmts/ret.h>
 #include <ast/stmts/struct_def.h>
+#include <ast/stmts/trait_stmt.h>
 #include <ast/stmts/var_def.h>
 #include <basic/name.h>
 #include <basic/types/all.h>
@@ -68,6 +69,9 @@ Parser::parseStmt (bool expectSemi) {
     }
     case TokenKind::Impl: {
         return parseImplStmt ();
+    }
+    case TokenKind::Trait: {
+        return parseTraitStmt ();
     }
     default: {
         Expr *expr = parseExpr ();
@@ -168,14 +172,21 @@ Parser::parseFuncDef (ast::AccessModifier access) {
         retType = createType<basic::NothType> ();
     }
     std::vector<Stmt *> body;
-    if (!parseBlock (body)) {
-        return nullptr;
+    bool                isDeclaration = true;
+    if (check (TokenKind::Semi)) {
+        expectSemi ();
+    } else {
+        isDeclaration = false;
+        if (!parseBlock (body)) {
+            return nullptr;
+        }
     }
     return createNode<FuncDef> (
         std::move (name),
         retType,
         std::move (args),
         std::move (body),
+        isDeclaration,
         access,
         firstTok.Start,
         _lastTok.End);
@@ -324,16 +335,39 @@ Parser::parseImplStmt () {
         auto *fd      = parseFuncDef (access);
         if (fd != nullptr) {
             auto *method = llvm::cast<FuncDef> (fd);
-            if (method != nullptr) {
-                methods.emplace_back (method, isStatic);
-            } else {
-                synchronize ();
-            }
+            methods.emplace_back (method, isStatic);
         }
     }
     return createNode<ImplStmt> (
         structType,
         traitType,
+        std::move (methods),
+        firstTok.Start,
+        _lastTok.End);
+}
+
+ast::Stmt *
+Parser::parseTraitStmt () {
+    const Token    firstTok = advance ();
+    basic::NameObj name;
+    if (!expectName (name)) {
+        return nullptr;
+    }
+    if (!expectTok (TokenKind::LBrace, "{")) {
+        return nullptr;
+    }
+    std::vector<Method> methods;
+    while (!isAtEnd () && !match (TokenKind::RBrace)) {
+        auto access = match (TokenKind::Pub) ? AccessModifier::Pub : AccessModifier::Priv;
+        bool isStatic = match (TokenKind::Static);
+        auto *fd      = parseFuncDef (access);
+        if (fd != nullptr) {
+            auto *method = llvm::cast<FuncDef> (fd);
+            methods.emplace_back (method, isStatic);
+        }
+    }
+    return createNode<TraitStmt> (
+        std::move (name),
         std::move (methods),
         firstTok.Start,
         _lastTok.End);
@@ -571,7 +605,8 @@ Parser::parsePrimaryExpr (bool allowStruct) {
         if (allowStruct && match (TokenKind::LBrace)) { // StructInstance
             auto fields = parseFieldsForInstance ();
             return createNode<StructInstance> (
-                basic::NameObj (tok),
+                createType<basic::NamedType> (
+                    std::vector<basic::NameObj>{ basic::NameObj (tok) }),
                 std::move (fields),
                 tok.Start,
                 _lastTok.End);
@@ -652,6 +687,7 @@ Parser::tryParseAsTypeExpr () {
 
 Expr *
 Parser::parseChain (Expr *base, bool allowStruct) {
+    std::vector<basic::NameObj> path;
     while (true) {
         if (match (TokenKind::Dot)) {
             if (match (TokenKind::LParen)) { // cast
@@ -664,13 +700,14 @@ Parser::parseChain (Expr *base, bool allowStruct) {
             if (!expectName (name)) {
                 return nullptr;
             }
+            path.emplace_back (name);
 
             if (allowStruct && match (TokenKind::LBrace)) { // StructInstance
                 auto fields = parseFieldsForInstance ();
                 return createNode<StructInstance> (
-                    std::move (name),
+                    createType<basic::NamedType> (std::move (path)),
                     std::move (fields),
-                    tok.Start,
+                    path.front ().Start,
                     _lastTok.End);
             }
 
@@ -681,7 +718,7 @@ Parser::parseChain (Expr *base, bool allowStruct) {
                     base,
                     basic::NameObj (tok),
                     std::move (args),
-                    tok.Start,
+                    base->Start (),
                     _lastTok.End);
             } else {
                 base = createNode<FieldExpr> (
@@ -840,8 +877,7 @@ Parser::isStmtStart (TokenKind kind) {
         variant (Let) variant (Const) variant (Func) variant (Ret) variant (If)
             variant (Else) variant (For) variant (Break) variant (Continue)
                 variant (Struct) variant (Pub) variant (Impl) variant (Trait)
-                    variant (Del) variant (Mod) variant (Import)
-                        variant (Static) return true;
+                    variant (Mod) variant (Import) variant (Static) return true;
     default: return false;
     }
 #undef variant

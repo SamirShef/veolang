@@ -194,11 +194,15 @@ HIRLinearizer::linearizeFuncCall (FuncCall *fc) {
     for (auto *a : fc->Args ()) {
         args.emplace_back (linearizeExpr (a));
     }
-    return emitToTmp (
-        _builder.CreateCall (fc->Function (), std::move (args), fc->Start (), fc->End ()),
-        fc->Function ()->RetType,
+    auto *call = _builder.CreateCall (
+        fc->GetFunction (),
+        std::move (args),
         fc->Start (),
         fc->End ());
+    if (fc->GetFunction ()->RetType ()->IsNoth ()) {
+        return _builder.CreateExprStmt (call, fc->Start (), fc->End ());
+    }
+    return emitToTmp (call, fc->GetFunction ()->RetType (), fc->Start (), fc->End ());
 }
 
 Node *
