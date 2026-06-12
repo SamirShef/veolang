@@ -2,6 +2,7 @@
 #include <basic/name.h>
 #include <basic/symbols/struct.h>
 #include <basic/types/type.h>
+#include <hir/mangle_kind.h>
 #include <hir/node.h>
 #include <vector>
 
@@ -36,6 +37,7 @@ class StructDef : public Node {
     basic::NameObj     _name;
     std::vector<Field> _fields;
     symbols::Struct   *_base;
+    MangleKind         _mangleKind;
 
 public:
     StructDef (
@@ -43,10 +45,12 @@ public:
         std::vector<Field> fields,
         symbols::Struct   *base,
         llvm::SMLoc        start,
-        llvm::SMLoc        end)
+        llvm::SMLoc        end,
+        MangleKind         mangleKind = MangleKind::Veo)
         : _name (std::move (name)),
           _fields (std::move (fields)),
           _base (base),
+          _mangleKind (mangleKind),
           Node (NodeKind::StructDef, start, end) {}
 
     hir_classof (StructDef);
@@ -64,6 +68,11 @@ public:
     symbols::Struct *
     BaseSymbol () const {
         return _base;
+    }
+
+    MangleKind
+    GetMangleKind () const {
+        return _mangleKind;
     }
 };
 

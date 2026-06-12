@@ -50,16 +50,19 @@ struct Field {
 class StructDef : public Stmt {
     basic::NameObj     _name;
     std::vector<Field> _fields;
+    bool               _isDeclaration;
 
 public:
     StructDef (
         basic::NameObj     name,
         std::vector<Field> fields,
+        bool               isDeclaration,
         AccessModifier     access,
         llvm::SMLoc        start,
         llvm::SMLoc        end)
         : _name (std::move (name)),
           _fields (std::move (fields)),
+          _isDeclaration (isDeclaration),
           Stmt (access, NodeKind::StructDef, start, end) {}
 
     ast_classof (StructDef);
@@ -72,6 +75,11 @@ public:
     std::vector<Field> &
     Fields () {
         return _fields;
+    }
+
+    bool
+    IsDeclaration () const {
+        return _isDeclaration;
     }
 };
 

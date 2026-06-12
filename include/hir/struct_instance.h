@@ -1,6 +1,7 @@
 #pragma once
 #include <basic/symbols/struct.h>
 #include <basic/types/type.h>
+#include <hir/mangle_kind.h>
 #include <hir/node.h>
 #include <vector>
 
@@ -10,6 +11,7 @@ class StructInstance : public Node {
     std::vector<std::pair<size_t, Node *>> _fields;
     symbols::Struct                       *_base;
     basic::Type                           *_type;
+    MangleKind                             _mangleKind;
 
 public:
     StructInstance (
@@ -17,10 +19,12 @@ public:
         symbols::Struct                       *base,
         basic::Type                           *type,
         llvm::SMLoc                            start,
-        llvm::SMLoc                            end)
+        llvm::SMLoc                            end,
+        MangleKind                             mangleKind = MangleKind::Veo)
         : _fields (std::move (fields)),
           _base (base),
           _type (type),
+          _mangleKind (mangleKind),
           Node (NodeKind::StructInstance, start, end) {}
 
     hir_classof (StructInstance);
@@ -38,6 +42,11 @@ public:
     basic::Type *
     Type () const {
         return _type;
+    }
+
+    MangleKind
+    GetMangleKind () const {
+        return _mangleKind;
     }
 };
 

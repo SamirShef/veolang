@@ -6,6 +6,9 @@ using namespace diagnostic;
 
 void
 ReturnChecker::RunOnFunction (hir::Function *func) {
+    if (func->Body ().empty ()) {
+        return;
+    }
     if (func->RetType () == nullptr || func->RetType ()->IsNoth ()) {
         return;
     }

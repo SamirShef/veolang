@@ -4,6 +4,7 @@
 #include <basic/symbols/function.h>
 #include <basic/symbols/trait.h>
 #include <basic/types/type.h>
+#include <hir/mangle_kind.h>
 #include <unordered_map>
 #include <unordered_set>
 #include <vector>
@@ -110,9 +111,17 @@ struct Struct {
     std::unordered_map<std::string, MethodCandidates> Methods;
     std::unordered_set<Trait *>                       TraitsImplements;
     Module                                           *Parent;
+    hir::MangleKind                                   MangleKind;
 
-    Struct (basic::NameObj name, std::vector<Field> fields, Module *parent)
-        : Name (std::move (name)), Fields (std::move (fields)), Parent (parent) {}
+    Struct (
+        basic::NameObj     name,
+        std::vector<Field> fields,
+        Module            *parent,
+        hir::MangleKind    mangleKind = hir::MangleKind::Veo)
+        : Name (std::move (name)),
+          Fields (std::move (fields)),
+          Parent (parent),
+          MangleKind (mangleKind) {}
 
     bool
     operator== (const Struct &other) const;

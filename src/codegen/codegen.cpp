@@ -35,7 +35,8 @@ CodeGen::generateBasicBlock (BasicBlock *bb) {
 void
 CodeGen::generateVarDef (VarDef *vd) {
     bool        isGlobal = !_curFunc.has_value ();
-    std::string name     = isGlobal ? Mangler::MangleGlobalVar (vd) : vd->Name ().Val;
+    std::string name     = isGlobal ? Mangler::MangleGlobalVar (vd, vd->GetMangleKind ())
+                                    : vd->Name ().Val;
     auto       *type     = getType (vd->Type ());
     if (isGlobal) {
         llvm::Value *init = nullptr;
@@ -66,9 +67,10 @@ CodeGen::generateVarDef (VarDef *vd) {
 
 void
 CodeGen::declareFunc (Function *fd) {
-    const std::string &name = fd->MethodBaseType () == nullptr
-                                  ? Mangler::MangleFunction (fd)
-                                  : Mangler::MangleMethod (fd->MethodBaseType (), fd);
+    const std::string &name
+        = fd->MethodBaseType () == nullptr
+              ? Mangler::MangleFunction (fd, fd->GetMangleKind ())
+              : Mangler::MangleMethod (fd->MethodBaseType (), fd, fd->GetMangleKind ());
     std::vector<llvm::Type *> args;
     for (auto &a : fd->Args ()) {
         args.emplace_back (getType (a->Type ()));
@@ -85,12 +87,16 @@ CodeGen::declareFunc (Function *fd) {
 
 void
 CodeGen::generateFuncDef (Function *fd) {
-    _curFunc                  = CurrentFunction ();
-    const std::string &name   = fd->MethodBaseType () == nullptr
-                                    ? Mangler::MangleFunction (fd)
-                                    : Mangler::MangleMethod (fd->MethodBaseType (), fd);
-    auto              *func   = _mod->getFunction (name);
-    auto              *initBB = llvm::BasicBlock::Create (_ctx, "init", func);
+    if (fd->Body ().empty ()) {
+        return;
+    }
+    _curFunc = CurrentFunction ();
+    const std::string &name
+        = fd->MethodBaseType () == nullptr
+              ? Mangler::MangleFunction (fd, fd->GetMangleKind ())
+              : Mangler::MangleMethod (fd->MethodBaseType (), fd, fd->GetMangleKind ());
+    auto *func   = _mod->getFunction (name);
+    auto *initBB = llvm::BasicBlock::Create (_ctx, "init", func);
 
     for (auto &bb : fd->Body ()) {
         // declaration of basic blocks
@@ -151,7 +157,7 @@ CodeGen::generateBranch (Branch *br) {
 
 void
 CodeGen::generateStruct (hir::StructDef *sd) {
-    const auto               &name = Mangler::MangleStruct (sd);
+    const auto               &name = Mangler::MangleStruct (sd, sd->GetMangleKind ());
     std::vector<llvm::Type *> fields;
     fields.reserve (sd->Fields ().size ());
     for (const auto &field : sd->Fields ()) {
@@ -376,7 +382,7 @@ CodeGen::generateStructInstance (StructInstance *si) {
     const auto       *sym  = si->BaseSymbol ();
     llvm::StructType *type = llvm::StructType::getTypeByName (
         _ctx,
-        Mangler::MangleStructSymbol (si->BaseSymbol ()));
+        Mangler::MangleStructSymbol (sym, sym->MangleKind));
     if (_curFunc.has_value ()) {
         // local scope
         auto                      *structAlloca = _builder.CreateAlloca (type);
@@ -539,10 +545,12 @@ CodeGen::getType (basic::Type *type) {
                                             : _builder.getDoubleTy ();
     case basic::TypeKind::Bool: return _builder.getInt1Ty ();
     case basic::TypeKind::Char: return _builder.getInt32Ty ();
-    case basic::TypeKind::Struct:
+    case basic::TypeKind::Struct: {
+        auto *sym = t->AsStruct ()->BaseSymbol ();
         return llvm::StructType::getTypeByName (
             _ctx,
-            Mangler::MangleStructSymbol (t->AsStruct ()->BaseSymbol ()));
+            Mangler::MangleStructSymbol (sym, sym->MangleKind));
+    }
     case basic::TypeKind::Pointer: return _builder.getPtrTy ();
     default: {
         return _builder.getVoidTy ();
@@ -562,8 +570,9 @@ CodeGen::generateInitFunction () {
     llvm::BasicBlock *entry = llvm::BasicBlock::Create (_ctx, "entry", func);
     _builder.SetInsertPoint (entry);
     for (const auto *global : _hirGlobals) {
-        const std::string &name = Mangler::MangleGlobalVar (global);
-        auto              *gv   = _mod->getGlobalVariable (name);
+        const std::string &name
+            = Mangler::MangleGlobalVar (global, global->GetMangleKind ());
+        auto *gv = _mod->getGlobalVariable (name);
         if (gv->isConstant ()) {
             continue;
         }

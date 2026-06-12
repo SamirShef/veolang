@@ -16,6 +16,7 @@
 #include <ast/exprs/var_expr.h>
 #include <ast/stmts/break_continue.h>
 #include <ast/stmts/expr_stmt.h>
+#include <ast/stmts/extern_stmt.h>
 #include <ast/stmts/for_loop.h>
 #include <ast/stmts/if_else.h>
 #include <ast/stmts/impl_stmt.h>
@@ -56,6 +57,7 @@ private:
             variant (StructDef, dumpStructDef, StructDef);
             variant (ImplStmt, dumpImplStmt, ImplStmt);
             variant (TraitStmt, dumpTraitStmt, TraitStmt);
+            variant (ExternStmt, dumpExternStmt, ExternStmt);
         default: {
         }
         }
@@ -91,6 +93,9 @@ private:
 
     void
     dumpTraitStmt (TraitStmt *ts);
+
+    void
+    dumpExternStmt (ExternStmt *es);
 
     void
     dumpExpr (Expr *expr) {

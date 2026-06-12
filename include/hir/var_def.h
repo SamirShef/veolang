@@ -2,6 +2,7 @@
 #include <basic/name.h>
 #include <basic/symbols/variable.h>
 #include <basic/types/type.h>
+#include <hir/mangle_kind.h>
 #include <hir/node.h>
 
 namespace veo::hir {
@@ -13,6 +14,7 @@ class VarDef : public Node {
     bool               _isConst;
     bool               _isGlobal;
     symbols::Variable *_base;
+    MangleKind         _mangleKind;
 
 public:
     VarDef (
@@ -23,13 +25,15 @@ public:
         bool               isGlobal,
         llvm::SMLoc        start,
         llvm::SMLoc        end,
-        symbols::Variable *base)
+        symbols::Variable *base,
+        MangleKind         mangleKind = MangleKind::Veo)
         : _name (std::move (name)),
           _type (type),
           _expr (expr),
           _isConst (isConst),
           _isGlobal (isGlobal),
           _base (base),
+          _mangleKind (mangleKind),
           Node (NodeKind::VarDef, start, end) {}
 
     bool
@@ -82,6 +86,11 @@ public:
     symbols::Variable *
     BaseSymbol () const {
         return _base;
+    }
+
+    MangleKind
+    GetMangleKind () const {
+        return _mangleKind;
     }
 };
 

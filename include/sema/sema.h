@@ -17,6 +17,7 @@
 #include <ast/exprs/var_expr.h>
 #include <ast/stmts/break_continue.h>
 #include <ast/stmts/expr_stmt.h>
+#include <ast/stmts/extern_stmt.h>
 #include <ast/stmts/for_loop.h>
 #include <ast/stmts/if_else.h>
 #include <ast/stmts/impl_stmt.h>
@@ -131,6 +132,8 @@ public:
                 analyzeStructDef (llvm::cast<ast::StructDef> (stmt));
             } else if (stmt->Kind () == ast::NodeKind::TraitStmt) {
                 analyzeTraitStmt (llvm::cast<ast::TraitStmt> (stmt));
+            } else if (stmt->Kind () == ast::NodeKind::ExternStmt) {
+                analyzeExternStmt (llvm::cast<ast::ExternStmt> (stmt));
             }
         }
         for (size_t i = 0; i < res.Count; ++i) {
@@ -148,7 +151,8 @@ public:
         for (size_t i = 0; i < res.Count; ++i) {
             auto *stmt = llvm::cast<ast::Stmt> (res.Nodes[i]);
             if (stmt->Kind () == ast::NodeKind::StructDef
-                || stmt->Kind () == ast::NodeKind::TraitStmt) {
+                || stmt->Kind () == ast::NodeKind::TraitStmt
+                || stmt->Kind () == ast::NodeKind::ExternStmt) {
                 continue;
             }
             analyzeStmt (stmt);
@@ -208,7 +212,7 @@ private:
     analyzeVarDef (ast::VarDef *vd);
 
     void
-    declareFunc (ast::FuncDef *fd);
+    declareFunc (ast::FuncDef *fd, hir::MangleKind mangleKind = hir::MangleKind::Veo);
 
     void
     analyzeFuncDef (ast::FuncDef *fd, bool generatingGeneric = false);
@@ -250,6 +254,9 @@ private:
 
     void
     analyzeTraitStmt (ast::TraitStmt *ts);
+
+    void
+    analyzeExternStmt (ast::ExternStmt *es);
 
     SemanticResult
     analyzeExpr (ast::Expr *expr, Type *expectedType);

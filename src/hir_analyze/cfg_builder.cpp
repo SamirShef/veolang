@@ -5,6 +5,10 @@ namespace veo {
 
 void
 CFGBuilder::Build (hir::Function *func) {
+    if (func->Body ().empty ()) {
+        return;
+    }
+
     for (auto *bb : func->Body ()) {
         bb->ClearLinks ();
     }

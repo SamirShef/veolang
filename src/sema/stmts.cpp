@@ -1,4 +1,5 @@
 #include <basic/types/all.h>
+#include <hir/mangle_kind.h>
 #include <sema/sema.h>
 
 namespace veo {
@@ -19,6 +20,7 @@ Sema::analyzeStmt (Stmt *stmt) {
         variant (ForLoop, analyzeForLoop, ForLoopStmt);
         variant (BreakContinue, analyzeBreakContinue, BreakContinue);
         variant (ImplStmt, analyzeImplStmt, ImplStmt);
+        variant (ExternStmt, analyzeExternStmt, ExternStmt);
     default: break;
     }
 #undef variant
@@ -99,7 +101,14 @@ Sema::analyzeVarDef (VarDef *vd) {
             .AddSpan (vd->Start (), vd->End ());
         return;
     }
-    auto var = Variable (vd->Name (), type, vd->IsConst (), isGlobal, _mod, val.Val);
+    auto var = Variable (
+        vd->Name (),
+        type,
+        vd->IsConst (),
+        isGlobal,
+        _mod,
+        hir::MangleKind::Veo,
+        val.Val);
     symbols::Variable *sym = nullptr;
     _vars.top ().Vars.emplace (var.Name.Val, var);
     sym = &_vars.top ().Vars.at (var.Name.Val);
@@ -115,13 +124,14 @@ Sema::analyzeVarDef (VarDef *vd) {
         isGlobal,
         vd->Start (),
         vd->End (),
-        isGlobal ? sym : nullptr);
+        isGlobal ? sym : nullptr,
+        hir::MangleKind::Veo);
     sym->HIR                                = node;
     _vars.top ().Vars.at (var.Name.Val).HIR = node;
 }
 
 void
-Sema::declareFunc (FuncDef *fd) {
+Sema::declareFunc (FuncDef *fd, hir::MangleKind mangleKind) {
     if (fd->IsDeclaration ()) {
         _diag
             .Report (
@@ -163,8 +173,14 @@ Sema::declareFunc (FuncDef *fd) {
             .AddSpan (fd->Start (), fd->End ());
         return;
     }
-    auto func = Function (fd->Name (), fd->RetType (), fd->Args (), isGeneric, _mod);
-    auto it   = _mod->Funcs.find (func.Name.Val);
+    auto func = Function (
+        fd->Name (),
+        fd->RetType (),
+        fd->Args (),
+        isGeneric,
+        _mod,
+        mangleKind);
+    auto it = _mod->Funcs.find (func.Name.Val);
     if (it == _mod->Funcs.end ()) {
         _mod->Funcs.emplace (func.Name.Val, FunctionCandidates ());
     }
@@ -177,7 +193,8 @@ Sema::declareFunc (FuncDef *fd) {
             {},
             fd->Start (),
             fd->End (),
-            funcPtr.get ());
+            funcPtr.get (),
+            mangleKind);
         _funcs.emplace (funcPtr.get (), funcNode);
     }
     candidates.emplace_back (std::move (funcPtr));
@@ -226,6 +243,7 @@ Sema::analyzeFuncDef (FuncDef *fd, bool generatingGeneric) {
             arg.Name.Start,
             arg.Name.End,
             nullptr,
+            hir::MangleKind::Veo,
             false);
         args.emplace_back (node);
     }
@@ -248,6 +266,7 @@ Sema::analyzeFuncDef (FuncDef *fd, bool generatingGeneric) {
                 false,
                 false,
                 nullptr,
+                hir::MangleKind::Veo,
                 std::nullopt,
                 funcNode != nullptr ? funcNode->Args ()[index] : nullptr));
         ++index;
@@ -449,6 +468,15 @@ Sema::analyzeBreakContinue (BreakContinue *bc) {
 void
 Sema::analyzeStructDef (StructDef *sd) {
     if (!allowInScope (sd)) {
+        return;
+    }
+    if (sd->IsDeclaration ()) {
+        _diag
+            .Report (
+                DiagCode::EStructsOutsideExternBlockMustHaveBody,
+                "structures outside of extern blocks must have a body",
+                Severity::Error)
+            .AddSpan (sd->Start (), sd->End (), "missing structure body");
         return;
     }
     if (auto it = _mod->Structs.find (sd->Name ().Val); it != _mod->Structs.end ()) {
@@ -751,6 +779,7 @@ Sema::declareImplMethod (
             fd->Start (),
             fd->End (),
             methodPtr.get (),
+            hir::MangleKind::Veo,
             targetType,
             method.IsStatic);
         _methods.emplace (methodPtr.get (), methodNode);
@@ -861,6 +890,7 @@ Sema::analyzeImplMethodDef (
             fd->Name ().Start,
             fd->Name ().End,
             nullptr,
+            hir::MangleKind::Veo,
             false);
         args.emplace_back (node);
     }
@@ -874,6 +904,7 @@ Sema::analyzeImplMethodDef (
             arg.Name.Start,
             arg.Name.End,
             nullptr,
+            hir::MangleKind::Veo,
             false);
         args.emplace_back (node);
     }
@@ -898,6 +929,7 @@ Sema::analyzeImplMethodDef (
                 false,
                 false,
                 nullptr,
+                hir::MangleKind::Veo,
                 std::nullopt,
                 thisArg));
     }
@@ -910,6 +942,7 @@ Sema::analyzeImplMethodDef (
                 false,
                 false,
                 nullptr,
+                hir::MangleKind::Veo,
                 std::nullopt,
                 m->IsGeneric ? nullptr : methodNode->Args ()[index]));
         ++index;
@@ -1003,6 +1036,122 @@ Sema::analyzeTraitStmt (TraitStmt *ts) {
     }
     _mod->Traits.at (ts->Name ().Val).Methods = std::move (methods);
     popTypeScope ();
+}
+
+void
+Sema::analyzeExternStmt (ExternStmt *es) {
+    if (!allowInScope (es)) {
+        return;
+    }
+    auto mangleKindOpt = hir::MangleKindFromString (es->From ().Val);
+    if (!mangleKindOpt.has_value ()) {
+        // TODO: report error
+        return;
+    }
+    hir::MangleKind mangleKind = *mangleKindOpt;
+    for (auto *stmt : es->Body ()) {
+        if (stmt->Kind () != NodeKind::VarDef && stmt->Kind () != NodeKind::FuncDef
+            && stmt->Kind () != NodeKind::StructDef) {
+            // TODO: report error
+            continue;
+        }
+
+        switch (stmt->Kind ()) {
+        case NodeKind::VarDef: {
+            auto *vd = llvm::cast<VarDef> (stmt);
+            if (vd->Init () != nullptr) {
+                // TODO: report error
+                continue;
+            }
+            if (vd->Type () == nullptr) {
+                // TODO: report error
+                continue;
+            }
+            break;
+        }
+        case NodeKind::FuncDef: {
+            auto *fd = llvm::cast<FuncDef> (stmt);
+            if (!fd->IsDeclaration ()) {
+                // TODO: report error
+                continue;
+            }
+            resolveType (&fd->RetType ());
+            bool isGeneric = false;
+            for (auto &arg : fd->Args ()) {
+                resolveType (&arg.Type);
+                if (arg.Type->IsTrait ()) {
+                    isGeneric = true;
+                }
+            }
+            if (fd->RetType ()->IsTrait ()) {
+                _diag
+                    .Report (
+                        DiagCode::ECannotUseTraitForFunc,
+                        "cannot use trait '" + typeToString (fd->RetType ())
+                            + "' as a concrete return type",
+                        Severity::Error)
+                    .AddSpan (fd->Start (), fd->End ());
+                return;
+            }
+            auto func = Function (
+                fd->Name (),
+                fd->RetType (),
+                fd->Args (),
+                isGeneric,
+                _mod,
+                mangleKind);
+            auto it = _mod->Funcs.find (func.Name.Val);
+            if (it == _mod->Funcs.end ()) {
+                _mod->Funcs.emplace (func.Name.Val, FunctionCandidates ());
+            }
+            auto &candidates = _mod->Funcs.at (func.Name.Val).Candidates;
+            auto  funcPtr    = std::make_unique<Function> (func);
+            if (!isGeneric) {
+                std::vector<hir::VarDef *> args;
+                args.reserve (func.Args.size ());
+                for (auto &arg : fd->Args ()) {
+                    args.emplace_back (_builder.CreateVariable (
+                        arg.Name,
+                        arg.Type,
+                        nullptr,
+                        false,
+                        false,
+                        arg.Name.Start,
+                        arg.Name.End,
+                        nullptr,
+                        hir::MangleKind::Veo,
+                        false));
+                }
+                auto *funcNode = _builder.CreateFunction (
+                    func.Name,
+                    fd->RetType (),
+                    std::move (args),
+                    fd->Start (),
+                    fd->End (),
+                    funcPtr.get (),
+                    mangleKind);
+                _funcs.emplace (funcPtr.get (), funcNode);
+            }
+            candidates.emplace_back (std::move (funcPtr));
+            if (isGeneric) {
+                auto it = std::ranges::find_if (
+                    candidates,
+                    [&] (const std::unique_ptr<Function> &f) { return func == *f; });
+                _genericFuncs.emplace (it->get (), fd);
+            }
+            break;
+        }
+        case NodeKind::StructDef: {
+            auto *sd = llvm::cast<StructDef> (stmt);
+            if (!sd->IsDeclaration ()) {
+                // TODO: report error
+                continue;
+            }
+            break;
+        }
+        default: break;
+        }
+    }
 }
 
 }

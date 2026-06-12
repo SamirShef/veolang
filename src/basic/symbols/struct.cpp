@@ -11,7 +11,7 @@ Struct::operator== (const Struct &other) const {
 
     return Name.Val == other.Name.Val && Fields == other.Fields
            && Methods == other.Methods && TraitsImplements == other.TraitsImplements
-           && *Parent == *other.Parent;
+           && *Parent == *other.Parent && MangleKind == other.MangleKind;
 }
 
 }

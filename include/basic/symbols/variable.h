@@ -2,6 +2,7 @@
 #include <basic/name.h>
 #include <basic/types/type.h>
 #include <basic/value.h>
+#include <hir/mangle_kind.h>
 
 namespace veo::hir {
 
@@ -21,6 +22,7 @@ struct Variable {
     bool            IsGlobal;
     hir::VarDef    *HIR = nullptr;
     Module         *Parent;
+    hir::MangleKind MangleKind;
 
     Variable (
         basic::NameObj  name,
@@ -28,12 +30,14 @@ struct Variable {
         bool            isConst,
         bool            isGlobal,
         Module         *parent,
-        basic::OptValue val = std::nullopt,
-        hir::VarDef    *hir = nullptr)
+        hir::MangleKind mangleKind = hir::MangleKind::Veo,
+        basic::OptValue val        = std::nullopt,
+        hir::VarDef    *hir        = nullptr)
         : Name (std::move (name)),
           Type (type),
           IsConst (isConst),
           IsGlobal (isGlobal),
+          MangleKind (mangleKind),
           Val (val),
           HIR (hir),
           Parent (parent) {}

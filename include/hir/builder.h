@@ -74,14 +74,16 @@ public:
         std::vector<VarDef *> args,
         llvm::SMLoc           start,
         llvm::SMLoc           end,
-        symbols::Function    *base) {
+        symbols::Function    *base,
+        MangleKind            mangleKind) {
         auto *node = _ctx.CreateNode<Function> (
             std::move (name),
             retType,
             std::move (args),
             start,
             end,
-            base);
+            base,
+            mangleKind);
         _ctx.AddFunction (node);
         return node;
     }
@@ -94,6 +96,7 @@ public:
         llvm::SMLoc           start,
         llvm::SMLoc           end,
         symbols::Method      *base,
+        MangleKind            mangleKind,
         basic::Type          *methodBaseType,
         bool                  isStatic) {
         auto *node = _ctx.CreateNode<Function> (
@@ -103,6 +106,7 @@ public:
             start,
             end,
             base->Func.get (),
+            mangleKind,
             methodBaseType,
             isStatic);
         _ctx.AddFunction (node);
@@ -126,9 +130,18 @@ public:
         llvm::SMLoc        start,
         llvm::SMLoc        end,
         symbols::Variable *base,
+        MangleKind         mangleKind,
         bool               addToBlock = true) {
-        auto *node = _ctx.CreateNode<
-            VarDef> (std::move (name), type, init, isConst, isGlobal, start, end, base);
+        auto *node = _ctx.CreateNode<VarDef> (
+            std::move (name),
+            type,
+            init,
+            isConst,
+            isGlobal,
+            start,
+            end,
+            base,
+            mangleKind);
         if (isGlobal) {
             _ctx.AddGlobal (node);
         } else if (addToBlock) {

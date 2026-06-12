@@ -1149,7 +1149,8 @@ Sema::analyzeTernaryExpr (TernaryExpr *te, Type *expectedType) {
         false,
         te->Start (),
         te->End (),
-        nullptr);
+        nullptr,
+        hir::MangleKind::Veo);
     auto *trueBB  = _builder.CreateBasicBlock (_builder.Parent (), "cond.true");
     auto *falseBB = _builder.CreateBasicBlock (_builder.Parent (), "cond.false");
     auto *mergeBB = _builder.CreateBasicBlock (_builder.Parent (), "cond.merge");

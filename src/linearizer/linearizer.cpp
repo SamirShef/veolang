@@ -50,7 +50,8 @@ HIRLinearizer::linearizeVarDef (VarDef *vd) {
         false,
         vd->Start (),
         vd->End (),
-        vd->BaseSymbol ());
+        vd->BaseSymbol (),
+        vd->GetMangleKind ());
 }
 
 void
@@ -132,7 +133,8 @@ HIRLinearizer::linearizeBinaryExpr (BinaryExpr *be) {
             false,
             be->Start (),
             be->End (),
-            nullptr);
+            nullptr,
+            MangleKind::Veo);
 
         if (be->Op () == ast::BinOp::LogAnd) {
             _builder.CreateBr (flatLhs, rhsBB, mergeBB, be->Start (), be->End ());
@@ -312,7 +314,8 @@ HIRLinearizer::emitToTmp (
         false,
         start,
         end,
-        nullptr);
+        nullptr,
+        MangleKind::Veo);
 
     return _builder.CreateLoadVar (tmp, type, false, start, end);
 }
