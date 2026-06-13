@@ -5,8 +5,7 @@ func main(): i32 {
     }
     if (x += 10) == 10 {    // x equals 20
         return 0;
-    }
-    else {
+    } else {
         return x;           // returns 20
     }
     return 0;
