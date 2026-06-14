@@ -258,6 +258,15 @@ private:
     void
     analyzeExternStmt (ast::ExternStmt *es);
 
+    void
+    analyzeExternGlobalVar (ast::VarDef *vd, hir::MangleKind mangleKind);
+
+    void
+    analyzeExternFuncDef (ast::FuncDef *fd, hir::MangleKind mangleKind);
+
+    void
+    analyzeExternStructDef (ast::StructDef *sd, hir::MangleKind mangleKind);
+
     SemanticResult
     analyzeExpr (ast::Expr *expr, Type *expectedType);
 

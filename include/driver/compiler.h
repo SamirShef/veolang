@@ -43,6 +43,13 @@ GetOutputName (const std::string &inputFile, const llvm::Triple &triple);
 void
 Optimize (llvm::Module &mod, OptLevel level);
 
+bool
+CompileCFile (
+    const std::string &target,
+    const std::string &cSource,
+    const std::string &objFile,
+    OptLevel           level);
+
 CompilationResult
 Compile (
     const fs::path     &projectPath,

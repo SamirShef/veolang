@@ -15,6 +15,7 @@ class VarDef : public Node {
     bool               _isGlobal;
     symbols::Variable *_base;
     MangleKind         _mangleKind;
+    bool               _isDeclaration;
 
 public:
     VarDef (
@@ -26,7 +27,8 @@ public:
         llvm::SMLoc        start,
         llvm::SMLoc        end,
         symbols::Variable *base,
-        MangleKind         mangleKind = MangleKind::Veo)
+        MangleKind         mangleKind    = MangleKind::Veo,
+        bool               isDeclaration = false)
         : _name (std::move (name)),
           _type (type),
           _expr (expr),
@@ -34,6 +36,7 @@ public:
           _isGlobal (isGlobal),
           _base (base),
           _mangleKind (mangleKind),
+          _isDeclaration (isDeclaration),
           Node (NodeKind::VarDef, start, end) {}
 
     bool
@@ -43,7 +46,9 @@ public:
         }
 
         return _name == other->_name && _type == other->_type
-               && _isConst == other->_isConst && *_base == *other->_base;
+               && _isConst == other->_isConst && *_base == *other->_base
+               && _mangleKind == other->_mangleKind
+               && _isDeclaration == other->_isDeclaration;
     }
 
     bool
@@ -91,6 +96,11 @@ public:
     MangleKind
     GetMangleKind () const {
         return _mangleKind;
+    }
+
+    bool
+    IsDeclaration () const {
+        return _isDeclaration;
     }
 };
 

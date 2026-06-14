@@ -300,7 +300,10 @@ Parser::parseStructDef (ast::AccessModifier access) {
     } else if (!expectTok (TokenKind::LBrace, "{")) {
         return nullptr;
     }
-    std::vector<Field> fields = parseFields ();
+    std::vector<Field> fields;
+    if (!isDeclaration) {
+        fields = std::move (parseFields ());
+    }
     return createNode<StructDef> (
         std::move (name),
         std::move (fields),

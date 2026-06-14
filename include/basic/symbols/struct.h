@@ -112,6 +112,7 @@ struct Struct {
     std::unordered_set<Trait *>                       TraitsImplements;
     Module                                           *Parent;
     hir::MangleKind                                   MangleKind;
+    bool                                              IsComplete = true;
 
     Struct (
         basic::NameObj     name,

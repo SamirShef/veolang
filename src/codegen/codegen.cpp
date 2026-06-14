@@ -49,7 +49,7 @@ CodeGen::generateVarDef (VarDef *vd) {
             type,
             vd->IsConst (),
             llvm::GlobalValue::ExternalLinkage,
-            llvm::cast<llvm::Constant> (init),
+            vd->IsDeclaration () ? nullptr : llvm::cast<llvm::Constant> (init),
             name);
         _globals.emplace (vd, gv);
     } else {
@@ -343,9 +343,6 @@ CodeGen::generateUnaryExpr (UnaryExpr *ue) {
 llvm::Value *
 CodeGen::generateLoadVar (LoadVar *lv) {
     auto *lvalue = generateLValue (lv);
-    if (!_curFunc.has_value ()) {
-        return llvm::cast<llvm::GlobalVariable> (lvalue)->getInitializer ();
-    }
     if (auto *arg = llvm::dyn_cast<llvm::Argument> (lvalue)) {
         return arg;
     }
@@ -546,10 +543,12 @@ CodeGen::getType (basic::Type *type) {
     case basic::TypeKind::Bool: return _builder.getInt1Ty ();
     case basic::TypeKind::Char: return _builder.getInt32Ty ();
     case basic::TypeKind::Struct: {
-        auto *sym = t->AsStruct ()->BaseSymbol ();
-        return llvm::StructType::getTypeByName (
-            _ctx,
-            Mangler::MangleStructSymbol (sym, sym->MangleKind));
+        auto       *sym  = t->AsStruct ()->BaseSymbol ();
+        const auto &name = Mangler::MangleStructSymbol (sym, sym->MangleKind);
+        if (!sym->IsComplete) {
+            return llvm::StructType::create (_ctx, name);
+        }
+        return llvm::StructType::getTypeByName (_ctx, name);
     }
     case basic::TypeKind::Pointer: return _builder.getPtrTy ();
     default: {
@@ -570,6 +569,9 @@ CodeGen::generateInitFunction () {
     llvm::BasicBlock *entry = llvm::BasicBlock::Create (_ctx, "entry", func);
     _builder.SetInsertPoint (entry);
     for (const auto *global : _hirGlobals) {
+        if (global->IsDeclaration ()) {
+            continue;
+        }
         const std::string &name
             = Mangler::MangleGlobalVar (global, global->GetMangleKind ());
         auto *gv = _mod->getGlobalVariable (name);

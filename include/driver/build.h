@@ -2,15 +2,17 @@
 #include <filesystem>
 #include <string>
 #include <utility>
+#include <vector>
 
 namespace fs = std::filesystem;
 
 namespace veo::driver {
 
 struct Manifest {
-    std::string ProjectName;
-    fs::path    ManifestPath;
-    fs::path    EntryPointPath;
+    std::string           ProjectName;
+    fs::path              ManifestPath;
+    fs::path              EntryPointPath;
+    std::vector<fs::path> CSources;
 };
 
 class BuildDriver {

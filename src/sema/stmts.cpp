@@ -43,6 +43,18 @@ Sema::analyzeVarDef (VarDef *vd) {
     bool  isGlobal = _vars.size () == 1;
     Type *type     = vd->Type ();
     resolveType (&type);
+    if (type != nullptr) {
+        if (type->CanonicalType ()->IsStruct ()
+            && !type->CanonicalType ()->AsStruct ()->BaseSymbol ()->IsComplete) {
+            _diag
+                .Report (
+                    DiagCode::EIncompleteType,
+                    "type '" + typeToString (type) + "' is incomplete",
+                    Severity::Error)
+                .AddSpan (vd->Start (), vd->End ());
+            return;
+        }
+    }
     auto val = analyzeExpr (vd->Init (), vd->Type ());
     if (!val.Val.has_value () && vd->Init () != nullptr) {
         return;
@@ -125,7 +137,8 @@ Sema::analyzeVarDef (VarDef *vd) {
         vd->Start (),
         vd->End (),
         isGlobal ? sym : nullptr,
-        hir::MangleKind::Veo);
+        hir::MangleKind::Veo,
+        false);
     sym->HIR                                = node;
     _vars.top ().Vars.at (var.Name.Val).HIR = node;
 }
@@ -156,9 +169,37 @@ Sema::declareFunc (FuncDef *fd, hir::MangleKind mangleKind) {
         return;
     }
     resolveType (&fd->RetType ());
+    if (fd->RetType () != nullptr) {
+        if (fd->RetType ()->CanonicalType ()->IsStruct ()
+            && !fd->RetType ()
+                    ->CanonicalType ()
+                    ->AsStruct ()
+                    ->BaseSymbol ()
+                    ->IsComplete) {
+            _diag
+                .Report (
+                    DiagCode::EIncompleteType,
+                    "type '" + typeToString (fd->RetType ()) + "' is incomplete",
+                    Severity::Error)
+                .AddSpan (fd->Start (), fd->End ());
+            return;
+        }
+    }
     bool isGeneric = false;
     for (auto &arg : fd->Args ()) {
         resolveType (&arg.Type);
+        if (arg.Type != nullptr) {
+            if (arg.Type->CanonicalType ()->IsStruct ()
+                && !arg.Type->CanonicalType ()->AsStruct ()->BaseSymbol ()->IsComplete) {
+                _diag
+                    .Report (
+                        DiagCode::EIncompleteType,
+                        "type '" + typeToString (arg.Type) + "' is incomplete",
+                        Severity::Error)
+                    .AddSpan (arg.Name.Start, arg.Name.End);
+                return;
+            }
+        }
         if (arg.Type->IsTrait ()) {
             isGeneric = true;
         }
@@ -244,6 +285,7 @@ Sema::analyzeFuncDef (FuncDef *fd, bool generatingGeneric) {
             arg.Name.End,
             nullptr,
             hir::MangleKind::Veo,
+            false,
             false);
         args.emplace_back (node);
     }
@@ -737,9 +779,37 @@ Sema::declareImplMethod (
         return;
     }
     resolveType (&fd->RetType ());
+    if (fd->RetType () != nullptr) {
+        if (fd->RetType ()->CanonicalType ()->IsStruct ()
+            && !fd->RetType ()
+                    ->CanonicalType ()
+                    ->AsStruct ()
+                    ->BaseSymbol ()
+                    ->IsComplete) {
+            _diag
+                .Report (
+                    DiagCode::EIncompleteType,
+                    "type '" + typeToString (fd->RetType ()) + "' is incomplete",
+                    Severity::Error)
+                .AddSpan (fd->Start (), fd->End ());
+            return;
+        }
+    }
     bool isGeneric = false;
     for (auto &arg : fd->Args ()) {
         resolveType (&arg.Type);
+        if (arg.Type != nullptr) {
+            if (arg.Type->CanonicalType ()->IsStruct ()
+                && !arg.Type->CanonicalType ()->AsStruct ()->BaseSymbol ()->IsComplete) {
+                _diag
+                    .Report (
+                        DiagCode::EIncompleteType,
+                        "type '" + typeToString (arg.Type) + "' is incomplete",
+                        Severity::Error)
+                    .AddSpan (arg.Name.Start, arg.Name.End);
+                return;
+            }
+        }
         if (arg.Type->IsTrait ()) {
             isGeneric = true;
         }
@@ -891,6 +961,7 @@ Sema::analyzeImplMethodDef (
             fd->Name ().End,
             nullptr,
             hir::MangleKind::Veo,
+            false,
             false);
         args.emplace_back (node);
     }
@@ -905,6 +976,7 @@ Sema::analyzeImplMethodDef (
             arg.Name.End,
             nullptr,
             hir::MangleKind::Veo,
+            false,
             false);
         args.emplace_back (node);
     }
@@ -1045,113 +1117,239 @@ Sema::analyzeExternStmt (ExternStmt *es) {
     }
     auto mangleKindOpt = hir::MangleKindFromString (es->From ().Val);
     if (!mangleKindOpt.has_value ()) {
-        // TODO: report error
+        _diag
+            .Report (
+                DiagCode::EUnsupportedAbi,
+                "unsupported ABI \"" + es->From ().Val + "\" in extern block",
+                Severity::Error)
+            .AddSpan (
+                es->From ().Start,
+                es->From ().End,
+                "unknown foreign binary interface")
+            .AddNote (
+                "supported language ABIs are: "
+                + hir::SupportedLanguagesForManglingAsString ());
         return;
     }
     hir::MangleKind mangleKind = *mangleKindOpt;
     for (auto *stmt : es->Body ()) {
         if (stmt->Kind () != NodeKind::VarDef && stmt->Kind () != NodeKind::FuncDef
             && stmt->Kind () != NodeKind::StructDef) {
-            // TODO: report error
+            _diag
+                .Report (
+                    DiagCode::EStmtAreNotAllowedInExtern,
+                    "this statement are not allowed inside extern blocks",
+                    Severity::Error)
+                .AddSpan (stmt->Start (), stmt->End ());
             continue;
         }
 
         switch (stmt->Kind ()) {
         case NodeKind::VarDef: {
             auto *vd = llvm::cast<VarDef> (stmt);
-            if (vd->Init () != nullptr) {
-                // TODO: report error
-                continue;
-            }
-            if (vd->Type () == nullptr) {
-                // TODO: report error
-                continue;
-            }
+            analyzeExternGlobalVar (vd, mangleKind);
             break;
         }
         case NodeKind::FuncDef: {
             auto *fd = llvm::cast<FuncDef> (stmt);
-            if (!fd->IsDeclaration ()) {
-                // TODO: report error
-                continue;
-            }
-            resolveType (&fd->RetType ());
-            bool isGeneric = false;
-            for (auto &arg : fd->Args ()) {
-                resolveType (&arg.Type);
-                if (arg.Type->IsTrait ()) {
-                    isGeneric = true;
-                }
-            }
-            if (fd->RetType ()->IsTrait ()) {
-                _diag
-                    .Report (
-                        DiagCode::ECannotUseTraitForFunc,
-                        "cannot use trait '" + typeToString (fd->RetType ())
-                            + "' as a concrete return type",
-                        Severity::Error)
-                    .AddSpan (fd->Start (), fd->End ());
-                return;
-            }
-            auto func = Function (
-                fd->Name (),
-                fd->RetType (),
-                fd->Args (),
-                isGeneric,
-                _mod,
-                mangleKind);
-            auto it = _mod->Funcs.find (func.Name.Val);
-            if (it == _mod->Funcs.end ()) {
-                _mod->Funcs.emplace (func.Name.Val, FunctionCandidates ());
-            }
-            auto &candidates = _mod->Funcs.at (func.Name.Val).Candidates;
-            auto  funcPtr    = std::make_unique<Function> (func);
-            if (!isGeneric) {
-                std::vector<hir::VarDef *> args;
-                args.reserve (func.Args.size ());
-                for (auto &arg : fd->Args ()) {
-                    args.emplace_back (_builder.CreateVariable (
-                        arg.Name,
-                        arg.Type,
-                        nullptr,
-                        false,
-                        false,
-                        arg.Name.Start,
-                        arg.Name.End,
-                        nullptr,
-                        hir::MangleKind::Veo,
-                        false));
-                }
-                auto *funcNode = _builder.CreateFunction (
-                    func.Name,
-                    fd->RetType (),
-                    std::move (args),
-                    fd->Start (),
-                    fd->End (),
-                    funcPtr.get (),
-                    mangleKind);
-                _funcs.emplace (funcPtr.get (), funcNode);
-            }
-            candidates.emplace_back (std::move (funcPtr));
-            if (isGeneric) {
-                auto it = std::ranges::find_if (
-                    candidates,
-                    [&] (const std::unique_ptr<Function> &f) { return func == *f; });
-                _genericFuncs.emplace (it->get (), fd);
-            }
+            analyzeExternFuncDef (fd, mangleKind);
             break;
         }
         case NodeKind::StructDef: {
             auto *sd = llvm::cast<StructDef> (stmt);
-            if (!sd->IsDeclaration ()) {
-                // TODO: report error
-                continue;
-            }
+            analyzeExternStructDef (sd, mangleKind);
             break;
         }
         default: break;
         }
     }
+}
+
+void
+Sema::analyzeExternGlobalVar (VarDef *vd, hir::MangleKind mangleKind) {
+    if (vd->Init () != nullptr) {
+        _diag
+            .Report (
+                DiagCode::ECannotInitExternVar,
+                "extern variable '" + vd->Name ().Val + "' cannot have an initializer",
+                Severity::Error)
+            .AddSpan (vd->Init ()->Start (), vd->Init ()->End ());
+        return;
+    }
+    if (vd->Type () == nullptr) {
+        _diag
+            .Report (
+                DiagCode::EExternVarMustHaveType,
+                "extern variable '" + vd->Name ().Val + "' must have an explicit type",
+                Severity::Error)
+            .AddSpan (vd->Start (), vd->End ());
+        return;
+    }
+    Type *type = vd->Type ();
+    resolveType (&type);
+    if (type != nullptr) {
+        if (type->CanonicalType ()->IsStruct ()
+            && !type->CanonicalType ()->AsStruct ()->BaseSymbol ()->IsComplete) {
+            _diag
+                .Report (
+                    DiagCode::EIncompleteType,
+                    "type '" + typeToString (type) + "' is incomplete",
+                    Severity::Error)
+                .AddSpan (vd->Start (), vd->End ());
+            return;
+        }
+    }
+
+    auto var = Variable (
+        vd->Name (),
+        type,
+        vd->IsConst (),
+        true,
+        _mod,
+        mangleKind,
+        std::nullopt);
+
+    _vars.top ().Vars.emplace (var.Name.Val, var);
+    _mod->Vars.emplace (var.Name.Val, var);
+    auto *sym = &_mod->Vars.at (var.Name.Val);
+
+    auto *node = _builder.CreateVariable (
+        var.Name,
+        type,
+        nullptr,
+        vd->IsConst (),
+        true,
+        vd->Start (),
+        vd->End (),
+        sym,
+        mangleKind,
+        true);
+
+    sym->HIR                                = node;
+    _vars.top ().Vars.at (var.Name.Val).HIR = node;
+}
+
+void
+Sema::analyzeExternFuncDef (ast::FuncDef *fd, hir::MangleKind mangleKind) {
+    if (!fd->IsDeclaration ()) {
+        _diag
+            .Report (
+                DiagCode::EExternFuncCannotHaveBody,
+                "extern function '" + fd->Name ().Val + "' cannot have a body",
+                Severity::Error)
+            .AddSpan (fd->Start (), fd->End ());
+        return;
+    }
+    resolveType (&fd->RetType ());
+    if (fd->RetType () != nullptr) {
+        if (fd->RetType ()->CanonicalType ()->IsStruct ()
+            && !fd->RetType ()
+                    ->CanonicalType ()
+                    ->AsStruct ()
+                    ->BaseSymbol ()
+                    ->IsComplete) {
+            _diag
+                .Report (
+                    DiagCode::EIncompleteType,
+                    "type '" + typeToString (fd->RetType ()) + "' is incomplete",
+                    Severity::Error)
+                .AddSpan (fd->Start (), fd->End ());
+            return;
+        }
+    }
+    bool isGeneric = false;
+    for (auto &arg : fd->Args ()) {
+        resolveType (&arg.Type);
+        if (arg.Type != nullptr) {
+            if (arg.Type->CanonicalType ()->IsStruct ()
+                && !arg.Type->CanonicalType ()->AsStruct ()->BaseSymbol ()->IsComplete) {
+                _diag
+                    .Report (
+                        DiagCode::EIncompleteType,
+                        "type '" + typeToString (arg.Type) + "' is incomplete",
+                        Severity::Error)
+                    .AddSpan (arg.Name.Start, arg.Name.End);
+                return;
+            }
+        }
+        if (arg.Type->IsTrait ()) {
+            isGeneric = true;
+        }
+    }
+    if (fd->RetType ()->IsTrait ()) {
+        _diag
+            .Report (
+                DiagCode::ECannotUseTraitForFunc,
+                "cannot use trait '" + typeToString (fd->RetType ())
+                    + "' as a concrete return type",
+                Severity::Error)
+            .AddSpan (fd->Start (), fd->End ());
+        return;
+    }
+    auto func = Function (
+        fd->Name (),
+        fd->RetType (),
+        fd->Args (),
+        isGeneric,
+        _mod,
+        mangleKind);
+    auto it = _mod->Funcs.find (func.Name.Val);
+    if (it == _mod->Funcs.end ()) {
+        _mod->Funcs.emplace (func.Name.Val, FunctionCandidates ());
+    }
+    auto &candidates = _mod->Funcs.at (func.Name.Val).Candidates;
+    auto  funcPtr    = std::make_unique<Function> (func);
+    if (!isGeneric) {
+        std::vector<hir::VarDef *> args;
+        args.reserve (func.Args.size ());
+        for (auto &arg : fd->Args ()) {
+            args.emplace_back (_builder.CreateVariable (
+                arg.Name,
+                arg.Type,
+                nullptr,
+                false,
+                false,
+                arg.Name.Start,
+                arg.Name.End,
+                nullptr,
+                hir::MangleKind::Veo,
+                false,
+                false));
+        }
+        auto *funcNode = _builder.CreateFunction (
+            func.Name,
+            fd->RetType (),
+            std::move (args),
+            fd->Start (),
+            fd->End (),
+            funcPtr.get (),
+            mangleKind);
+        _funcs.emplace (funcPtr.get (), funcNode);
+    }
+    candidates.emplace_back (std::move (funcPtr));
+    if (isGeneric) {
+        auto it
+            = std::ranges::find_if (candidates, [&] (const std::unique_ptr<Function> &f) {
+                  return func == *f;
+              });
+        _genericFuncs.emplace (it->get (), fd);
+    }
+}
+
+void
+Sema::analyzeExternStructDef (ast::StructDef *sd, hir::MangleKind mangleKind) {
+    if (!sd->IsDeclaration ()) {
+        _diag
+            .Report (
+                DiagCode::EExternStructCannotHaveBody,
+                "extern structure '" + sd->Name ().Val + "' cannot have a body",
+                Severity::Error)
+            .AddSpan (sd->Start (), sd->End ());
+        return;
+    }
+    auto s       = Struct (sd->Name (), {}, _mod);
+    s.IsComplete = false;
+    _mod->Structs.emplace (sd->Name ().Val, std::move (s));
 }
 
 }

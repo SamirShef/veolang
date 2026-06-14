@@ -131,6 +131,7 @@ public:
         llvm::SMLoc        end,
         symbols::Variable *base,
         MangleKind         mangleKind,
+        bool               isDeclaration,
         bool               addToBlock = true) {
         auto *node = _ctx.CreateNode<VarDef> (
             std::move (name),
@@ -141,7 +142,8 @@ public:
             start,
             end,
             base,
-            mangleKind);
+            mangleKind,
+            isDeclaration);
         if (isGlobal) {
             _ctx.AddGlobal (node);
         } else if (addToBlock) {

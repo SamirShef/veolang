@@ -718,13 +718,22 @@ Sema::analyzeAsgnField (
             .AddSpan (fieldExpr->Name ().Start, fieldExpr->Name ().End);
         return {};
     }
-    auto *sym              = targetType->AsStruct ()->BaseSymbol ();
-    bool  baseIsStatic     = base.Val->Kind == ValueKind::Type;
-    bool  baseIsThis       = !baseIsStatic && _insideMethod.has_value ()
-                             && *_insideMethod->second == *targetType;
-    bool  canAccessPrivate = baseIsThis
-                             || baseIsStatic && _insideMethod.has_value ()
-                                    && *_insideMethod->second == *targetType;
+    auto *sym = targetType->AsStruct ()->BaseSymbol ();
+    if (!sym->IsComplete) {
+        _diag
+            .Report (
+                DiagCode::EIncompleteType,
+                "type '" + typeToString (targetType) + "' is incomplete",
+                Severity::Error)
+            .AddSpan (fieldExpr->Start (), fieldExpr->End ());
+        return {};
+    }
+    bool baseIsStatic     = base.Val->Kind == ValueKind::Type;
+    bool baseIsThis       = !baseIsStatic && _insideMethod.has_value ()
+                            && *_insideMethod->second == *targetType;
+    bool canAccessPrivate = baseIsThis
+                            || baseIsStatic && _insideMethod.has_value ()
+                                   && *_insideMethod->second == *targetType;
     if (baseIsThis) {
         // Modifying 'this' object
         _insideMethod->first->IsConst = false;
@@ -809,14 +818,23 @@ Sema::analyzeFieldExpr (FieldExpr *fe, Type *expectedType) {
             .AddSpan (fe->Name ().Start, fe->Name ().End);
         return {};
     }
-    auto *s                = targetType->AsStruct ()->BaseSymbol ();
-    bool  baseIsStatic     = base.Val->Kind == ValueKind::Type;
-    bool  baseIsThis       = !baseIsStatic && _insideMethod.has_value ()
-                             && *_insideMethod->second == *targetType;
-    bool  canAccessPrivate = baseIsThis
-                             || baseIsStatic && _insideMethod.has_value ()
-                                    && *_insideMethod->second == *targetType;
-    auto  it = std::ranges::find_if (s->Fields, [&] (const symbols::Field &field) {
+    auto *s = targetType->AsStruct ()->BaseSymbol ();
+    if (!s->IsComplete) {
+        _diag
+            .Report (
+                DiagCode::EIncompleteType,
+                "type '" + typeToString (targetType) + "' is incomplete",
+                Severity::Error)
+            .AddSpan (fe->Start (), fe->End ());
+        return {};
+    }
+    bool baseIsStatic     = base.Val->Kind == ValueKind::Type;
+    bool baseIsThis       = !baseIsStatic && _insideMethod.has_value ()
+                            && *_insideMethod->second == *targetType;
+    bool canAccessPrivate = baseIsThis
+                            || baseIsStatic && _insideMethod.has_value ()
+                                   && *_insideMethod->second == *targetType;
+    auto it = std::ranges::find_if (s->Fields, [&] (const symbols::Field &field) {
         return field.Name.Val == fe->Name ().Val;
     });
     if (it == s->Fields.end ()) {
@@ -986,14 +1004,23 @@ Sema::analyzeMethodCall (MethodCall *mc, Type *expectedType) {
             mc->End ());
     }
     auto *s = targetType->IsStruct () ? targetType->AsStruct ()->BaseSymbol () : nullptr;
-    bool  baseIsConstVar   = base.Val->Kind == ValueKind::Const
-                             && base.Node->Kind () == hir::NodeKind::LoadVar;
-    bool  baseIsStatic     = base.Val->Kind == ValueKind::Type;
-    bool  baseIsThis       = !baseIsStatic && _insideMethod.has_value ()
-                             && *_insideMethod->second == *targetType;
-    bool  canAccessPrivate = baseIsThis
-                             || baseIsStatic && _insideMethod.has_value ()
-                                    && *_insideMethod->second == *targetType;
+    if (!s->IsComplete) {
+        _diag
+            .Report (
+                DiagCode::EIncompleteType,
+                "type '" + typeToString (targetType) + "' is incomplete",
+                Severity::Error)
+            .AddSpan (mc->Start (), mc->End ());
+        return {};
+    }
+    bool baseIsConstVar   = base.Val->Kind == ValueKind::Const
+                            && base.Node->Kind () == hir::NodeKind::LoadVar;
+    bool baseIsStatic     = base.Val->Kind == ValueKind::Type;
+    bool baseIsThis       = !baseIsStatic && _insideMethod.has_value ()
+                            && *_insideMethod->second == *targetType;
+    bool canAccessPrivate = baseIsThis
+                            || baseIsStatic && _insideMethod.has_value ()
+                                   && *_insideMethod->second == *targetType;
     std::unordered_map<std::string, MethodCandidates> *methods = nullptr;
     if (s != nullptr) {
         methods = &s->Methods;
@@ -1150,7 +1177,8 @@ Sema::analyzeTernaryExpr (TernaryExpr *te, Type *expectedType) {
         te->Start (),
         te->End (),
         nullptr,
-        hir::MangleKind::Veo);
+        hir::MangleKind::Veo,
+        false);
     auto *trueBB  = _builder.CreateBasicBlock (_builder.Parent (), "cond.true");
     auto *falseBB = _builder.CreateBasicBlock (_builder.Parent (), "cond.false");
     auto *mergeBB = _builder.CreateBasicBlock (_builder.Parent (), "cond.merge");

@@ -57,6 +57,13 @@ enum class DiagCode : uint8_t {
     ECannotUseTraitForVar,
     ECannotUseTraitForFunc,
     EMethodSignatureMismatch,
+    EIncompleteType,
+    EUnsupportedAbi,
+    EStmtAreNotAllowedInExtern,
+    ECannotInitExternVar,
+    EExternVarMustHaveType,
+    EExternFuncCannotHaveBody,
+    EExternStructCannotHaveBody,
 
     WUnusedVar,
     WLossPrecision,
