@@ -2,6 +2,7 @@
 #include <basic/name.h>
 #include <basic/symbols/variable.h>
 #include <basic/types/type.h>
+#include <hir/mangle_kind.h>
 #include <hir/node.h>
 
 namespace veo::hir {
@@ -13,6 +14,8 @@ class VarDef : public Node {
     bool               _isConst;
     bool               _isGlobal;
     symbols::Variable *_base;
+    MangleKind         _mangleKind;
+    bool               _isDeclaration;
 
 public:
     VarDef (
@@ -23,13 +26,17 @@ public:
         bool               isGlobal,
         llvm::SMLoc        start,
         llvm::SMLoc        end,
-        symbols::Variable *base)
+        symbols::Variable *base,
+        MangleKind         mangleKind    = MangleKind::Veo,
+        bool               isDeclaration = false)
         : _name (std::move (name)),
           _type (type),
           _expr (expr),
           _isConst (isConst),
           _isGlobal (isGlobal),
           _base (base),
+          _mangleKind (mangleKind),
+          _isDeclaration (isDeclaration),
           Node (NodeKind::VarDef, start, end) {}
 
     bool
@@ -39,7 +46,9 @@ public:
         }
 
         return _name == other->_name && _type == other->_type
-               && _isConst == other->_isConst && *_base == *other->_base;
+               && _isConst == other->_isConst && *_base == *other->_base
+               && _mangleKind == other->_mangleKind
+               && _isDeclaration == other->_isDeclaration;
     }
 
     bool
@@ -82,6 +91,16 @@ public:
     symbols::Variable *
     BaseSymbol () const {
         return _base;
+    }
+
+    MangleKind
+    GetMangleKind () const {
+        return _mangleKind;
+    }
+
+    bool
+    IsDeclaration () const {
+        return _isDeclaration;
     }
 };
 

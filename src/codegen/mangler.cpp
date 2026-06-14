@@ -6,8 +6,11 @@
 namespace veo {
 
 std::string
-Mangler::MangleFunction (const hir::Function *func) {
-    auto              *sym = func->BaseSymbol ();
+Mangler::MangleFunction (const hir::Function *func, hir::MangleKind mangleKind) {
+    auto *sym = func->BaseSymbol ();
+    if (mangleKind == hir::MangleKind::C) {
+        return sym->Name.Val;
+    }
     std::ostringstream oss;
     oss << "_VF";
     oss << MangleModule (sym->Parent);
@@ -20,7 +23,11 @@ Mangler::MangleFunction (const hir::Function *func) {
 }
 
 std::string
-Mangler::MangleMethod (basic::Type *base, hir::Function *func) {
+Mangler::MangleMethod (
+    basic::Type *base, hir::Function *func, hir::MangleKind mangleKind) {
+    if (mangleKind == hir::MangleKind::C) {
+        return func->Name ().Val;
+    }
     std::ostringstream oss;
     oss << "_VM";
     if (base->IsStruct ()) {
@@ -40,8 +47,11 @@ Mangler::MangleMethod (basic::Type *base, hir::Function *func) {
 }
 
 std::string
-Mangler::MangleGlobalVar (const hir::VarDef *var) {
-    auto              *sym = var->BaseSymbol ();
+Mangler::MangleGlobalVar (const hir::VarDef *var, hir::MangleKind mangleKind) {
+    auto *sym = var->BaseSymbol ();
+    if (mangleKind == hir::MangleKind::C) {
+        return sym->Name.Val;
+    }
     std::ostringstream oss;
     oss << "_VG";
     oss << MangleModule (sym->Parent);
@@ -60,13 +70,15 @@ Mangler::MangleStaticField (const symbols::Struct *sym, const std::string &field
 }
 
 std::string
-Mangler::MangleStruct (const hir::StructDef *sd) {
+Mangler::MangleStruct (const hir::StructDef *sd, hir::MangleKind mangleKind) {
     return MangleStructSymbol (sd->BaseSymbol ());
 }
 
 std::string
-Mangler::MangleStructSymbol (const symbols::Struct *sym) {
-
+Mangler::MangleStructSymbol (const symbols::Struct *sym, hir::MangleKind mangleKind) {
+    if (mangleKind == hir::MangleKind::C) {
+        return sym->Name.Val;
+    }
     std::ostringstream oss;
     oss << "_VS";
     oss << MangleModule (sym->Parent);
@@ -87,7 +99,7 @@ Mangler::MangleModule (const symbols::Module *mod) {
 
 // NOLINTBEGIN(cppcoreguidelines-avoid-magic-numbers)
 std::string
-Mangler::MangleType (const basic::Type *type) {
+Mangler::MangleType (const basic::Type *type, hir::MangleKind mangleKind) {
     switch (type->Kind ()) {
     case basic::TypeKind::Integer: {
         const auto *it = llvm::cast<basic::IntegerType> (type);

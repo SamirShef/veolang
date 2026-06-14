@@ -16,6 +16,7 @@
 #include <ast/exprs/var_expr.h>
 #include <ast/stmts/break_continue.h>
 #include <ast/stmts/expr_stmt.h>
+#include <ast/stmts/extern_stmt.h>
 #include <ast/stmts/for_loop.h>
 #include <ast/stmts/func_def.h>
 #include <ast/stmts/if_else.h>
@@ -72,6 +73,9 @@ Parser::parseStmt (bool expectSemi) {
     }
     case TokenKind::Trait: {
         return parseTraitStmt ();
+    }
+    case TokenKind::Extern: {
+        return parseExternStmt ();
     }
     default: {
         Expr *expr = parseExpr ();
@@ -172,14 +176,12 @@ Parser::parseFuncDef (ast::AccessModifier access) {
         retType = createType<basic::NothType> ();
     }
     std::vector<Stmt *> body;
-    bool                isDeclaration = true;
+    bool                isDeclaration = false;
     if (check (TokenKind::Semi)) {
+        isDeclaration = true;
         expectSemi ();
-    } else {
-        isDeclaration = false;
-        if (!parseBlock (body)) {
-            return nullptr;
-        }
+    } else if (!parseBlock (body)) {
+        return nullptr;
     }
     return createNode<FuncDef> (
         std::move (name),
@@ -291,13 +293,21 @@ Parser::parseStructDef (ast::AccessModifier access) {
     if (!expectName (name)) {
         return nullptr;
     }
-    if (!expectTok (TokenKind::LBrace, "{")) {
+    bool isDeclaration = false;
+    if (check (TokenKind::Semi)) {
+        isDeclaration = true;
+        expectSemi ();
+    } else if (!expectTok (TokenKind::LBrace, "{")) {
         return nullptr;
     }
-    std::vector<Field> fields = parseFields ();
+    std::vector<Field> fields;
+    if (!isDeclaration) {
+        fields = std::move (parseFields ());
+    }
     return createNode<StructDef> (
         std::move (name),
         std::move (fields),
+        isDeclaration,
         access,
         firstTok.Start,
         _lastTok.End);
@@ -369,6 +379,29 @@ Parser::parseTraitStmt () {
     return createNode<TraitStmt> (
         std::move (name),
         std::move (methods),
+        firstTok.Start,
+        _lastTok.End);
+}
+
+Stmt *
+Parser::parseExternStmt () {
+    const Token    firstTok = advance ();
+    basic::NameObj from;
+    if (check (TokenKind::StrLit)) {
+        from = basic::NameObj (advance ());
+    }
+    std::vector<Stmt *> body;
+    if (match (TokenKind::LBrace)) {
+        parseStmtsIntoBlock (body);
+    } else {
+        Stmt *stmt = parseStmt ();
+        if (stmt != nullptr) {
+            body.push_back (stmt);
+        }
+    }
+    return createNode<ExternStmt> (
+        std::move (from),
+        std::move (body),
         firstTok.Start,
         _lastTok.End);
 }

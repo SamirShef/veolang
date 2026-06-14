@@ -183,6 +183,31 @@ Optimize (llvm::Module &mod, OptLevel level) {
     mpm.run (mod, mam);
 }
 
+bool
+CompileCFile (
+    const std::string &target,
+    const std::string &cSource,
+    const std::string &objFile,
+    OptLevel           level) {
+    std::string optFlag = "-O0";
+    switch (level) {
+#define variant(kind)                                                                    \
+    case OptLevel::kind: optFlag = "-" #kind; break;
+        variant (O0);
+        variant (O1);
+        variant (O2);
+        variant (O3);
+        variant (Os);
+        variant (Oz);
+#undef variant
+    }
+
+    std::string cmd = "clang --target=\"" + target + "\" " + optFlag + " -c \"" + cSource
+                      + "\" -o \"" + objFile + "\"";
+
+    return system (cmd.c_str ()) == EXIT_SUCCESS;
+}
+
 CompilationResult
 Compile (
     const fs::path     &projectPath,
@@ -297,5 +322,4 @@ Compile (
 
     return { .Success = !parseRes.HasErrors, .ObjPath = objPath };
 }
-
 }

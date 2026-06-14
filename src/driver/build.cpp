@@ -37,6 +37,8 @@ BuildDriver::Build () {
         exit (1);
     }
 
+    std::vector<std::string> objFiles;
+
     auto *mod         = new symbols::Module (manif.ProjectName);
     auto  artefactDir = manif.ManifestPath.parent_path () / "build" / "obj";
     auto  objPath     = artefactDir
@@ -46,17 +48,52 @@ BuildDriver::Build () {
                         / (manif.EntryPointPath.stem ().string () + ".o");
     objPath           = objPath.lexically_normal ();
     fs::create_directories (objPath.parent_path ());
+    objFiles.push_back (objPath.string ());
 
     std::string  targetTripleStr = TargetTripleOpt.empty ()
                                        ? llvm::sys::getDefaultTargetTriple ()
                                        : TargetTripleOpt.getValue ();
     llvm::Triple triple (targetTripleStr);
+
+    for (const auto &cSrc : manif.CSources) {
+        auto absoluteCSrc = manif.ManifestPath.parent_path () / cSrc;
+        if (!fs::exists (absoluteCSrc)) {
+            llvm::errs () << llvm::raw_fd_ostream::RED << "Error: C source file "
+                          << cSrc.string () << " does not exist\n"
+                          << llvm::raw_fd_ostream::RESET;
+            exit (1);
+        }
+
+        auto cObjPath = artefactDir
+                        / fs::absolute (absoluteCSrc)
+                              .parent_path ()
+                              .lexically_relative (manif.ManifestPath.parent_path ())
+                        / (cSrc.stem ().string () + ".o");
+        cObjPath      = cObjPath.lexically_normal ();
+
+        fs::create_directories (cObjPath.parent_path ());
+
+        if (!CompileCFile (
+                targetTripleStr,
+                absoluteCSrc.string (),
+                cObjPath.string (),
+                OptimizationLevelOpt)) {
+            llvm::errs () << llvm::raw_fd_ostream::RED
+                          << "Error: Failed to compile C source " << cSrc.string ()
+                          << '\n'
+                          << llvm::raw_fd_ostream::RESET;
+            exit (1);
+        }
+
+        objFiles.push_back (cObjPath.string ());
+    }
+
     auto compileRes = Compile (_projectRoot, manif.EntryPointPath, objPath, mod, triple);
     if (!compileRes.Success) {
         exit (1);
     }
     auto exePath = artefactDir / GetOutputName (manif.ProjectName, triple);
-    if (LinkObjectFiles (targetTripleStr, exePath.string (), { objPath.string () })) {
+    if (LinkObjectFiles (targetTripleStr, exePath.string (), objFiles)) {
         llvm::errs ().changeColor (llvm::raw_fd_ostream::GREEN, true)
             << "SUCCESS: " << llvm::raw_fd_ostream::RESET << exePath.string () << "\n";
     } else {
@@ -90,9 +127,19 @@ BuildDriver::parseManifest (const fs::path &path) {
         llvm::errs () << ")\n" << llvm::raw_fd_ostream::RESET;
         exit (1);
     }
+
+    std::vector<fs::path> csources;
+    if (auto *arr = manif["c"]["sources"].as_array ()) {
+        for (auto &el : *arr) {
+            if (auto *s = el.as_string ()) {
+                csources.emplace_back (s->get ());
+            }
+        }
+    }
     return { .ProjectName    = pkgName,
              .ManifestPath   = fs::absolute (path),
-             .EntryPointPath = fs::path (entryPath) };
+             .EntryPointPath = fs::path (entryPath),
+             .CSources       = std::move (csources) };
 }
 
 }

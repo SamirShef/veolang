@@ -4,6 +4,7 @@
 #include <basic/symbols/function.h>
 #include <basic/types/type.h>
 #include <hir/basic_block.h>
+#include <hir/mangle_kind.h>
 #include <hir/node.h>
 #include <hir/var_def.h>
 
@@ -15,6 +16,7 @@ class Function : public Node {
     std::vector<VarDef *>     _args;
     std::vector<BasicBlock *> _body;
     symbols::Function        *_base;
+    MangleKind                _mangleKind;
     basic::Type              *_methodBaseType;
     bool                      _isStatic;
 
@@ -26,12 +28,14 @@ public:
         llvm::SMLoc           start,
         llvm::SMLoc           end,
         symbols::Function    *base,
+        MangleKind            mangleKind     = MangleKind::Veo,
         basic::Type          *methodBaseType = nullptr,
         bool                  isStatic       = false)
         : _name (std::move (name)),
           _retType (retType),
           _args (std::move (args)),
           _base (base),
+          _mangleKind (mangleKind),
           _methodBaseType (methodBaseType),
           _isStatic (isStatic),
           Node (NodeKind::Func, start, end) {}
@@ -61,6 +65,11 @@ public:
     symbols::Function *
     BaseSymbol () const {
         return _base;
+    }
+
+    MangleKind
+    GetMangleKind () const {
+        return _mangleKind;
     }
 
     basic::Type *

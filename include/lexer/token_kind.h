@@ -38,6 +38,7 @@ enum class TokenKind : uint8_t {
     Mod,      // keyword `mod`
     Import,   // keyword `import`
     Static,   // keyword `static`
+    Extern,   // keyword `extern`
 
     BoolLit,  // bool literal
     CharLit,  // character literal

@@ -257,6 +257,18 @@ Dumper::dumpTraitStmt (TraitStmt *ts) {
 }
 
 void
+Dumper::dumpExternStmt (ExternStmt *es) {
+    print (
+        "ExternStmt: "
+        + (!es->From ().Val.empty () ? "from '" + es->From ().Val + "':" : "") + '\n');
+    ++_indentLvl;
+    for (auto *stmt : es->Body ()) {
+        dumpStmt (stmt);
+    }
+    --_indentLvl;
+}
+
+void
 Dumper::dumpLiteralExpr (LiteralExpr *le) {
     print ("LiteralExpr: " + le->Value () + '\n');
 }

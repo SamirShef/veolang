@@ -118,6 +118,9 @@ private:
     ast::Stmt *
     parseTraitStmt ();
 
+    ast::Stmt *
+    parseExternStmt ();
+
     std::vector<ast::Argument>
     parseArguments ();
 
