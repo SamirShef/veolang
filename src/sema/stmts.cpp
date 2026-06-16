@@ -168,6 +168,14 @@ Sema::declareFunc (FuncDef *fd, hir::MangleKind mangleKind) {
             .AddSpan (fd->Name ().Start, fd->Name ().End, "redefined here");
         return;
     }
+    if (fd->IsGeneric ()) {
+        pushTypeScope ();
+        for (const auto &param : fd->GenericParams ()) {
+            _localTypes.back ().emplace (
+                param.Name.Val,
+                createType<GenericType> (param.Name.Val));
+        }
+    }
     resolveType (&fd->RetType ());
     if (fd->RetType () != nullptr) {
         if (fd->RetType ()->CanonicalType ()->IsStruct ()
@@ -185,7 +193,7 @@ Sema::declareFunc (FuncDef *fd, hir::MangleKind mangleKind) {
             return;
         }
     }
-    bool isGeneric = false;
+    bool isGeneric = fd->IsGeneric ();
     for (auto &arg : fd->Args ()) {
         resolveType (&arg.Type);
         if (arg.Type != nullptr) {
@@ -220,6 +228,7 @@ Sema::declareFunc (FuncDef *fd, hir::MangleKind mangleKind) {
         fd->Args (),
         isGeneric,
         _mod,
+        fd->IsGeneric () ? fd : nullptr,
         mangleKind);
     auto it = _mod->Funcs.find (func.Name.Val);
     if (it == _mod->Funcs.end ()) {
@@ -227,7 +236,7 @@ Sema::declareFunc (FuncDef *fd, hir::MangleKind mangleKind) {
     }
     auto &candidates = _mod->Funcs.at (func.Name.Val).Candidates;
     auto  funcPtr    = std::make_unique<Function> (func);
-    if (!isGeneric) {
+    if (!func.IsGeneric) {
         auto *funcNode = _builder.CreateFunction (
             func.Name,
             fd->RetType (),
@@ -239,17 +248,21 @@ Sema::declareFunc (FuncDef *fd, hir::MangleKind mangleKind) {
         _funcs.emplace (funcPtr.get (), funcNode);
     }
     candidates.emplace_back (std::move (funcPtr));
-    if (isGeneric) {
+    if (func.IsGeneric) {
         auto it
             = std::ranges::find_if (candidates, [&] (const std::unique_ptr<Function> &f) {
                   return func == *f;
               });
         _genericFuncs.emplace (it->get (), fd);
+        popTypeScope ();
     }
 }
 
 void
 Sema::analyzeFuncDef (FuncDef *fd, bool generatingGeneric) {
+    if (fd->IsGeneric ()) {
+        return;
+    }
     if (!generatingGeneric && !allowInScope (fd)) {
         return;
     }
@@ -296,8 +309,6 @@ Sema::analyzeFuncDef (FuncDef *fd, bool generatingGeneric) {
     _funcRetTypes.push (fd->RetType ());
     _vars.emplace ();
 
-    _localsCount = 0;
-
     size_t index = 0;
     for (const auto &arg : fd->Args ()) {
         _vars.top ().Vars.emplace (
@@ -330,25 +341,11 @@ Sema::analyzeRet (Return *ret) {
     if (!allowInScope (ret, false)) {
         return;
     }
-    if (ret->RetExpr () == nullptr) {
-        if (!_funcRetTypes.top ()->IsNoth ()) {
-            _diag
-                .Report (
-                    DiagCode::ECannotCast,
-                    "cannot implicitly cast 'noth' to '"
-                        + typeToString (_funcRetTypes.top ()) + "'",
-                    Severity::Error)
-                .AddSpan (ret->Start (), ret->End ());
-            return;
-        }
-        _builder.CreateRet (nullptr, ret->Start (), ret->End ());
-    } else {
-        auto res = analyzeExpr (ret->RetExpr (), _funcRetTypes.top ());
-        if (!res.Val.has_value ()) {
-            return;
-        }
-        _builder.CreateRet (res.Node, ret->Start (), ret->End ());
+    auto res = analyzeExpr (ret->RetExpr (), _funcRetTypes.top ());
+    if (ret->RetExpr () != nullptr && !res.Val.has_value ()) {
+        return;
     }
+    _builder.CreateRet (res.Node, ret->Start (), ret->End ());
 }
 
 void
@@ -824,8 +821,14 @@ Sema::declareImplMethod (
             .AddSpan (fd->Start (), fd->End ());
         return;
     }
-    auto func = Function (fd->Name (), fd->RetType (), fd->Args (), isGeneric, _mod);
-    auto m    = symbols::Method (
+    auto func = Function (
+        fd->Name (),
+        fd->RetType (),
+        fd->Args (),
+        isGeneric,
+        _mod,
+        fd->IsGeneric () ? fd : nullptr);
+    auto m = symbols::Method (
         std::make_unique<Function> (func),
         fd->Access (),
         method.IsStatic,
@@ -1092,8 +1095,14 @@ Sema::analyzeTraitStmt (TraitStmt *ts) {
                 isGeneric = true;
             }
         }
-        auto func = Function (fd->Name (), fd->RetType (), fd->Args (), isGeneric, _mod);
-        auto m    = symbols::Method (
+        auto func = Function (
+            fd->Name (),
+            fd->RetType (),
+            fd->Args (),
+            isGeneric,
+            _mod,
+            fd->IsGeneric () ? fd : nullptr);
+        auto m = symbols::Method (
             std::make_unique<Function> (func),
             fd->Access (),
             method.IsStatic,
@@ -1292,6 +1301,7 @@ Sema::analyzeExternFuncDef (ast::FuncDef *fd, hir::MangleKind mangleKind) {
         fd->Args (),
         isGeneric,
         _mod,
+        fd->IsGeneric () ? fd : nullptr,
         mangleKind);
     auto it = _mod->Funcs.find (func.Name.Val);
     if (it == _mod->Funcs.end ()) {

@@ -162,6 +162,12 @@ Parser::parseFuncDef (ast::AccessModifier access) {
     if (!expectName (name)) {
         return nullptr;
     }
+    bool                      isGeneric = false;
+    std::vector<GenericParam> genericParams;
+    if (match (TokenKind::Lt)) {
+        genericParams = std::move (parseGenericParams ());
+        isGeneric     = true;
+    }
     if (!expectTok (TokenKind::LParen, "(")) {
         return nullptr;
     }
@@ -189,9 +195,60 @@ Parser::parseFuncDef (ast::AccessModifier access) {
         std::move (args),
         std::move (body),
         isDeclaration,
+        std::move (genericParams),
         access,
         firstTok.Start,
         _lastTok.End);
+}
+
+std::vector<GenericParam>
+Parser::parseGenericParams () {
+    std::vector<GenericParam> params;
+    while (!isAtEnd () && !match (TokenKind::Gt)) { // TODO: replace to smart checking
+        auto param = parseGenericParam ();
+        if (!param.IsValid ()) {
+            continue;
+        }
+        params.push_back (param);
+        if (!check (TokenKind::Gt)) { // TODO: replace to smart checking
+            if (!expectTok (TokenKind::Comma, ",")) {
+                break;
+            }
+        }
+    }
+    return std::move (params);
+}
+
+GenericParam
+Parser::parseGenericParam () {
+    basic::NameObj name;
+    if (!expectName (name)) {
+        return GenericParam::Invalid ();
+    }
+    return { name };
+}
+
+std::vector<basic::Type *>
+Parser::parseGenericParamsForCall () {
+    std::vector<basic::Type *> params;
+    while (!isAtEnd () && !match (TokenKind::Gt)) { // TODO: replace to smart checking
+        auto *param = parseGenericParamForCall ();
+        if (param == nullptr) {
+            continue;
+        }
+        params.push_back (param);
+        if (!check (TokenKind::Gt)) { // TODO: replace to smart checking
+            if (!expectTok (TokenKind::Comma, ",")) {
+                break;
+            }
+        }
+    }
+    return std::move (params);
+}
+
+basic::Type *
+Parser::parseGenericParamForCall () {
+    return consumeType ();
 }
 
 Stmt *
@@ -644,12 +701,23 @@ Parser::parsePrimaryExpr (bool allowStruct) {
                 tok.Start,
                 _lastTok.End);
         }
-        if (match (TokenKind::LParen)) { // FuncCall
+        if (match (TokenKind::Bang) || match (TokenKind::LParen)) { // FuncCall
+            std::vector<basic::Type *> genericParams;
+            if (check (_lastTok, TokenKind::Bang)) {
+                if (!expectTok (TokenKind::Lt, "<")) {
+                    return nullptr;
+                }
+                genericParams = std::move (parseGenericParamsForCall ());
+                if (!expectTok (TokenKind::LParen, "(")) {
+                    return nullptr;
+                }
+            }
             std::vector<Expr *> args;
             parseArgumentsForCall (args);
             return createNode<FuncCall> (
                 basic::NameObj (tok),
                 std::move (args),
+                std::move (genericParams),
                 tok.Start,
                 _lastTok.End);
         }

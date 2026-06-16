@@ -120,9 +120,6 @@ Sema::analyzeExpr (Expr *expr, Type *expectedType) {
         auto  res   = SemanticResult (                                                   \
             value,                                                                       \
             _builder.CreateLiteral (value, le->Start (), le->End ()));                   \
-        if (expectedType == nullptr) {                                                   \
-            return res;                                                                  \
-        }                                                                                \
         res = implicitlyCast (res, &expectedType, le->Start (), le->End ());             \
         return res;                                                                      \
     }
@@ -137,9 +134,6 @@ Sema::analyzeExpr (Expr *expr, Type *expectedType) {
         auto res = SemanticResult (                                                      \
             value,                                                                       \
             _builder.CreateLiteral (value, le->Start (), le->End ()));                   \
-        if (expectedType == nullptr) {                                                   \
-            return res;                                                                  \
-        }                                                                                \
         res = implicitlyCast (res, &expectedType, le->Start (), le->End ());             \
         return res;                                                                      \
     }
@@ -249,9 +243,6 @@ Sema::analyzeLiteralExpr (LiteralExpr *le, Type *expectedType) {
         auto res   = SemanticResult (
             value,
             _builder.CreateLiteral (value, le->Start (), le->End ()));
-        if (expectedType == nullptr) {
-            return res;
-        }
         res = implicitlyCast (res, &expectedType, le->Start (), le->End ());
         return res;
     }
@@ -261,9 +252,6 @@ Sema::analyzeLiteralExpr (LiteralExpr *le, Type *expectedType) {
         auto res   = SemanticResult (
             value,
             _builder.CreateLiteral (value, le->Start (), le->End ()));
-        if (expectedType == nullptr) {
-            return res;
-        }
         res = implicitlyCast (res, &expectedType, le->Start (), le->End ());
         return res;
     }
@@ -351,11 +339,7 @@ Sema::analyzeBinaryExpr (BinaryExpr *be, Type *expectedType) {
         be->End ());
 
     auto res = SemanticResult (Value (ValueKind::Unknown, resType), node);
-
-    if (expectedType != nullptr) {
-        res = implicitlyCast (res, &expectedType, be->Start (), be->End ());
-    }
-
+    res      = implicitlyCast (res, &expectedType, be->Start (), be->End ());
     return res;
 }
 
@@ -468,11 +452,7 @@ Sema::analyzeUnaryExpr (UnaryExpr *ue, Type *expectedType) {
 
     auto *node = _builder.CreateUnary (op, resType, rhs.Node, ue->Start (), ue->End ());
     auto  res  = SemanticResult (Value (ValueKind::Unknown, resType), node);
-
-    if (expectedType != nullptr) {
-        res = implicitlyCast (res, &expectedType, ue->Start (), ue->End ());
-    }
-
+    res        = implicitlyCast (res, &expectedType, ue->Start (), ue->End ());
     return res;
 }
 
@@ -512,9 +492,7 @@ Sema::analyzeVarExpr (VarExpr *ve, Type *expectedType) {
             ve->End ());
     }
     auto res = SemanticResult (value, node);
-    if (expectedType != nullptr) {
-        res = implicitlyCast (res, &expectedType, ve->Start (), ve->End ());
-    }
+    res      = implicitlyCast (res, &expectedType, ve->Start (), ve->End ());
     return res;
 }
 
@@ -543,27 +521,55 @@ Sema::analyzeFuncCall (FuncCall *fc, Type *expectedType) {
         argTypes.emplace_back (argRes.Val->Type);
     }
 
-    auto *func = resolveBestOverload (candidates, argTypes, fc->Start (), fc->End ());
+    auto *func = resolveBestOverload (
+        candidates,
+        fc->GenericParams (),
+        argTypes,
+        fc->Start (),
+        fc->End ());
     if (func == nullptr) {
         return {};
     }
 
-    if (func->IsGeneric) {
-        if (!generateGenericFunc (&func, argTypes, candidates, fc)) {
+    ast::FuncDef *funcDef = nullptr;
+    if (auto it = _genericFuncs.find (func); it != _genericFuncs.end ()) {
+        funcDef = it->second;
+    }
+    auto *finalFunc = func;
+
+    if (funcDef != nullptr && funcDef->IsGeneric ()) {
+        std::unordered_map<std::string, Type *> substMap;
+        const auto                             &genericParams = funcDef->GenericParams ();
+
+        if (!fc->GenericParams ().empty ()) {
+            for (size_t i = 0; i < genericParams.size (); ++i) {
+                substMap[genericParams[i].Name.Val] = fc->GenericParams ()[i];
+            }
+        } else {
+            std::unordered_map<std::string, Type *> inferredMap;
+            for (size_t i = 0; i < argTypes.size (); ++i) {
+                deduceGenericTypes (func->Args[i].Type, argTypes[i], inferredMap);
+            }
+            substMap = std::move (inferredMap);
+        }
+
+        finalFunc = generateGenericFunc (func, funcDef, substMap);
+        if (finalFunc == nullptr) {
             return {};
         }
     }
 
     std::vector<hir::Node *> hirArgs;
+    hirArgs.reserve (argResults.size ());
     for (size_t i = 0; i < argResults.size (); ++i) {
-        auto res = analyzeExpr (fc->Args ()[i], func->Args[i].Type);
+        auto res = analyzeExpr (fc->Args ()[i], finalFunc->Args[i].Type);
         hirArgs.emplace_back (res.Node);
     }
 
     auto res = SemanticResult (
-        Value (ValueKind::Unknown, func->RetType),
+        Value (ValueKind::Unknown, finalFunc->RetType),
         _builder.CreateCall (
-            _funcs.at (func),
+            _funcs.at (finalFunc),
             std::move (hirArgs),
             fc->Start (),
             fc->End ()));
@@ -571,41 +577,82 @@ Sema::analyzeFuncCall (FuncCall *fc, Type *expectedType) {
     return res;
 }
 
-bool
+symbols::Function *
 Sema::generateGenericFunc (
-    symbols::Function          **func,
-    std::vector<Type *>         &argTypes,
-    symbols::FunctionCandidates *candidates,
-    ast::FuncCall               *fc) {
-    auto                 *lastBB  = _builder.InsertBlock ();
-    auto                 *oldFunc = _genericFuncs.at (*func);
-    std::vector<Argument> args;
-    args.reserve (oldFunc->Args ().size ());
-    size_t i = 0;
-    for (const auto &a : oldFunc->Args ()) {
-        Type *type = nullptr;
-        if (a.Type->IsTrait ()) {
-            type = argTypes[i]->CanonicalType ();
-        } else {
-            type = a.Type->CanonicalType ();
-        }
-        args.emplace_back (a.Name, type);
-        ++i;
+    symbols::Function                             *func,
+    ast::FuncDef                                  *fd,
+    const std::unordered_map<std::string, Type *> &substMap) {
+    auto       *oldBB = _builder.InsertBlock ();
+    const auto &name  = fd->Name ().Val;
+
+    auto specFunc     = std::make_unique<symbols::Function> ();
+    specFunc->Name    = basic::NameObj (name, fd->Name ().Start, fd->Name ().End);
+    specFunc->RetType = substituteGenericTypes (fd->RetType (), substMap);
+
+    for (const auto &arg : fd->Args ()) {
+        Type *concreteArgType = substituteGenericTypes (arg.Type, substMap);
+        specFunc->Args.emplace_back (arg.Name, concreteArgType);
     }
-    auto *newFunc = createNode<FuncDef> (
-        oldFunc->Name (),
-        oldFunc->RetType (),
-        std::move (args),
-        oldFunc->Body (),
-        false,
-        oldFunc->Access (),
-        oldFunc->Start (),
-        oldFunc->End ());
-    declareFunc (newFunc);
-    analyzeFuncDef (newFunc, true);
-    _builder.SetInsertionPoint (lastBB);
-    *func = resolveBestOverload (candidates, argTypes, fc->Start (), fc->End ());
-    return func != nullptr;
+
+    auto *funcPtr = specFunc.get ();
+
+    _mod->Funcs[name].Candidates.push_back (std::move (specFunc));
+
+    std::vector<hir::VarDef *> hirArgs;
+    hirArgs.reserve (funcPtr->Args.size ());
+    for (const auto &arg : funcPtr->Args) {
+        hirArgs.emplace_back (_builder.CreateVariable (
+            arg.Name,
+            arg.Type,
+            nullptr,
+            false,
+            false,
+            arg.Name.Start,
+            arg.Name.End,
+            nullptr,
+            hir::MangleKind::Veo,
+            false,
+            false));
+    }
+
+    auto *funcNode = _builder.CreateFunction (
+        funcPtr->Name,
+        funcPtr->RetType,
+        std::move (hirArgs),
+        fd->Start (),
+        fd->End (),
+        funcPtr,
+        hir::MangleKind::Veo);
+    _funcs.emplace (funcPtr, funcNode);
+    auto *entry = _builder.CreateBasicBlock (funcNode, "entry");
+    _builder.SetInsertionPoint (entry);
+
+    _funcRetTypes.push (funcPtr->RetType);
+    _vars.emplace ();
+
+    for (size_t i = 0; i < funcPtr->Args.size (); ++i) {
+        _vars.top ().Vars.emplace (
+            funcPtr->Args[i].Name.Val,
+            symbols::Variable (
+                funcPtr->Args[i].Name,
+                funcPtr->Args[i].Type,
+                false,
+                false,
+                nullptr,
+                hir::MangleKind::Veo,
+                std::nullopt,
+                funcNode->Args ()[i]));
+    }
+
+    for (auto *stmt : fd->Body ()) {
+        analyzeStmt (stmt);
+    }
+
+    _vars.pop ();
+    _funcRetTypes.pop ();
+
+    _builder.SetInsertionPoint (oldBB);
+    return funcPtr;
 }
 
 Sema::SemanticResult
@@ -1053,7 +1100,8 @@ Sema::analyzeMethodCall (MethodCall *mc, Type *expectedType) {
         argTypes.emplace_back (argRes.Val->Type);
     }
 
-    auto *method = resolveBestOverload (candidates, argTypes, mc->Start (), mc->End ());
+    auto *method
+        = resolveBestOverload (candidates, {}, argTypes, mc->Start (), mc->End ());
     if (method == nullptr) {
         return {};
     }
@@ -1115,7 +1163,8 @@ Sema::generateGenericMethod (
     symbols::Struct           *s,
     basic::Type               *targetType,
     symbols::MethodCandidates *candidates,
-    ast::MethodCall           *mc) {
+    ast::MethodCall           *mc
+    /*const std::unordered_map<std::string, Type *> &substMap*/) {
     auto                 *lastBB    = _builder.InsertBlock ();
     auto                 *oldMethod = _genericMethods.at (*method);
     std::vector<Argument> args;
@@ -1137,6 +1186,7 @@ Sema::generateGenericMethod (
         std::move (args),
         oldMethod->Body (),
         false,
+        oldMethod->GenericParams (),
         oldMethod->Access (),
         oldMethod->Start (),
         oldMethod->End ());
@@ -1144,7 +1194,7 @@ Sema::generateGenericMethod (
     declareImplMethod (newMethod, s, targetType);
     analyzeImplMethodDef (newMethod, s, targetType);
     _builder.SetInsertionPoint (lastBB);
-    *method = resolveBestOverload (candidates, argTypes, mc->Start (), mc->End ());
+    *method = resolveBestOverload (candidates, {}, argTypes, mc->Start (), mc->End ());
     return method != nullptr;
 }
 
@@ -1238,7 +1288,7 @@ Sema::analyzeCastExpr (CastExpr *ce, Type *expectedType) {
     auto  val  = analyzeExpr (ce->GetExpr (), nullptr);
     auto *type = ce->Type ();
     if (!val.Val.has_value () || type == nullptr) {
-        return val;
+        return {};
     }
     resolveType (&val.Val->Type);
     resolveType (&type);
@@ -1259,7 +1309,7 @@ Sema::analyzeCastExpr (CastExpr *ce, Type *expectedType) {
     }
 
     if (*src == *dst) {
-        return val;
+        return implicitlyCast (val, &expectedType, ce->Start (), ce->End ());
     }
 
     auto kind = hir::CastKind::Invalid;
@@ -1289,7 +1339,8 @@ Sema::analyzeCastExpr (CastExpr *ce, Type *expectedType) {
         kind = hir::CastKind::BitCast;
     }
 
-    return cast (kind, dst, val, ce->Start (), ce->End ());
+    auto res = cast (kind, dst, val, ce->Start (), ce->End ());
+    return implicitlyCast (res, &expectedType, ce->Start (), ce->End ());
 }
 
 void

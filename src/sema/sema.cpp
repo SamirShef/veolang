@@ -50,21 +50,6 @@ Sema::canApplyAsgnOp (AsgnOp op, Type *type) {
 }
 
 bool
-Sema::viableFuncCandidate (
-    symbols::Function *func, const std::vector<Type *> &args, size_t &costSum) {
-    bool viable = true;
-    for (size_t i = 0; i < args.size (); ++i) {
-        CastCost cost = checkCastCost (args[i], func->Args[i].Type);
-        if (cost == CastCost::Incompatible) {
-            viable = false;
-            break;
-        }
-        costSum += static_cast<size_t> (cost);
-    }
-    return viable;
-}
-
-bool
 Sema::inGlobalScope () const {
     return _vars.size () == 1;
 }

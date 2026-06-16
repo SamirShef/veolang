@@ -34,28 +34,45 @@ struct Argument {
     }
 };
 
+struct GenericParam {
+    basic::NameObj Name;
+
+    bool
+    IsValid () const {
+        return !Name.Val.empty ();
+    }
+
+    static GenericParam
+    Invalid () {
+        return GenericParam (basic::NameObj ());
+    }
+};
+
 class FuncDef : public Stmt {
-    basic::NameObj        _name;
-    basic::Type          *_retType;
-    std::vector<Argument> _args;
-    std::vector<Stmt *>   _body;
-    bool                  _isDeclaration;
+    basic::NameObj            _name;
+    basic::Type              *_retType;
+    std::vector<Argument>     _args;
+    std::vector<Stmt *>       _body;
+    bool                      _isDeclaration;
+    std::vector<GenericParam> _genericParams;
 
 public:
     FuncDef (
-        basic::NameObj        name,
-        basic::Type          *retType,
-        std::vector<Argument> args,
-        std::vector<Stmt *>   body,
-        bool                  isDeclaration,
-        AccessModifier        access,
-        llvm::SMLoc           start,
-        llvm::SMLoc           end)
+        basic::NameObj            name,
+        basic::Type              *retType,
+        std::vector<Argument>     args,
+        std::vector<Stmt *>       body,
+        bool                      isDeclaration,
+        std::vector<GenericParam> genericParams,
+        AccessModifier            access,
+        llvm::SMLoc               start,
+        llvm::SMLoc               end)
         : _name (std::move (name)),
           _retType (retType),
           _args (std::move (args)),
           _body (std::move (body)),
           _isDeclaration (isDeclaration),
+          _genericParams (std::move (genericParams)),
           Stmt (access, NodeKind::FuncDef, start, end) {}
 
     ast_classof (FuncDef);
@@ -83,6 +100,16 @@ public:
     bool
     IsDeclaration () const {
         return _isDeclaration;
+    }
+
+    std::vector<GenericParam> &
+    GenericParams () {
+        return _genericParams;
+    }
+
+    bool
+    IsGeneric () const {
+        return !_genericParams.empty ();
     }
 };
 

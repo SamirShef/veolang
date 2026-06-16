@@ -97,6 +97,18 @@ private:
     ast::Stmt *
     parseFuncDef (ast::AccessModifier access);
 
+    std::vector<ast::GenericParam>
+    parseGenericParams ();
+
+    ast::GenericParam
+    parseGenericParam ();
+
+    std::vector<basic::Type *>
+    parseGenericParamsForCall ();
+
+    basic::Type *
+    parseGenericParamForCall ();
+
     ast::Stmt *
     parseRet ();
 
