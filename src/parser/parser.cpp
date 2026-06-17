@@ -812,13 +812,24 @@ Parser::parseChain (Expr *base, bool allowStruct) {
                     _lastTok.End);
             }
 
-            if (match (TokenKind::LParen)) {
+            if (match (TokenKind::Bang) || match (TokenKind::LParen)) {
+                std::vector<basic::Type *> genericParams;
+                if (check (_lastTok, TokenKind::Bang)) {
+                    if (!expectTok (TokenKind::Lt, "<")) {
+                        return nullptr;
+                    }
+                    genericParams = std::move (parseGenericParamsForCall ());
+                    if (!expectTok (TokenKind::LParen, "(")) {
+                        return nullptr;
+                    }
+                }
                 std::vector<Expr *> args;
                 parseArgumentsForCall (args);
                 base = createNode<MethodCall> (
                     base,
                     basic::NameObj (tok),
                     std::move (args),
+                    std::move (genericParams),
                     base->Start (),
                     _lastTok.End);
             } else {

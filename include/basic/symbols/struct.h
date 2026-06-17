@@ -55,10 +55,12 @@ struct Field {
 
 struct Method {
     std::unique_ptr<Function> Func;
-    ast::AccessModifier       Access;
-    bool                      IsStatic;
-    bool                      IsGeneric;
+    ast::AccessModifier       Access = ast::AccessModifier::Priv;
+    bool                      IsStatic{};
+    bool                      IsGeneric{};
     bool                      IsConst = true;
+
+    Method () = default;
 
     Method (
         std::unique_ptr<Function> func,

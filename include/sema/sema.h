@@ -315,15 +315,12 @@ private:
     SemanticResult
     analyzeMethodCall (ast::MethodCall *mc, Type *expectedType);
 
-    bool
+    symbols::Method *
     generateGenericMethod (
-        symbols::Method          **method,
-        std::vector<Type *>       &argTypes,
-        symbols::Struct           *s,
-        basic::Type               *targetType,
-        symbols::MethodCandidates *candidates,
-        ast::MethodCall           *mc
-        /*const std::unordered_map<std::string, Type *> &substMap*/);
+        symbols::Method                               *method,
+        Type                                          *targetType,
+        ast::FuncDef                                  *fd,
+        const std::unordered_map<std::string, Type *> &substMap);
 
     SemanticResult
     analyzeTernaryExpr (ast::TernaryExpr *te, Type *expectedType);
