@@ -69,13 +69,14 @@ public:
 
     Function *
     CreateFunction (
-        basic::NameObj        name,
-        basic::Type          *retType,
-        std::vector<VarDef *> args,
-        llvm::SMLoc           start,
-        llvm::SMLoc           end,
-        symbols::Function    *base,
-        MangleKind            mangleKind) {
+        basic::NameObj             name,
+        basic::Type               *retType,
+        std::vector<VarDef *>      args,
+        llvm::SMLoc                start,
+        llvm::SMLoc                end,
+        symbols::Function         *base,
+        MangleKind                 mangleKind,
+        std::vector<basic::Type *> substMap) {
         auto *node = _ctx.CreateNode<Function> (
             std::move (name),
             retType,
@@ -83,22 +84,26 @@ public:
             start,
             end,
             base,
-            mangleKind);
+            mangleKind,
+            nullptr,
+            false,
+            std::move (substMap));
         _ctx.AddFunction (node);
         return node;
     }
 
     Function *
     CreateMethod (
-        basic::NameObj        name,
-        basic::Type          *retType,
-        std::vector<VarDef *> args,
-        llvm::SMLoc           start,
-        llvm::SMLoc           end,
-        symbols::Method      *base,
-        MangleKind            mangleKind,
-        basic::Type          *methodBaseType,
-        bool                  isStatic) {
+        basic::NameObj             name,
+        basic::Type               *retType,
+        std::vector<VarDef *>      args,
+        llvm::SMLoc                start,
+        llvm::SMLoc                end,
+        symbols::Method           *base,
+        MangleKind                 mangleKind,
+        basic::Type               *methodBaseType,
+        bool                       isStatic,
+        std::vector<basic::Type *> substMap) {
         auto *node = _ctx.CreateNode<Function> (
             std::move (name),
             retType,
@@ -108,7 +113,8 @@ public:
             base->Func.get (),
             mangleKind,
             methodBaseType,
-            isStatic);
+            isStatic,
+            std::move (substMap));
         _ctx.AddFunction (node);
         return node;
     }

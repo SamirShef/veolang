@@ -214,6 +214,15 @@ private:
     expectName (basic::NameObj &res);
 
     bool
+    expectGtForGeneric ();
+
+    bool
+    matchGtForGeneric ();
+
+    bool
+    checkGtForGeneric ();
+
+    bool
     isAtEnd () const;
 };
 

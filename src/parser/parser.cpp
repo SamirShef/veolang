@@ -204,13 +204,13 @@ Parser::parseFuncDef (ast::AccessModifier access) {
 std::vector<GenericParam>
 Parser::parseGenericParams () {
     std::vector<GenericParam> params;
-    while (!isAtEnd () && !match (TokenKind::Gt)) { // TODO: replace to smart checking
+    while (!isAtEnd () && !matchGtForGeneric ()) {
         auto param = parseGenericParam ();
         if (!param.IsValid ()) {
             continue;
         }
         params.push_back (param);
-        if (!check (TokenKind::Gt)) { // TODO: replace to smart checking
+        if (!checkGtForGeneric ()) {
             if (!expectTok (TokenKind::Comma, ",")) {
                 break;
             }
@@ -231,13 +231,13 @@ Parser::parseGenericParam () {
 std::vector<basic::Type *>
 Parser::parseGenericParamsForCall () {
     std::vector<basic::Type *> params;
-    while (!isAtEnd () && !match (TokenKind::Gt)) { // TODO: replace to smart checking
+    while (!isAtEnd () && !matchGtForGeneric ()) {
         auto *param = parseGenericParamForCall ();
         if (param == nullptr) {
             continue;
         }
         params.push_back (param);
-        if (!check (TokenKind::Gt)) { // TODO: replace to smart checking
+        if (!checkGtForGeneric ()) {
             if (!expectTok (TokenKind::Comma, ",")) {
                 break;
             }
@@ -350,6 +350,10 @@ Parser::parseStructDef (ast::AccessModifier access) {
     if (!expectName (name)) {
         return nullptr;
     }
+    std::vector<GenericParam> genericParams;
+    if (match (TokenKind::Lt)) {
+        genericParams = std::move (parseGenericParams ());
+    }
     bool isDeclaration = false;
     if (check (TokenKind::Semi)) {
         isDeclaration = true;
@@ -365,6 +369,7 @@ Parser::parseStructDef (ast::AccessModifier access) {
         std::move (name),
         std::move (fields),
         isDeclaration,
+        std::move (genericParams),
         access,
         firstTok.Start,
         _lastTok.End);
@@ -708,6 +713,13 @@ Parser::parsePrimaryExpr (bool allowStruct) {
                     return nullptr;
                 }
                 genericParams = std::move (parseGenericParamsForCall ());
+                if (!check (TokenKind::LParen)) {
+                    auto *type = createType<basic::NamedType> (
+                        std::vector<basic::NameObj>{ basic::NameObj (tok) },
+                        std::move (genericParams));
+                    return createNode<TypeExpr> (type, tok.Start, _curTok.End);
+                }
+
                 if (!expectTok (TokenKind::LParen, "(")) {
                     return nullptr;
                 }
@@ -789,10 +801,12 @@ Parser::tryParseAsTypeExpr () {
 Expr *
 Parser::parseChain (Expr *base, bool allowStruct) {
     std::vector<basic::NameObj> path;
+    bool                        allowTypeExpr = true;
     while (true) {
         if (match (TokenKind::Dot)) {
             if (match (TokenKind::LParen)) { // cast
-                base = parseCastOperator (base);
+                base          = parseCastOperator (base);
+                allowTypeExpr = false;
                 continue;
             }
 
@@ -819,10 +833,19 @@ Parser::parseChain (Expr *base, bool allowStruct) {
                         return nullptr;
                     }
                     genericParams = std::move (parseGenericParamsForCall ());
+                    if (allowTypeExpr && !check (TokenKind::LParen)) {
+                        auto  start = path.front ().Start;
+                        auto *type  = createType<basic::NamedType> (
+                            std::move (path),
+                            std::move (genericParams));
+                        return createNode<TypeExpr> (type, start, _curTok.End);
+                    }
                     if (!expectTok (TokenKind::LParen, "(")) {
                         return nullptr;
                     }
                 }
+                allowStruct   = false;
+                allowTypeExpr = false;
                 std::vector<Expr *> args;
                 parseArgumentsForCall (args);
                 base = createNode<MethodCall> (
@@ -907,7 +930,16 @@ Parser::consumeType () {
                 }
                 path.emplace_back (name);
             }
-            return createType<basic::NamedType> (std::move (path));
+            std::vector<basic::Type *> genericParams;
+            if (match (TokenKind::Bang)) {
+                if (!expectTok (TokenKind::Lt, "<")) {
+                    return nullptr;
+                }
+                genericParams = std::move (parseGenericParamsForCall ());
+            }
+            return createType<basic::NamedType> (
+                std::move (path),
+                std::move (genericParams));
         }
         kind (Star) return createType<basic::PointerType> (consumeType ());
         kind (ISize) kind (USize) return createType<basic::SizeType> (
@@ -1057,6 +1089,43 @@ Parser::expectName (basic::NameObj &res) {
     }
     res = basic::NameObj (tok);
     return true;
+}
+
+bool
+Parser::expectGtForGeneric () {
+    if (check (TokenKind::GtEq)) {
+        _curTok = Token (
+            TokenKind::Eq,
+            { _curTok.Val[1] },
+            llvm::SMLoc::getFromPointer (_curTok.Start.getPointer () + 1),
+            _curTok.End);
+        return true;
+    }
+    // TODO: add support '>>'
+    return expectTok (TokenKind::Gt, ">");
+}
+
+bool
+Parser::matchGtForGeneric () {
+    if (check (TokenKind::GtEq)) {
+        _curTok = Token (
+            TokenKind::Eq,
+            { _curTok.Val[1] },
+            llvm::SMLoc::getFromPointer (_curTok.Start.getPointer () + 1),
+            _curTok.End);
+        return true;
+    }
+    // TODO: add support '>>'
+    return match (TokenKind::Gt);
+}
+
+bool
+Parser::checkGtForGeneric () {
+    if (check (TokenKind::GtEq)) {
+        return true;
+    }
+    // TODO: add support '>>'
+    return check (TokenKind::Gt);
 }
 
 bool

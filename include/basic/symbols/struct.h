@@ -1,5 +1,6 @@
 #pragma once
 #include <ast/access_modifier.h>
+#include <ast/stmts/struct_def.h>
 #include <basic/name.h>
 #include <basic/symbols/function.h>
 #include <basic/symbols/trait.h>
@@ -113,6 +114,8 @@ struct Struct {
     std::unordered_map<std::string, MethodCandidates> Methods;
     std::unordered_set<Trait *>                       TraitsImplements;
     Module                                           *Parent;
+    ast::StructDef                                   *StructDef;
+    bool                                              IsGeneric;
     hir::MangleKind                                   MangleKind;
     bool                                              IsComplete = true;
 
@@ -120,10 +123,14 @@ struct Struct {
         basic::NameObj     name,
         std::vector<Field> fields,
         Module            *parent,
+        bool               isGeneric,
+        ast::StructDef    *structDef,
         hir::MangleKind    mangleKind = hir::MangleKind::Veo)
         : Name (std::move (name)),
           Fields (std::move (fields)),
           Parent (parent),
+          IsGeneric (isGeneric),
+          StructDef (structDef),
           MangleKind (mangleKind) {}
 
     bool
