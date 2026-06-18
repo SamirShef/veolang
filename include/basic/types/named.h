@@ -23,8 +23,8 @@ public:
         return _path;
     }
 
-    std::vector<Type *> &
-    GenericParams () {
+    const std::vector<Type *> &
+    GenericParams () const {
         return _genericParams;
     }
 

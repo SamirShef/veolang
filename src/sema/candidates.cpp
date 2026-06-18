@@ -283,7 +283,7 @@ Sema::deduceGenericTypes (
         return false;
     }
 
-    if (auto *generic = llvm::dyn_cast<GenericType> (paramType)) {
+    if (auto *generic = llvm::dyn_cast<GenericType> (paramType->CanonicalType ())) {
         std::string name = generic->Name ();
         auto        it   = inferredMap.find (name);
         if (it != inferredMap.end ()) {
@@ -291,12 +291,12 @@ Sema::deduceGenericTypes (
                 { Value (ValueKind::Unknown, argType), nullptr },
                 &it->second);
         }
-        inferredMap[name] = argType;
+        inferredMap[name] = argType->CanonicalType ();
         return true;
     }
 
-    if (auto *paramPtr = llvm::dyn_cast<PointerType> (paramType)) {
-        if (auto *argPtr = llvm::dyn_cast<PointerType> (argType)) {
+    if (auto *paramPtr = llvm::dyn_cast<PointerType> (paramType->CanonicalType ())) {
+        if (auto *argPtr = llvm::dyn_cast<PointerType> (argType->CanonicalType ())) {
             return deduceGenericTypes (paramPtr->Base (), argPtr->Base (), inferredMap);
         }
         return false;

@@ -322,6 +322,10 @@ private:
         ast::FuncDef                                  *fd,
         const std::unordered_map<std::string, Type *> &substMap);
 
+    symbols::Struct *
+    instantiateGenericStruct (
+        symbols::Struct *s, const std::unordered_map<std::string, Type *> &substMap);
+
     SemanticResult
     analyzeTernaryExpr (ast::TernaryExpr *te, Type *expectedType);
 
