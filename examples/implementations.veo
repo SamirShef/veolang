@@ -4,13 +4,13 @@ struct Rect {
 }
 
 func main(): i32 {
-    let rect = Rect.new(2, 5);
+    let rect = Rect.New(2, 5);
     let area = rect.Area();
     return area; // returns 10
 }
 
 impl Rect {
-    pub static func new(w: i32, h: i32): Rect {
+    pub static func New(w: i32, h: i32): Rect {
         return Rect { width: w, height: h };
     }
 
