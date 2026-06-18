@@ -666,12 +666,12 @@ Sema::declareImplMethods (ImplStmt *is) {
         }
     }
     bool structIsGeneric = sym != nullptr && sym->IsGeneric;
-    if (structIsGeneric) {
-        for (auto &param : sym->StructDef->GenericParams ()) {
-            registerLocalType (param.Name.Val, createType<GenericType> (param.Name.Val));
-        }
-    }
     for (auto &method : is->Methods ()) {
+        if (structIsGeneric) {
+            for (auto &param : sym->StructDef->GenericParams ()) {
+                method.Func->GenericParams ().push_back (param);
+            }
+        }
         declareImplMethod (method, sym, targetType);
     }
 
