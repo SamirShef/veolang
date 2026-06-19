@@ -820,7 +820,7 @@ Parser::parseChain (Expr *base, bool allowStruct) {
             path.emplace_back (name);
             std::vector<basic::Type *> genericParams;
             bool                       hasGenerics = false;
-            if (check (_lastTok, TokenKind::Bang)) {
+            if (match (TokenKind::Bang)) {
                 if (!expectTok (TokenKind::Lt, "<")) {
                     return nullptr;
                 }
@@ -839,7 +839,7 @@ Parser::parseChain (Expr *base, bool allowStruct) {
                     _lastTok.End);
             }
 
-            if (match (TokenKind::Bang) || match (TokenKind::LParen)) {
+            if (match (TokenKind::LParen)) {
                 allowStruct   = false;
                 allowTypeExpr = false;
                 std::vector<Expr *> args;

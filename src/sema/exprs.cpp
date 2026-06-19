@@ -1,3 +1,5 @@
+#include "ast/stmts/func_def.h"
+
 #include <basic/types/all.h>
 #include <codegen/mangler.h>
 #include <sema/sema.h>
@@ -1149,8 +1151,18 @@ Sema::analyzeMethodCall (MethodCall *mc, Type *expectedType) {
         argTypes.emplace_back (argRes.Val->Type);
     }
 
-    auto *method
-        = resolveBestOverload (candidates, {}, argTypes, mc->Start (), mc->End ());
+    if (s != nullptr && s->StructDef != nullptr) {
+        for (auto &param : s->StructDef->GenericParams ()) {
+            mc->GenericParams ().push_back (createType<GenericType> (param.Name.Val));
+        }
+    }
+
+    auto *method = resolveBestOverload (
+        candidates,
+        mc->GenericParams (),
+        argTypes,
+        mc->Start (),
+        mc->End ());
     if (method == nullptr) {
         return {};
     }
