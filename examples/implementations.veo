@@ -5,7 +5,7 @@ struct Rect {
 
 func main(): i32 {
     let rect = Rect.new(2, 5);
-    let area = rect.Area();
+    let area = rect.area();
     return area; // returns 10
 }
 
@@ -14,7 +14,7 @@ impl Rect {
         return This { width: w, height: h };
     }
 
-    pub func Area(): i32 {
+    pub func area(): i32 {
         return this.width * this.height;
     }
 }
