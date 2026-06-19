@@ -11,14 +11,11 @@ struct Module;
 
 struct Function {
     basic::NameObj             Name;
-    basic::Type               *RetType{};
+    basic::Type               *RetType;
     std::vector<ast::Argument> Args;
-    bool                       IsGeneric{};
-    Module                    *Parent{};
-    ast::FuncDef              *FuncDef{};
-    hir::MangleKind            MangleKind = hir::MangleKind::Veo;
-
-    Function () = default;
+    bool                       IsGeneric;
+    Module                    *Parent;
+    hir::MangleKind            MangleKind;
 
     Function (
         basic::NameObj             name,
@@ -26,14 +23,12 @@ struct Function {
         std::vector<ast::Argument> args,
         bool                       isGeneric,
         Module                    *parent,
-        ast::FuncDef              *funcDef,
         hir::MangleKind            mangleKind = hir::MangleKind::Veo)
         : Name (std::move (name)),
           RetType (retType),
           Args (std::move (args)),
           IsGeneric (isGeneric),
           Parent (parent),
-          FuncDef (funcDef),
           MangleKind (mangleKind) {}
 
     bool

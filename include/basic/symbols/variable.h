@@ -17,12 +17,12 @@ struct Module;
 struct Variable {
     basic::NameObj  Name;
     basic::Type    *Type;
+    basic::OptValue Val;
     bool            IsConst;
     bool            IsGlobal;
+    hir::VarDef    *HIR = nullptr;
     Module         *Parent;
     hir::MangleKind MangleKind;
-    basic::OptValue Val;
-    hir::VarDef    *HIR = nullptr;
 
     Variable (
         basic::NameObj  name,

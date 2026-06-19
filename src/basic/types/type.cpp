@@ -17,7 +17,6 @@ as (Pointer);
 as (Noth);
 as (Alias);
 as (TraitThis);
-as (Generic);
 
 #undef as
 
@@ -84,11 +83,6 @@ operator== (const Type &lhs, const Type &rhs) {
         const auto *tlhs = lAnon->AsTraitThis ();
         const auto *trhs = rAnon->AsTraitThis ();
         return *tlhs->Trait () == *trhs->Trait ();
-    }
-    case TypeKind::Generic: {
-        const auto *glhs = lAnon->AsGeneric ();
-        const auto *grhs = rAnon->AsGeneric ();
-        return glhs->Name () == grhs->Name ();
     }
     default: return true; // BoolType, CharType, NothType and SizeType
     }

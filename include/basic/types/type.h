@@ -16,7 +16,6 @@ class PointerType;
 class NothType;
 class AliasType;
 class TraitThisType;
-class GenericType;
 
 #define type_classof(kind)                                                               \
     static bool classof (const veo::basic::Type *type) {                                 \
@@ -36,7 +35,6 @@ enum class TypeKind : uint8_t {
     Noth,
     Alias,
     TraitThis,
-    Generic,
 };
 
 class Type {
@@ -90,8 +88,6 @@ public:
     as (Alias);
     is (TraitThis);
     as (TraitThis);
-    is (Generic);
-    as (Generic);
 
     bool
     IsIntOrSize () const {

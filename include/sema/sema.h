@@ -288,11 +288,12 @@ private:
     SemanticResult
     analyzeFuncCall (ast::FuncCall *fc, Type *expectedType);
 
-    symbols::Function *
+    bool
     generateGenericFunc (
-        symbols::Function                             *func,
-        ast::FuncDef                                  *fd,
-        const std::unordered_map<std::string, Type *> &substMap);
+        symbols::Function          **func,
+        std::vector<Type *>         &argTypes,
+        symbols::FunctionCandidates *candidates,
+        ast::FuncCall               *fc);
 
     SemanticResult
     analyzeAsgnExpr (ast::AsgnExpr *ae, Type *expectedType);
@@ -322,8 +323,7 @@ private:
         symbols::Struct           *s,
         basic::Type               *targetType,
         symbols::MethodCandidates *candidates,
-        ast::MethodCall           *mc
-        /*const std::unordered_map<std::string, Type *> &substMap*/);
+        ast::MethodCall           *mc);
 
     SemanticResult
     analyzeTernaryExpr (ast::TernaryExpr *te, Type *expectedType);
@@ -433,7 +433,6 @@ private:
     symbols::Function *
     resolveBestOverload (
         symbols::FunctionCandidates *candidates,
-        const std::vector<Type *>   &explicitGenericArgs,
         const std::vector<Type *>   &argTypes,
         llvm::SMLoc                  start,
         llvm::SMLoc                  end);
@@ -441,7 +440,6 @@ private:
     symbols::Method *
     resolveBestOverload (
         symbols::MethodCandidates *candidates,
-        const std::vector<Type *> &explicitGenericArgs,
         const std::vector<Type *> &argTypes,
         llvm::SMLoc                start,
         llvm::SMLoc                end);
@@ -474,21 +472,7 @@ private:
 
     bool
     viableFuncCandidate (
-        symbols::Function         *func,
-        ast::FuncDef              *funcDef,
-        const std::vector<Type *> &explicitGenericArgs,
-        const std::vector<Type *> &args,
-        size_t                    &costSum);
-
-    bool
-    deduceGenericTypes (
-        Type                                    *paramType,
-        Type                                    *argType,
-        std::unordered_map<std::string, Type *> &inferredMap);
-
-    Type *
-    substituteGenericTypes (
-        Type *type, const std::unordered_map<std::string, Type *> &substMap);
+        symbols::Function *func, const std::vector<Type *> &args, size_t &costSum);
 
     bool
     inGlobalScope () const;

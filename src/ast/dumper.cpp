@@ -49,27 +49,14 @@ void
 Dumper::dumpFuncDef (FuncDef *fd) {
     print (
         "FuncDef: " + std::string (AccessToString (fd->Access ()))
-        + (fd->IsDeclaration () ? " decl" : "") + ' ' + fd->Name ().Val);
-    if (fd->IsGeneric ()) {
-        _os << "<";
-        size_t i = 0;
-        for (const auto &param : fd->GenericParams ()) {
-            if (i != 0) {
-                _os << ", ";
-            }
-            _os << param.Name.Val;
-            ++i;
-        }
-        _os << ">";
-    }
-    _os << " (";
+        + (fd->IsDeclaration () ? " decl" : "") + ' ' + fd->Name ().Val + " (");
     size_t i = 0;
     for (const auto &arg : fd->Args ()) {
-        if (i != 0) {
-            _os << ", ";
-        }
         if (arg.IsValid ()) {
             _os << arg.Name.Val << ": " << arg.Type->ToString ();
+        }
+        if (i < fd->Args ().size () - 1) {
+            _os << ", ";
         }
         ++i;
     }
@@ -310,20 +297,7 @@ Dumper::dumpVarExpr (VarExpr *ve) {
 
 void
 Dumper::dumpFuncCall (FuncCall *fc) {
-    print ("FuncCall: " + fc->Name ().Val);
-    if (fc->IsGeneric ()) {
-        _os << " <";
-        size_t i = 0;
-        for (const auto &param : fc->GenericParams ()) {
-            if (i != 0) {
-                _os << ", ";
-            }
-            _os << param->ToString ();
-            ++i;
-        }
-        _os << ">";
-    }
-    _os << '\n';
+    print ("FuncCall: " + fc->Name ().Val + '\n');
     ++_indentLvl;
     for (auto &a : fc->Args ()) {
         dumpExpr (a);
