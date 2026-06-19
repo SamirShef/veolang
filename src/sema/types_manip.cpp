@@ -53,43 +53,14 @@ Sema::resolveType (Type **type) {
         }
     }
     const auto &typeName = path.back ();
-    if (auto it = curMod->Structs.find (typeName.Val); it != curMod->Structs.end ()) {
-        auto *s = &it->second;
-
-        if (s->IsGeneric) {
-            const auto &genArgs = named->GenericParams ();
-
-            if (genArgs.empty ()) {
-                *type = createType<StructType> (s);
-                return *type;
-            }
-
-            const auto &genParams = s->StructDef->GenericParams ();
-            if (genArgs.size () != genParams.size ()) {
-                // TODO: report error
-                return nullptr;
-            }
-
-            std::unordered_map<std::string, Type *> substMap;
-            bool                                    isGeneric = false;
-            for (size_t i = 0; i < genParams.size (); ++i) {
-                Type *argType = genArgs[i];
-                resolveType (&argType);
-                if (argType->CanonicalType ()->IsGeneric ()) {
-                    isGeneric = true;
-                    break;
-                }
-                substMap[genParams[i].Name.Val] = argType;
-            }
-            if (!isGeneric) {
-                s = instantiateGenericStruct (s, substMap);
-            }
-        }
-        *type = createType<StructType> (s);
+    auto        structIt = curMod->Structs.find (typeName.Val);
+    if (structIt != curMod->Structs.end ()) {
+        *type = createType<StructType> (&structIt->second);
         return *type;
     }
-    if (auto it = curMod->Traits.find (typeName.Val); it != curMod->Traits.end ()) {
-        *type = createType<TraitType> (&it->second);
+    auto traitIt = curMod->Traits.find (typeName.Val);
+    if (traitIt != curMod->Traits.end ()) {
+        *type = createType<TraitType> (&traitIt->second);
         return *type;
     }
 
@@ -204,4 +175,5 @@ Sema::compareTypesWithThis (Type *traitTy, Type *implTy, Type *concreteTarget) {
     }
     return *traitTy == *implTy;
 }
+
 }

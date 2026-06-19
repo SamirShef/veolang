@@ -171,7 +171,9 @@ Sema::declareFunc (FuncDef *fd, hir::MangleKind mangleKind) {
     if (fd->IsGeneric ()) {
         pushTypeScope ();
         for (const auto &param : fd->GenericParams ()) {
-            registerLocalType (param.Name.Val, createType<GenericType> (param.Name.Val));
+            _localTypes.back ().emplace (
+                param.Name.Val,
+                createType<GenericType> (param.Name.Val));
         }
     }
     resolveType (&fd->RetType ());
@@ -529,6 +531,11 @@ Sema::analyzeStructDef (StructDef *sd) {
         return;
     }
 
+    std::vector<symbols::Field> fields;
+    fields.reserve (sd->Fields ().size ());
+    std::vector<hir::Field> hirFields;
+    hirFields.reserve (sd->Fields ().size ());
+
     auto s = Struct (
         sd->Name (),
         {},
@@ -536,21 +543,6 @@ Sema::analyzeStructDef (StructDef *sd) {
         sd->IsGeneric (),
         sd->IsGeneric () ? sd : nullptr);
     _mod->Structs.emplace (sd->Name ().Val, std::move (s));
-    if (sd->IsGeneric ()) {
-        pushTypeScope ();
-        for (const auto &param : sd->GenericParams ()) {
-            registerLocalType (param.Name.Val, createType<GenericType> (param.Name.Val));
-        }
-        for (auto &field : sd->Fields ()) {
-            resolveType (&field.Type);
-        }
-        return;
-    }
-
-    std::vector<symbols::Field> fields;
-    fields.reserve (sd->Fields ().size ());
-    std::vector<hir::Field> hirFields;
-    hirFields.reserve (sd->Fields ().size ());
 
     size_t index = 0;
     for (auto &field : sd->Fields ()) {
@@ -623,7 +615,7 @@ Sema::analyzeStructDef (StructDef *sd) {
     _mod->Structs.at (sd->Name ().Val).Fields = std::move (fields);
     _builder.CreateStruct (
         sd->Name (),
-        std::move (hirFields),
+        hirFields,
         &_mod->Structs.at (sd->Name ().Val),
         sd->Start (),
         sd->End ());
@@ -663,12 +655,6 @@ Sema::declareImplMethods (ImplStmt *is) {
         } else {
             _mod->PrimitiveTraitsImplement[targetType].emplace_back (
                 traitType->AsTrait ()->BaseSymbol ());
-        }
-    }
-    bool structIsGeneric = sym != nullptr && sym->IsGeneric;
-    if (structIsGeneric) {
-        for (auto &param : sym->StructDef->GenericParams ()) {
-            registerLocalType (param.Name.Val, createType<GenericType> (param.Name.Val));
         }
     }
     for (auto &method : is->Methods ()) {
@@ -795,11 +781,12 @@ Sema::declareImplMethod (
             .AddSpan (fd->Name ().Start, fd->Name ().End, "redefined here");
         return;
     }
-    bool isGeneric = fd->IsGeneric () || sym != nullptr && sym->IsGeneric;
-    if (isGeneric) {
+    if (fd->IsGeneric ()) {
         pushTypeScope ();
         for (const auto &param : fd->GenericParams ()) {
-            registerLocalType (param.Name.Val, createType<GenericType> (param.Name.Val));
+            _localTypes.back ().emplace (
+                param.Name.Val,
+                createType<GenericType> (param.Name.Val));
         }
     }
     resolveType (&fd->RetType ());
@@ -819,6 +806,7 @@ Sema::declareImplMethod (
             return;
         }
     }
+    bool isGeneric = fd->IsGeneric ();
     for (auto &arg : fd->Args ()) {
         resolveType (&arg.Type);
         if (arg.Type != nullptr) {
@@ -853,7 +841,7 @@ Sema::declareImplMethod (
         fd->Args (),
         isGeneric,
         _mod,
-        isGeneric ? fd : nullptr);
+        fd->IsGeneric () ? fd : nullptr);
     auto m = symbols::Method (
         std::make_unique<Function> (func),
         fd->Access (),
@@ -947,7 +935,7 @@ void
 Sema::analyzeImplMethodDef (
     ast::Method method, symbols::Struct *sym, basic::Type *targetType) {
     auto *fd = method.Func;
-    if (fd->IsGeneric () || sym != nullptr && sym->IsGeneric) {
+    if (fd->IsGeneric ()) {
         return;
     }
     if (fd->IsDeclaration ()) {

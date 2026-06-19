@@ -952,7 +952,7 @@ Sema::SemanticResult
 Sema::analyzeStructInstance (StructInstance *si, Type *expectedType) {
     resolveType (&si->StructType ());
     Type *structType = si->StructType ()->CanonicalType ();
-    if (structType != nullptr && !structType->IsStruct ()) {
+    if (!structType->IsStruct ()) {
         _diag
             .Report (
                 DiagCode::EUndefined,
@@ -962,41 +962,6 @@ Sema::analyzeStructInstance (StructInstance *si, Type *expectedType) {
         return {};
     }
     auto *s = structType->AsStruct ()->BaseSymbol ();
-
-    if (s->IsGeneric) {
-        auto *genStruct = s;
-        auto *sd        = genStruct->StructDef;
-
-        std::unordered_map<std::string, Type *> inferredMap;
-
-        for (const auto &[fieldName, expr] : si->Fields ()) {
-            auto  res            = analyzeExpr (expr, nullptr);
-            Type *concreteExprTy = res.Val->Type;
-
-            for (const auto &astField : sd->Fields ()) {
-                if (astField.Name.Val == fieldName.Val) {
-                    deduceGenericTypes (astField.Type, concreteExprTy, inferredMap);
-                    break;
-                }
-            }
-        }
-
-        for (const auto &param : sd->GenericParams ()) {
-            if (!inferredMap.contains (param.Name.Val)) {
-                _diag
-                    .Report (
-                        DiagCode::ECannotInferType,
-                        "cannot infer generic parameter '" + param.Name.Val
-                            + "' for structure '" + genStruct->Name.Val + "'",
-                        Severity::Error)
-                    .AddSpan (si->Start (), si->End ());
-                return {};
-            }
-        }
-
-        s = instantiateGenericStruct (genStruct, inferredMap);
-    }
-
     std::vector<std::pair<size_t, hir::Node *>> fields;
     std::unordered_map<size_t, NameObj>         initializedFields;
     ValueKind                                   valKind = ValueKind::Const;
@@ -1194,7 +1159,7 @@ Sema::analyzeMethodCall (MethodCall *mc, Type *expectedType) {
         _methodCallOnConstBase.emplace_back (mc, method);
     }
 
-    if (methodDef != nullptr) {
+    if (methodDef != nullptr && methodDef->IsGeneric ()) {
         std::unordered_map<std::string, Type *> substMap;
         const auto &genericParams = methodDef->GenericParams ();
 
@@ -1376,76 +1341,6 @@ Sema::generateGenericMethod (
     popTypeScope ();
 
     return methodPtr;
-}
-
-symbols::Struct *
-Sema::instantiateGenericStruct (
-    symbols::Struct *s, const std::unordered_map<std::string, Type *> &substMap) {
-    auto   mangledName = s->Name.Val + "<";
-    size_t i           = 0;
-    for (auto &param : s->StructDef->GenericParams ()) {
-        if (i != 0) {
-            mangledName += ", ";
-        }
-        mangledName += substMap.at (param.Name.Val)->ToString ();
-    }
-    mangledName += ">";
-
-    if (auto *existing = getStruct (mangledName, s->Parent)) {
-        return existing;
-    }
-
-    auto                       *sd = s->StructDef;
-    std::vector<symbols::Field> instantiatedFields;
-
-    pushTypeScope ();
-    for (const auto &[name, type] : substMap) {
-        registerLocalType (name, type);
-    }
-
-    size_t                  idx = 0;
-    std::vector<hir::Field> hirFields;
-    for (const auto &astField : sd->Fields ()) {
-        Type *substitutedType = substituteGenericTypes (astField.Type, substMap);
-        resolveType (&substitutedType);
-
-        instantiatedFields.emplace_back (
-            astField.Name,
-            substitutedType,
-            astField.IsStatic,
-            astField.IsConst,
-            astField.Access,
-            idx++);
-
-        hirFields.emplace_back (
-            astField.Name,
-            substitutedType,
-            astField.IsStatic,
-            astField.IsConst);
-    }
-
-    auto instStruct = symbols::Struct (
-        s->Name,
-        std::move (instantiatedFields),
-        s->Parent,
-        false,
-        sd,
-        s->MangleKind);
-    instStruct.Methods    = std::move (s->Methods);
-    instStruct.IsComplete = true;
-
-    _mod->Structs.emplace (mangledName, std::move (instStruct));
-    auto *concreteStructType = &_mod->Structs.at (mangledName);
-
-    _builder.CreateStruct (
-        s->Name,
-        std::move (hirFields),
-        concreteStructType,
-        sd->Start (),
-        sd->End ());
-
-    popTypeScope ();
-    return concreteStructType;
 }
 
 Sema::SemanticResult

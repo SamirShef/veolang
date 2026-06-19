@@ -95,9 +95,6 @@ Mangler::MangleStructSymbol (const symbols::Struct *sym, hir::MangleKind mangleK
     oss << "_VS";
     oss << MangleModule (sym->Parent);
     oss << "E" << sym->Name.Val.size () << sym->Name.Val;
-    for (const auto &field : sym->Fields) {
-        oss << MangleType (field.Type, mangleKind);
-    }
     return oss.str ();
 }
 

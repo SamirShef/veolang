@@ -697,26 +697,33 @@ Parser::parsePrimaryExpr (bool allowStruct) {
             _lastTok.End);
     }
     case TokenKind::Id: {
-        std::vector<basic::Type *> genericParams;
-        bool                       hasGenerics = false;
-        if (match (TokenKind::Bang)) {
-            if (!expectTok (TokenKind::Lt, "<")) {
-                return nullptr;
-            }
-            genericParams = std::move (parseGenericParamsForCall ());
-            hasGenerics   = true;
-        }
         if (allowStruct && match (TokenKind::LBrace)) { // StructInstance
             auto fields = parseFieldsForInstance ();
             return createNode<StructInstance> (
                 createType<basic::NamedType> (
-                    std::vector<basic::NameObj>{ basic::NameObj (tok) },
-                    std::move (genericParams)),
+                    std::vector<basic::NameObj>{ basic::NameObj (tok) }),
                 std::move (fields),
                 tok.Start,
                 _lastTok.End);
         }
-        if (match (TokenKind::LParen)) { // FuncCall
+        if (match (TokenKind::Bang) || match (TokenKind::LParen)) { // FuncCall
+            std::vector<basic::Type *> genericParams;
+            if (check (_lastTok, TokenKind::Bang)) {
+                if (!expectTok (TokenKind::Lt, "<")) {
+                    return nullptr;
+                }
+                genericParams = std::move (parseGenericParamsForCall ());
+                if (!check (TokenKind::LParen)) {
+                    auto *type = createType<basic::NamedType> (
+                        std::vector<basic::NameObj>{ basic::NameObj (tok) },
+                        std::move (genericParams));
+                    return createNode<TypeExpr> (type, tok.Start, _curTok.End);
+                }
+
+                if (!expectTok (TokenKind::LParen, "(")) {
+                    return nullptr;
+                }
+            }
             std::vector<Expr *> args;
             parseArgumentsForCall (args);
             return createNode<FuncCall> (
@@ -725,15 +732,6 @@ Parser::parsePrimaryExpr (bool allowStruct) {
                 std::move (genericParams),
                 tok.Start,
                 _lastTok.End);
-        }
-        if (hasGenerics) {
-            _diag
-                .Report (
-                    DiagCode::EUnexpectedToken,
-                    "expected '{' or '(' after generic arguments",
-                    Severity::Error)
-                .AddSpan (tok.Start, tok.End);
-            return nullptr;
         }
         // VarExpr
         return createNode<VarExpr> (basic::NameObj (tok), tok.Start, tok.End);
@@ -818,28 +816,34 @@ Parser::parseChain (Expr *base, bool allowStruct) {
                 return nullptr;
             }
             path.emplace_back (name);
-            std::vector<basic::Type *> genericParams;
-            bool                       hasGenerics = false;
-            if (match (TokenKind::Bang)) {
-                if (!expectTok (TokenKind::Lt, "<")) {
-                    return nullptr;
-                }
-                genericParams = std::move (parseGenericParamsForCall ());
-                hasGenerics   = true;
-            }
 
             if (allowStruct && match (TokenKind::LBrace)) { // StructInstance
                 auto fields = parseFieldsForInstance ();
                 return createNode<StructInstance> (
-                    createType<basic::NamedType> (
-                        std::move (path),
-                        std::move (genericParams)),
+                    createType<basic::NamedType> (std::move (path)),
                     std::move (fields),
                     path.front ().Start,
                     _lastTok.End);
             }
 
-            if (match (TokenKind::LParen)) {
+            if (match (TokenKind::Bang) || match (TokenKind::LParen)) {
+                std::vector<basic::Type *> genericParams;
+                if (check (_lastTok, TokenKind::Bang)) {
+                    if (!expectTok (TokenKind::Lt, "<")) {
+                        return nullptr;
+                    }
+                    genericParams = std::move (parseGenericParamsForCall ());
+                    if (allowTypeExpr && !check (TokenKind::LParen)) {
+                        auto  start = path.front ().Start;
+                        auto *type  = createType<basic::NamedType> (
+                            std::move (path),
+                            std::move (genericParams));
+                        return createNode<TypeExpr> (type, start, _curTok.End);
+                    }
+                    if (!expectTok (TokenKind::LParen, "(")) {
+                        return nullptr;
+                    }
+                }
                 allowStruct   = false;
                 allowTypeExpr = false;
                 std::vector<Expr *> args;
@@ -852,15 +856,6 @@ Parser::parseChain (Expr *base, bool allowStruct) {
                     base->Start (),
                     _lastTok.End);
             } else {
-                if (hasGenerics) {
-                    _diag
-                        .Report (
-                            DiagCode::EUnexpectedToken,
-                            "expected '{' or '(' after generic arguments",
-                            Severity::Error)
-                        .AddSpan (tok.Start, tok.End);
-                    return nullptr;
-                }
                 base = createNode<FieldExpr> (
                     base,
                     std::move (name),
@@ -936,7 +931,10 @@ Parser::consumeType () {
                 path.emplace_back (name);
             }
             std::vector<basic::Type *> genericParams;
-            if (match (TokenKind::Lt)) {
+            if (match (TokenKind::Bang)) {
+                if (!expectTok (TokenKind::Lt, "<")) {
+                    return nullptr;
+                }
                 genericParams = std::move (parseGenericParamsForCall ());
             }
             return createType<basic::NamedType> (
