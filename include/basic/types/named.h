@@ -8,29 +8,16 @@ namespace veo::basic {
 
 class NamedType : public Type {
     std::vector<NameObj> _path;
-    std::vector<Type *>  _genericParams;
 
 public:
-    explicit NamedType (std::vector<NameObj> path, std::vector<Type *> genericParams = {})
-        : _path (std::move (path)),
-          _genericParams (std::move (genericParams)),
-          Type (TypeKind::Named) {}
+    explicit NamedType (std::vector<NameObj> path)
+        : _path (std::move (path)), Type (TypeKind::Named) {}
 
     type_classof (Named);
 
     std::vector<NameObj>
     Path () const {
         return _path;
-    }
-
-    std::vector<Type *> &
-    GenericParams () {
-        return _genericParams;
-    }
-
-    bool
-    IsGeneric () const {
-        return !_genericParams.empty ();
     }
 
     std::string
@@ -43,17 +30,6 @@ public:
             }
             oss << name.Val;
             ++index;
-        }
-        if (IsGeneric ()) {
-            oss << "<";
-            size_t i = 0;
-            for (const auto &param : _genericParams) {
-                if (i != 0) {
-                    oss << ", ";
-                }
-                oss << param->ToString ();
-            }
-            oss << ">";
         }
         return oss.str ();
     }

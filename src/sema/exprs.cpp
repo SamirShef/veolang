@@ -175,7 +175,6 @@ Sema::analyzeLiteralExpr (LiteralExpr *le, Type *expectedType) {
             expectedType = createType<IntegerType> (
                 32); // NOLINT(cppcoreguidelines-avoid-magic-numbers)
         }
-        resolveType (&expectedType);
         expectedType = expectedType->CanonicalType ();
         if (!expectedType->IsNumber ()) {
             _diag
@@ -618,11 +617,6 @@ Sema::generateGenericFunc (
             false));
     }
 
-    std::vector<Type *> substMapForFuncNode;
-    substMapForFuncNode.reserve (substMap.size ());
-    for (const auto &[_, type] : substMap) {
-        substMapForFuncNode.push_back (type);
-    }
     auto *funcNode = _builder.CreateFunction (
         funcPtr->Name,
         funcPtr->RetType,
@@ -630,8 +624,7 @@ Sema::generateGenericFunc (
         fd->Start (),
         fd->End (),
         funcPtr,
-        hir::MangleKind::Veo,
-        std::move (substMapForFuncNode));
+        hir::MangleKind::Veo);
     _funcs.emplace (funcPtr, funcNode);
     auto *entry = _builder.CreateBasicBlock (funcNode, "entry");
     _builder.SetInsertionPoint (entry);
@@ -653,16 +646,9 @@ Sema::generateGenericFunc (
                 funcNode->Args ()[i]));
     }
 
-    pushTypeScope ();
-    for (const auto &[name, type] : substMap) {
-        registerLocalType (name, type);
-    }
-
     for (auto *stmt : fd->Body ()) {
         analyzeStmt (stmt);
     }
-
-    popTypeScope ();
 
     _vars.pop ();
     _funcRetTypes.pop ();
@@ -1275,11 +1261,6 @@ Sema::generateGenericMethod (
             false));
     }
 
-    std::vector<Type *> substMapForFuncNode;
-    substMapForFuncNode.reserve (substMap.size ());
-    for (const auto &[_, type] : substMap) {
-        substMapForFuncNode.push_back (type);
-    }
     auto *methodNode = _builder.CreateFunction (
         methodPtr->Func->Name,
         methodPtr->Func->RetType,
@@ -1287,8 +1268,7 @@ Sema::generateGenericMethod (
         fd->Start (),
         fd->End (),
         methodPtr->Func.get (),
-        hir::MangleKind::Veo,
-        std::move (substMapForFuncNode));
+        hir::MangleKind::Veo);
     auto *entry = _builder.CreateBasicBlock (methodNode, "entry");
     _builder.SetInsertionPoint (entry);
     _methods.emplace (methodPtr, methodNode);
@@ -1324,10 +1304,6 @@ Sema::generateGenericMethod (
                 std::nullopt,
                 methodNode->Args ()[i]));
         ++i;
-    }
-
-    for (const auto &[name, type] : substMap) {
-        registerLocalType (name, type);
     }
 
     for (auto *stmt : fd->Body ()) {

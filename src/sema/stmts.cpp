@@ -244,8 +244,7 @@ Sema::declareFunc (FuncDef *fd, hir::MangleKind mangleKind) {
             fd->Start (),
             fd->End (),
             funcPtr.get (),
-            mangleKind,
-            {});
+            mangleKind);
         _funcs.emplace (funcPtr.get (), funcNode);
     }
     candidates.emplace_back (std::move (funcPtr));
@@ -536,12 +535,7 @@ Sema::analyzeStructDef (StructDef *sd) {
     std::vector<hir::Field> hirFields;
     hirFields.reserve (sd->Fields ().size ());
 
-    auto s = Struct (
-        sd->Name (),
-        {},
-        _mod,
-        sd->IsGeneric (),
-        sd->IsGeneric () ? sd : nullptr);
+    auto s = Struct (sd->Name (), {}, _mod);
     _mod->Structs.emplace (sd->Name ().Val, std::move (s));
 
     size_t index = 0;
@@ -868,8 +862,7 @@ Sema::declareImplMethod (
             methodPtr.get (),
             hir::MangleKind::Veo,
             targetType,
-            method.IsStatic,
-            {});
+            method.IsStatic);
         _methods.emplace (methodPtr.get (), methodNode);
     }
     auto &candidates = methods->at (methodPtr->Func->Name.Val).Candidates;
@@ -1350,8 +1343,7 @@ Sema::analyzeExternFuncDef (ast::FuncDef *fd, hir::MangleKind mangleKind) {
             fd->Start (),
             fd->End (),
             funcPtr.get (),
-            mangleKind,
-            {});
+            mangleKind);
         _funcs.emplace (funcPtr.get (), funcNode);
     }
     candidates.emplace_back (std::move (funcPtr));
@@ -1375,7 +1367,7 @@ Sema::analyzeExternStructDef (ast::StructDef *sd, hir::MangleKind mangleKind) {
             .AddSpan (sd->Start (), sd->End ());
         return;
     }
-    auto s       = Struct (sd->Name (), {}, _mod, false, nullptr, mangleKind);
+    auto s       = Struct (sd->Name (), {}, _mod);
     s.IsComplete = false;
     _mod->Structs.emplace (sd->Name ().Val, std::move (s));
 }

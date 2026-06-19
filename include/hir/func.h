@@ -11,28 +11,26 @@
 namespace veo::hir {
 
 class Function : public Node {
-    basic::NameObj             _name;
-    basic::Type               *_retType;
-    std::vector<VarDef *>      _args;
-    std::vector<BasicBlock *>  _body;
-    symbols::Function         *_base;
-    MangleKind                 _mangleKind;
-    basic::Type               *_methodBaseType;
-    bool                       _isStatic;
-    std::vector<basic::Type *> _substMap;
+    basic::NameObj            _name;
+    basic::Type              *_retType;
+    std::vector<VarDef *>     _args;
+    std::vector<BasicBlock *> _body;
+    symbols::Function        *_base;
+    MangleKind                _mangleKind;
+    basic::Type              *_methodBaseType;
+    bool                      _isStatic;
 
 public:
     Function (
-        basic::NameObj             name,
-        basic::Type               *retType,
-        std::vector<VarDef *>      args,
-        llvm::SMLoc                start,
-        llvm::SMLoc                end,
-        symbols::Function         *base,
-        MangleKind                 mangleKind     = MangleKind::Veo,
-        basic::Type               *methodBaseType = nullptr,
-        bool                       isStatic       = false,
-        std::vector<basic::Type *> substMap       = {})
+        basic::NameObj        name,
+        basic::Type          *retType,
+        std::vector<VarDef *> args,
+        llvm::SMLoc           start,
+        llvm::SMLoc           end,
+        symbols::Function    *base,
+        MangleKind            mangleKind     = MangleKind::Veo,
+        basic::Type          *methodBaseType = nullptr,
+        bool                  isStatic       = false)
         : _name (std::move (name)),
           _retType (retType),
           _args (std::move (args)),
@@ -40,7 +38,6 @@ public:
           _mangleKind (mangleKind),
           _methodBaseType (methodBaseType),
           _isStatic (isStatic),
-          _substMap (std::move (substMap)),
           Node (NodeKind::Func, start, end) {}
 
     hir_classof (Func);
@@ -83,11 +80,6 @@ public:
     bool
     IsStatic () const {
         return _isStatic;
-    }
-
-    const std::vector<basic::Type *> &
-    SubstMap () const {
-        return _substMap;
     }
 };
 

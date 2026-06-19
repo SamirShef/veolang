@@ -1,6 +1,5 @@
 #pragma once
 #include <ast/stmt.h>
-#include <ast/stmts/func_def.h>
 #include <basic/name.h>
 #include <basic/types/type.h>
 #include <vector>
@@ -49,10 +48,9 @@ struct Field {
 };
 
 class StructDef : public Stmt {
-    basic::NameObj            _name;
-    std::vector<Field>        _fields;
-    bool                      _isDeclaration;
-    std::vector<GenericParam> _genericParams;
+    basic::NameObj     _name;
+    std::vector<Field> _fields;
+    bool               _isDeclaration;
 
 public:
     StructDef (
@@ -65,20 +63,6 @@ public:
         : _name (std::move (name)),
           _fields (std::move (fields)),
           _isDeclaration (isDeclaration),
-          Stmt (access, NodeKind::StructDef, start, end) {}
-
-    StructDef (
-        basic::NameObj            name,
-        std::vector<Field>        fields,
-        bool                      isDeclaration,
-        std::vector<GenericParam> genericParam,
-        AccessModifier            access,
-        llvm::SMLoc               start,
-        llvm::SMLoc               end)
-        : _name (std::move (name)),
-          _fields (std::move (fields)),
-          _isDeclaration (isDeclaration),
-          _genericParams (std::move (genericParam)),
           Stmt (access, NodeKind::StructDef, start, end) {}
 
     ast_classof (StructDef);
@@ -96,16 +80,6 @@ public:
     bool
     IsDeclaration () const {
         return _isDeclaration;
-    }
-
-    std::vector<GenericParam> &
-    GenericParams () {
-        return _genericParams;
-    }
-
-    bool
-    IsGeneric () const {
-        return !_genericParams.empty ();
     }
 };
 

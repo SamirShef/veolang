@@ -14,17 +14,11 @@ Mangler::MangleFunction (const hir::Function *func, hir::MangleKind mangleKind) 
     std::ostringstream oss;
     oss << "_VF";
     oss << MangleModule (sym->Parent);
-    oss << "E" << sym->Name.Val.size () << sym->Name.Val;
+    oss << "E" << sym->Name.Val.size () << sym->Name.Val << "I";
     for (auto &a : sym->Args) {
         oss << MangleType (a.Type);
     }
-    if (!func->SubstMap ().empty ()) {
-        oss << "I";
-        for (const auto &param : func->SubstMap ()) {
-            oss << MangleType (param);
-        }
-        oss << "E";
-    }
+    oss << "E";
     return oss.str ();
 }
 
@@ -44,17 +38,11 @@ Mangler::MangleMethod (
         const auto &name = base->ToString ();
         oss << "E" << name.size () << name;
     }
-    oss << "E" << func->Name ().Val.size () << func->Name ().Val;
+    oss << "E" << func->Name ().Val.size () << func->Name ().Val << "I";
     for (auto &a : func->Args ()) {
         oss << MangleType (a->Type ());
     }
-    if (!func->SubstMap ().empty ()) {
-        oss << "I";
-        for (const auto &param : func->SubstMap ()) {
-            oss << MangleType (param);
-        }
-        oss << "E";
-    }
+    oss << "E";
     return oss.str ();
 }
 
@@ -74,7 +62,7 @@ Mangler::MangleGlobalVar (const hir::VarDef *var, hir::MangleKind mangleKind) {
 std::string
 Mangler::MangleStaticField (const symbols::Struct *sym, const std::string &fieldName) {
     std::ostringstream oss;
-    oss << "_Vf";
+    oss << "_VF";
     oss << MangleModule (sym->Parent);
     oss << "E" << sym->Name.Val.size () << sym->Name.Val;
     oss << "E" << fieldName.size () << fieldName;
