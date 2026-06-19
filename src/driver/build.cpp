@@ -58,7 +58,7 @@ BuildDriver::Build () {
         const auto &fileItem    = _graph.at (importPath);
         const auto &compileUnit = fileItem.Path;
 
-        auto *mod = new symbols::Module (compileUnit.stem ());
+        auto *mod = new symbols::Module (compileUnit.stem ().string ());
         ModuleLoader::AddModule (importPath, mod);
 
         auto objPath = artefactDir
@@ -181,7 +181,7 @@ BuildDriver::scanDeps (const std::string &importPath) {
     }
     auto file = File{
         .Path  = path,
-        .Deps  = std::move (resolveDeps (path)),
+        .Deps  = std::move (resolveDeps (path.string ())),
         .State = VisitState::Unvisited,
     };
     _graph[importPath] = file;
