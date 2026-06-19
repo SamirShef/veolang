@@ -121,6 +121,9 @@ private:
     ast::Stmt *
     parseExternStmt ();
 
+    ast::Stmt *
+    parseImportStmt ();
+
     std::vector<ast::Argument>
     parseArguments ();
 

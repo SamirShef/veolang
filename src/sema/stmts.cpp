@@ -1,4 +1,5 @@
 #include <basic/types/all.h>
+#include <driver/module_loader.h>
 #include <hir/mangle_kind.h>
 #include <sema/sema.h>
 
@@ -1350,6 +1351,38 @@ Sema::analyzeExternStructDef (ast::StructDef *sd, hir::MangleKind mangleKind) {
     auto s       = Struct (sd->Name (), {}, _mod);
     s.IsComplete = false;
     _mod->Structs.emplace (sd->Name ().Val, std::move (s));
+}
+
+void
+Sema::analyzeImportStmt (ast::ImportStmt *is) {
+    std::string path;
+    for (const auto &part : is->Path ()) {
+        if (!path.empty ()) {
+            path += '.';
+        }
+        path += part.Val;
+    }
+    auto *importMod = driver::ModuleLoader::LoadModule (path);
+    if (importMod == nullptr) {
+        // TODO: report error
+        return;
+    }
+    auto *cur = _mod;
+    for (size_t i = 0; i < is->Path ().size () - 1; ++i) {
+        const auto &path = is->Path ()[i];
+        if (auto it = _mod->Imports.find (path.Val); it != _mod->Imports.end ()) {
+            cur = it->second;
+        } else {
+            auto *newMod = new Module (path.Val, cur);
+            if (cur == _mod) {
+                cur->Imports.emplace (path.Val, newMod);
+            } else {
+                cur->Submods.emplace (path.Val, newMod);
+            }
+            cur = newMod;
+        }
+    }
+    cur->Submods.emplace (importMod->Name, importMod);
 }
 
 }

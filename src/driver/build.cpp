@@ -2,9 +2,13 @@
 #include <driver/build.h>
 #include <driver/cli_options.h>
 #include <driver/compiler.h>
+#include <driver/deps_resolver.h>
+#include <driver/module_loader.h>
 #include <filesystem>
+#include <fstream>
 #include <llvm/Support/raw_ostream.h>
 #include <llvm/TargetParser/Host.h>
+#include <sstream>
 #include <toml++/toml.h>
 
 namespace veo::driver {
@@ -36,24 +40,41 @@ BuildDriver::Build () {
                       << llvm::raw_fd_ostream::RESET;
         exit (1);
     }
+    const auto &entryModImportPath = fs::absolute (manif.EntryPointPath)
+                                         .lexically_relative (_projectRoot / "src")
+                                         .stem ()
+                                         .string ();
+    scanDeps (entryModImportPath);
+    sortDeps (entryModImportPath);
 
     std::vector<std::string> objFiles;
-
-    auto *mod         = new symbols::Module (manif.ProjectName);
-    auto  artefactDir = manif.ManifestPath.parent_path () / "build" / "obj";
-    auto  objPath     = artefactDir
-                        / fs::absolute (manif.EntryPointPath)
-                              .parent_path ()
-                              .lexically_relative (manif.ManifestPath.parent_path ())
-                        / (manif.EntryPointPath.stem ().string () + ".o");
-    objPath           = objPath.lexically_normal ();
-    fs::create_directories (objPath.parent_path ());
-    objFiles.push_back (objPath.string ());
-
+    auto         artefactDir     = manif.ManifestPath.parent_path () / "build" / "obj";
     std::string  targetTripleStr = TargetTripleOpt.empty ()
                                        ? llvm::sys::getDefaultTargetTriple ()
                                        : TargetTripleOpt.getValue ();
     llvm::Triple triple (targetTripleStr);
+
+    for (const auto &importPath : _compilationQueue) {
+        const auto &fileItem    = _graph.at (importPath);
+        const auto &compileUnit = fileItem.Path;
+
+        auto *mod = new symbols::Module (compileUnit.stem ());
+        ModuleLoader::AddModule (importPath, mod);
+
+        auto objPath = artefactDir
+                       / fs::absolute (compileUnit)
+                             .parent_path ()
+                             .lexically_relative (manif.ManifestPath.parent_path ())
+                       / (compileUnit.stem ().string () + ".o");
+        objPath      = objPath.lexically_normal ();
+        fs::create_directories (objPath.parent_path ());
+        objFiles.push_back (objPath.string ());
+
+        auto compileRes = Compile (_projectRoot, compileUnit, objPath, mod, triple);
+        if (!compileRes.Success) {
+            exit (1);
+        }
+    }
 
     for (const auto &cSrc : manif.CSources) {
         auto absoluteCSrc = manif.ManifestPath.parent_path () / cSrc;
@@ -88,10 +109,6 @@ BuildDriver::Build () {
         objFiles.push_back (cObjPath.string ());
     }
 
-    auto compileRes = Compile (_projectRoot, manif.EntryPointPath, objPath, mod, triple);
-    if (!compileRes.Success) {
-        exit (1);
-    }
     auto exePath = artefactDir / GetOutputName (manif.ProjectName, triple);
     if (LinkObjectFiles (targetTripleStr, exePath.string (), objFiles)) {
         llvm::errs ().changeColor (llvm::raw_fd_ostream::GREEN, true)
@@ -140,6 +157,80 @@ BuildDriver::parseManifest (const fs::path &path) {
              .ManifestPath   = fs::absolute (path),
              .EntryPointPath = fs::path (entryPath),
              .CSources       = std::move (csources) };
+}
+
+fs::path
+BuildDriver::resolveImportPathToFilePath (const std::string &importPath) {
+    std::string relPath;
+    for (const auto &c : importPath) {
+        relPath += c == '.' ? '/' : c;
+    }
+    auto res = _projectRoot / "src" / fs::path (relPath + ".veo");
+    return std::move (res);
+}
+
+void
+BuildDriver::scanDeps (const std::string &importPath) {
+    if (_graph.contains (importPath)) {
+        return;
+    }
+
+    auto path = resolveImportPathToFilePath (importPath);
+    if (!fs::exists (path)) {
+        return;
+    }
+    auto file = File{
+        .Path  = path,
+        .Deps  = std::move (resolveDeps (path)),
+        .State = VisitState::Unvisited,
+    };
+    _graph[importPath] = file;
+    for (const auto &dep : file.Deps) {
+        scanDeps (dep);
+    }
+}
+
+void
+BuildDriver::sortDeps (const std::string &importPath) {
+    auto it = _graph.find (importPath);
+    if (it == _graph.end ()) {
+        return;
+    }
+    auto &file = it->second;
+
+    if (file.State == VisitState::Visiting) {
+        // TODO: report error
+        return;
+    }
+    if (file.State == VisitState::Visited) {
+        return;
+    }
+
+    file.State = VisitState::Visiting;
+    for (const auto &dep : file.Deps) {
+        sortDeps (dep);
+    }
+    file.State = VisitState::Visited;
+    _compilationQueue.push_back (importPath);
+}
+
+std::vector<std::string>
+BuildDriver::resolveDeps (const std::string &absolutePath) {
+    const auto &path = fs::path (absolutePath);
+    if (!fs::exists (path)) {
+        return {};
+    }
+    std::ifstream     file (path);
+    std::stringstream content;
+    content << file.rdbuf ();
+    const auto &contentStr = content.str ();
+    if (contentStr.empty ()) {
+        return {};
+    }
+    DepsResolver depsResolver (&contentStr.front (), &contentStr.back ());
+    auto         deps = std::move (depsResolver.Deps ());
+    file.close ();
+    return std::move (deps);
 }
 
 }

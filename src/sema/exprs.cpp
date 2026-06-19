@@ -490,6 +490,14 @@ Sema::analyzeVarExpr (VarExpr *ve, Type *expectedType) {
         if (auto *s = getStruct (ve->Name ().Val)) {
             return { Value (ValueKind::Type, createType<StructType> (s)), nullptr };
         }
+        if (auto it = _mod->Submods.find (ve->Name ().Val); it != _mod->Submods.end ()) {
+            return { Value (ValueKind::Mod, createType<ModuleType> (it->second)),
+                     nullptr };
+        }
+        if (auto it = _mod->Imports.find (ve->Name ().Val); it != _mod->Imports.end ()) {
+            return { Value (ValueKind::Mod, createType<ModuleType> (it->second)),
+                     nullptr };
+        }
         _diag
             .Report (
                 DiagCode::EUndefined,
@@ -810,7 +818,7 @@ Sema::analyzeFieldExpr (FieldExpr *fe, Type *expectedType) {
             fe->Start (),
             fe->End ());
     }
-    if (!targetType->IsStruct ()) {
+    if (!targetType->IsStruct () && !targetType->IsModule ()) {
         _diag
             .Report (
                 DiagCode::ECannotAccessFromNonStruct,
@@ -818,6 +826,34 @@ Sema::analyzeFieldExpr (FieldExpr *fe, Type *expectedType) {
                     + typeToString (targetType) + "'",
                 Severity::Error)
             .AddSpan (fe->Name ().Start, fe->Name ().End);
+        return {};
+    }
+    if (targetType->IsModule ()) {
+        auto *mod = targetType->AsModule ()->Base ();
+        if (auto it = mod->Vars.find (fe->Name ().Val); it != mod->Vars.end ()) {
+            auto *var   = &it->second;
+            auto  value = Value (
+                var->IsConst ? ValueKind::Const : ValueKind::Unknown,
+                var->IsConst ? var->Val->Data : ValueData (),
+                var->Type);
+            hir::Node *node = nullptr;
+            if (var->IsConst && !value.Type->IsStruct ()) {
+                node = _builder.CreateLiteral (value, fe->Start (), fe->End ());
+            } else {
+                node = _builder.CreateLoadVar (
+                    var->HIR,
+                    var->Type,
+                    var->IsGlobal,
+                    fe->Start (),
+                    fe->End ());
+            }
+            auto res = SemanticResult (value, node);
+            if (expectedType != nullptr) {
+                res = implicitlyCast (res, &expectedType, fe->Start (), fe->End ());
+            }
+            return res;
+        }
+        // TODO: report error
         return {};
     }
     auto *s = targetType->AsStruct ()->BaseSymbol ();
@@ -1004,6 +1040,16 @@ Sema::analyzeMethodCall (MethodCall *mc, Type *expectedType) {
             targetType,
             mc->Start (),
             mc->End ());
+    }
+    if (targetType->IsModule ()) {
+        auto *mod    = targetType->AsModule ()->Base ();
+        auto *oldMod = _mod;
+        _mod         = mod;
+        auto *fc
+            = createNode<FuncCall> (mc->Name (), mc->Args (), mc->Start (), mc->End ());
+        auto res = analyzeFuncCall (fc, expectedType);
+        _mod     = oldMod;
+        return res;
     }
     auto *s = targetType->IsStruct () ? targetType->AsStruct ()->BaseSymbol () : nullptr;
     if (!s->IsComplete) {

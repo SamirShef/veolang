@@ -274,6 +274,20 @@ Dumper::dumpLiteralExpr (LiteralExpr *le) {
 }
 
 void
+Dumper::dumpImportStmt (ImportStmt *is) {
+    print ("ImportStmt: ");
+    size_t i = 0;
+    for (const auto &name : is->Path ()) {
+        if (i != 0) {
+            _os << '.';
+        }
+        _os << name.Val;
+        ++i;
+    }
+    _os << '\n';
+}
+
+void
 Dumper::dumpBinaryExpr (BinaryExpr *be) {
     print ("BinaryExpr: " + std::string (BinOpToString (be->Op ())) + '\n');
     ++_indentLvl;

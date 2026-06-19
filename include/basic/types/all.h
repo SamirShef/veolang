@@ -3,6 +3,7 @@
 #include <basic/types/char.h>
 #include <basic/types/floating.h>
 #include <basic/types/integer.h>
+#include <basic/types/module.h>
 #include <basic/types/named.h>
 #include <basic/types/noth.h>
 #include <basic/types/pointer.h>

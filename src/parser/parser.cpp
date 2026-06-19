@@ -21,6 +21,7 @@
 #include <ast/stmts/func_def.h>
 #include <ast/stmts/if_else.h>
 #include <ast/stmts/impl_stmt.h>
+#include <ast/stmts/import_stmt.h>
 #include <ast/stmts/ret.h>
 #include <ast/stmts/struct_def.h>
 #include <ast/stmts/trait_stmt.h>
@@ -76,6 +77,9 @@ Parser::parseStmt (bool expectSemi) {
     }
     case TokenKind::Extern: {
         return parseExternStmt ();
+    }
+    case TokenKind::Import: {
+        return checkTrailingSemi (parseImportStmt (), expectSemi);
     }
     default: {
         Expr *expr = parseExpr ();
@@ -404,6 +408,24 @@ Parser::parseExternStmt () {
         std::move (body),
         firstTok.Start,
         _lastTok.End);
+}
+
+Stmt *
+Parser::parseImportStmt () {
+    const Token                 firstTok = advance ();
+    std::vector<basic::NameObj> path;
+    basic::NameObj              name;
+    if (!expectName (name)) {
+        return nullptr;
+    }
+    path.push_back (name);
+    while (match (TokenKind::Dot)) {
+        if (!expectName (name)) {
+            return nullptr;
+        }
+        path.push_back (name);
+    }
+    return createNode<ImportStmt> (std::move (path), firstTok.Start, _curTok.End);
 }
 
 std::vector<Argument>

@@ -17,6 +17,7 @@ as (Pointer);
 as (Noth);
 as (Alias);
 as (TraitThis);
+as (Module);
 
 #undef as
 
@@ -83,6 +84,11 @@ operator== (const Type &lhs, const Type &rhs) {
         const auto *tlhs = lAnon->AsTraitThis ();
         const auto *trhs = rAnon->AsTraitThis ();
         return *tlhs->Trait () == *trhs->Trait ();
+    }
+    case TypeKind::Module: {
+        const auto *mlhs = lAnon->AsModule ();
+        const auto *mrhs = rAnon->AsModule ();
+        return *mlhs->Base () == *mrhs->Base ();
     }
     default: return true; // BoolType, CharType, NothType and SizeType
     }
