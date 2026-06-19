@@ -1,3 +1,5 @@
+#include "ast/stmts/func_def.h"
+
 #include <basic/types/all.h>
 #include <codegen/mangler.h>
 #include <sema/sema.h>
