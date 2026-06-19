@@ -1053,7 +1053,7 @@ Sema::analyzeMethodCall (MethodCall *mc, Type *expectedType) {
             mc->End ());
     }
     auto *s = targetType->IsStruct () ? targetType->AsStruct ()->BaseSymbol () : nullptr;
-    if (s != nullptr && !s->IsComplete) {
+    if (!s->IsComplete) {
         _diag
             .Report (
                 DiagCode::EIncompleteType,
@@ -1118,12 +1118,6 @@ Sema::analyzeMethodCall (MethodCall *mc, Type *expectedType) {
         return {};
     }
 
-    ast::FuncDef *methodDef = nullptr;
-    if (auto it = _genericMethods.find (method); it != _genericMethods.end ()) {
-        methodDef = it->second;
-    }
-    auto *finalMethod = method;
-
     if (!canAccessMethod (
             mc->Name (),
             *method,
@@ -1144,34 +1138,13 @@ Sema::analyzeMethodCall (MethodCall *mc, Type *expectedType) {
     if (baseIsConstVar) {
         _methodCallOnConstBase.emplace_back (mc, method);
     }
-
-    if (methodDef != nullptr && methodDef->IsGeneric ()) {
-        std::unordered_map<std::string, Type *> substMap;
-        const auto &genericParams = methodDef->GenericParams ();
-
-        if (!mc->GenericParams ().empty ()) {
-            for (size_t i = 0; i < genericParams.size (); ++i) {
-                substMap[genericParams[i].Name.Val] = mc->GenericParams ()[i];
-            }
-        } else {
-            std::unordered_map<std::string, Type *> inferredMap;
-            for (size_t i = 0; i < argTypes.size (); ++i) {
-                deduceGenericTypes (method->Func->Args[i].Type, argTypes[i], inferredMap);
-            }
-            substMap = std::move (inferredMap);
-        }
-
-        finalMethod = generateGenericMethod (method, targetType, methodDef, substMap);
-        if (finalMethod == nullptr) {
+    if (method->Func->IsGeneric) {
+        if (!generateGenericMethod (&method, argTypes, s, targetType, candidates, mc)) {
             return {};
         }
     }
-    hir::Function *hirFunc = nullptr;
-    if (auto it = _methods.find (finalMethod); it != _methods.end ()) {
-        hirFunc = it->second;
-    }
     std::vector<hir::Node *> hirArgs;
-    if (!finalMethod->IsStatic) {
+    if (!method->IsStatic) {
         hirArgs.emplace_back (_builder.CreateReference (
             base.Node,
             createType<PointerType> (targetType),
@@ -1179,144 +1152,62 @@ Sema::analyzeMethodCall (MethodCall *mc, Type *expectedType) {
             mc->End ()));
     }
     for (size_t i = 0; i < argResults.size (); ++i) {
-        auto res = analyzeExpr (mc->Args ()[i], finalMethod->Func->Args[i].Type);
+        auto res = analyzeExpr (mc->Args ()[i], method->Func->Args[i].Type);
         hirArgs.emplace_back (res.Node);
     }
 
     auto *node = targetType->IsTrait () ? nullptr
                                         : _builder.CreateCall (
-                                              hirFunc,
+                                              _methods.at (method),
                                               std::move (hirArgs),
                                               mc->Start (),
                                               mc->End ());
-    auto  val  = Value (ValueKind::Unknown, finalMethod->Func->RetType);
+    auto  val  = Value (ValueKind::Unknown, method->Func->RetType);
     auto  res  = SemanticResult (val, node);
     res        = implicitlyCast (res, &expectedType, mc->Start (), mc->End ());
     return res;
 }
 
-symbols::Method *
+bool
 Sema::generateGenericMethod (
-    symbols::Method                               *method,
-    Type                                          *targetType,
-    ast::FuncDef                                  *fd,
-    const std::unordered_map<std::string, Type *> &substMap) {
-    auto       *oldBB = _builder.InsertBlock ();
-    const auto &name  = fd->Name ().Val;
-
-    pushTypeScope ();
-    auto *thisAlias = createType<AliasType> (NameObj ("This", {}, {}), targetType);
-    registerLocalType ("This", thisAlias);
-
-    auto specFunc     = std::make_unique<symbols::Function> ();
-    specFunc->Name    = basic::NameObj (name, fd->Name ().Start, fd->Name ().End);
-    specFunc->RetType = substituteGenericTypes (fd->RetType (), substMap);
-
-    for (const auto &arg : fd->Args ()) {
-        Type *concreteArgType = substituteGenericTypes (arg.Type, substMap);
-        specFunc->Args.emplace_back (arg.Name, concreteArgType);
-    }
-
-    auto specMethod      = std::make_unique<symbols::Method> ();
-    specMethod->Func     = std::move (specFunc);
-    specMethod->IsConst  = method->IsConst;
-    specMethod->IsStatic = method->IsStatic;
-    specMethod->Access   = method->Access;
-
-    symbols::Method *methodPtr = specMethod.get ();
-    auto            &methods
-        = targetType->CanonicalType ()->IsStruct ()
-              ? targetType->CanonicalType ()->AsStruct ()->BaseSymbol ()->Methods[name]
-              : _mod->PrimitiveMethods[targetType->CanonicalType ()][name];
-    methods.Candidates.push_back (std::move (specMethod));
-
-    std::vector<hir::VarDef *> hirArgs;
-    if (!method->IsStatic) {
-        auto *node = _builder.CreateVariable (
-            basic::NameObj ("this", fd->Name ().Start, fd->Name ().End),
-            createType<PointerType> (targetType),
-            nullptr,
-            false,
-            false,
-            fd->Name ().Start,
-            fd->Name ().End,
-            nullptr,
-            hir::MangleKind::Veo,
-            false,
-            false);
-        hirArgs.emplace_back (node);
-    }
-    for (const auto &arg : methodPtr->Func->Args) {
-        hirArgs.emplace_back (_builder.CreateVariable (
-            arg.Name,
-            arg.Type,
-            nullptr,
-            false,
-            false,
-            arg.Name.Start,
-            arg.Name.End,
-            nullptr,
-            hir::MangleKind::Veo,
-            false,
-            false));
-    }
-
-    auto *methodNode = _builder.CreateFunction (
-        methodPtr->Func->Name,
-        methodPtr->Func->RetType,
-        std::move (hirArgs),
-        fd->Start (),
-        fd->End (),
-        methodPtr->Func.get (),
-        hir::MangleKind::Veo);
-    auto *entry = _builder.CreateBasicBlock (methodNode, "entry");
-    _builder.SetInsertionPoint (entry);
-    _methods.emplace (methodPtr, methodNode);
-
-    _funcRetTypes.push (methodPtr->Func->RetType);
-    _vars.emplace ();
-
-    if (methodNode != nullptr && !method->IsStatic) {
-        auto *thisArg = methodNode->Args ()[0];
-        _vars.top ().Vars.emplace (
-            thisArg->Name ().Val,
-            Variable (
-                thisArg->Name (),
-                thisArg->Type (),
-                false,
-                false,
-                nullptr,
-                hir::MangleKind::Veo,
-                std::nullopt,
-                thisArg));
-    }
-    size_t i = method->IsStatic ? 0 : 1;
-    for (const auto &arg : methodPtr->Func->Args) {
-        _vars.top ().Vars.emplace (
-            arg.Name.Val,
-            symbols::Variable (
-                arg.Name,
-                arg.Type,
-                false,
-                false,
-                nullptr,
-                hir::MangleKind::Veo,
-                std::nullopt,
-                methodNode->Args ()[i]));
+    symbols::Method          **method,
+    std::vector<Type *>       &argTypes,
+    symbols::Struct           *s,
+    basic::Type               *targetType,
+    symbols::MethodCandidates *candidates,
+    ast::MethodCall           *mc
+    /*const std::unordered_map<std::string, Type *> &substMap*/) {
+    auto                 *lastBB    = _builder.InsertBlock ();
+    auto                 *oldMethod = _genericMethods.at (*method);
+    std::vector<Argument> args;
+    args.reserve (oldMethod->Args ().size ());
+    size_t i = 0;
+    for (const auto &a : oldMethod->Args ()) {
+        Type *type = nullptr;
+        if (a.Type->IsTrait ()) {
+            type = argTypes[i]->CanonicalType ();
+        } else {
+            type = a.Type->CanonicalType ();
+        }
+        args.emplace_back (a.Name, type);
         ++i;
     }
-
-    for (auto *stmt : fd->Body ()) {
-        analyzeStmt (stmt);
-    }
-
-    _vars.pop ();
-    _funcRetTypes.pop ();
-
-    _builder.SetInsertionPoint (oldBB);
-    popTypeScope ();
-
-    return methodPtr;
+    auto *newFunc = createNode<FuncDef> (
+        oldMethod->Name (),
+        oldMethod->RetType (),
+        std::move (args),
+        oldMethod->Body (),
+        false,
+        oldMethod->GenericParams (),
+        oldMethod->Access (),
+        oldMethod->Start (),
+        oldMethod->End ());
+    auto newMethod = ast::Method (newFunc, (*method)->IsStatic);
+    declareImplMethod (newMethod, s, targetType);
+    analyzeImplMethodDef (newMethod, s, targetType);
+    _builder.SetInsertionPoint (lastBB);
+    *method = resolveBestOverload (candidates, {}, argTypes, mc->Start (), mc->End ());
+    return method != nullptr;
 }
 
 Sema::SemanticResult

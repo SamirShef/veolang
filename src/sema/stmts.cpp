@@ -775,14 +775,6 @@ Sema::declareImplMethod (
             .AddSpan (fd->Name ().Start, fd->Name ().End, "redefined here");
         return;
     }
-    if (fd->IsGeneric ()) {
-        pushTypeScope ();
-        for (const auto &param : fd->GenericParams ()) {
-            _localTypes.back ().emplace (
-                param.Name.Val,
-                createType<GenericType> (param.Name.Val));
-        }
-    }
     resolveType (&fd->RetType ());
     if (fd->RetType () != nullptr) {
         if (fd->RetType ()->CanonicalType ()->IsStruct ()
@@ -800,7 +792,7 @@ Sema::declareImplMethod (
             return;
         }
     }
-    bool isGeneric = fd->IsGeneric ();
+    bool isGeneric = false;
     for (auto &arg : fd->Args ()) {
         resolveType (&arg.Type);
         if (arg.Type != nullptr) {
@@ -867,14 +859,13 @@ Sema::declareImplMethod (
     }
     auto &candidates = methods->at (methodPtr->Func->Name.Val).Candidates;
     candidates.emplace_back (std::move (methodPtr));
-    if (func.IsGeneric) {
+    if (isGeneric) {
         auto it = std::ranges::find_if (
             candidates,
             [&] (const std::unique_ptr<symbols::Method> &method) {
                 return *method == *candidates.back ();
             });
         _genericMethods.emplace (it->get (), fd);
-        popTypeScope ();
     }
 }
 
@@ -928,9 +919,6 @@ void
 Sema::analyzeImplMethodDef (
     ast::Method method, symbols::Struct *sym, basic::Type *targetType) {
     auto *fd = method.Func;
-    if (fd->IsGeneric ()) {
-        return;
-    }
     if (fd->IsDeclaration ()) {
         return;
     }
@@ -1002,6 +990,8 @@ Sema::analyzeImplMethodDef (
     _insideMethod = { m, targetType };
     _funcRetTypes.push (fd->RetType ());
     _vars.emplace ();
+
+    _localsCount = 0;
 
     auto index = static_cast<size_t> (!m->IsStatic);
     if (methodNode != nullptr && !method.IsStatic) {
