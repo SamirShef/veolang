@@ -1,4 +1,7 @@
 #include <basic/symbols/module.h>
+#include <basic/types/pool.h>
+#include <bitcode/deserializer.h>
+#include <bitcode/serializer.h>
 #include <driver/build.h>
 #include <driver/cli_options.h>
 #include <driver/compiler.h>
@@ -54,26 +57,49 @@ BuildDriver::Build () {
                                        : TargetTripleOpt.getValue ();
     llvm::Triple triple (targetTripleStr);
 
+    basic::TypePool       typePool;
+    bitcode::Serializer   serializer;
+    bitcode::Deserializer deserializer (typePool);
+
     for (const auto &importPath : _compilationQueue) {
         const auto &fileItem    = _graph.at (importPath);
         const auto &compileUnit = fileItem.Path;
 
+        auto objPath   = artefactDir
+                         / fs::absolute (compileUnit)
+                               .parent_path ()
+                               .lexically_relative (manif.ManifestPath.parent_path ())
+                         / (compileUnit.stem ().string () + ".o");
+        objPath        = objPath.lexically_normal ();
+        auto vmetaPath = fs::path (objPath).replace_extension (".vmeta");
+        objFiles.push_back (objPath.string ());
+
+        if (isArtefactsFresh (compileUnit, objPath, vmetaPath)) {
+            auto *loadedMod = deserializer.DeserializeModule (vmetaPath);
+            if (loadedMod != nullptr) {
+                llvm::errs () << "  Loaded precompiled metadata for: " << importPath
+                              << '\n';
+                continue;
+            }
+            // TODO: report error
+            llvm::errs () << "error\n";
+            break;
+        }
+
+        fs::create_directories (objPath.parent_path ());
+
         auto *mod = new symbols::Module (compileUnit.stem ().string ());
         ModuleLoader::AddModule (importPath, mod);
 
-        auto objPath = artefactDir
-                       / fs::absolute (compileUnit)
-                             .parent_path ()
-                             .lexically_relative (manif.ManifestPath.parent_path ())
-                       / (compileUnit.stem ().string () + ".o");
-        objPath      = objPath.lexically_normal ();
-        fs::create_directories (objPath.parent_path ());
-        objFiles.push_back (objPath.string ());
+        llvm::errs () << "  Compilation module " << mod->Name << '\n';
 
-        auto compileRes = Compile (_projectRoot, compileUnit, objPath, mod, triple);
+        auto compileRes
+            = Compile (_projectRoot, compileUnit, objPath, mod, typePool, triple);
         if (!compileRes.Success) {
             exit (1);
         }
+
+        serializer.SerializeModule (mod, vmetaPath);
     }
 
     for (const auto &cSrc : manif.CSources) {
@@ -231,6 +257,16 @@ BuildDriver::resolveDeps (const std::string &absolutePath) {
     auto         deps = std::move (depsResolver.Deps ());
     file.close ();
     return std::move (deps);
+}
+
+bool
+BuildDriver::isArtefactsFresh (
+    const fs::path &srcPath, const fs::path &objPath, const fs::path &vmetaPath) {
+    if (!fs::exists (objPath) || !fs::exists (vmetaPath)) {
+        return false;
+    }
+    return fs::last_write_time (objPath) > fs::last_write_time (srcPath)
+           && fs::last_write_time (vmetaPath) > fs::last_write_time (srcPath);
 }
 
 }

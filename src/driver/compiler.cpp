@@ -214,6 +214,7 @@ Compile (
     const fs::path     &filePath,
     const fs::path     &objPath,
     symbols::Module    *mod,
+    TypePool           &typePool,
     const llvm::Triple &triple) {
     fs::path filePathInBuild
         = projectPath / "build" / "obj"
@@ -232,10 +233,9 @@ Compile (
     }
     unsigned bufferId = mgr.AddNewSourceBuffer (std::move (*bufferOrErr), llvm::SMLoc ());
 
-    TypePool     pool;
     ast::Context astContext;
     Lexer        lex (diag, mgr, bufferId);
-    Parser       parser (diag, lex, pool, astContext);
+    Parser       parser (diag, lex, typePool, astContext);
     ParseResult  parseRes = parser.Parse ();
     if (diag.HasErrors ()) {
         parseRes.HasErrors = true;
@@ -266,7 +266,7 @@ Compile (
     if (triple.isArch16Bit ()) {
         ptrBitWidth = 16;
     }
-    Sema sema (diag, builder, astContext, mod, pool, ptrBitWidth);
+    Sema sema (diag, builder, astContext, mod, typePool, ptrBitWidth);
     sema.Analyze (parseRes);
 
     HIRLinearizer linearizer (builder);
@@ -320,6 +320,6 @@ Compile (
         return { .Success = false, .ObjPath = "" };
     }
 
-    return { .Success = !parseRes.HasErrors, .ObjPath = objPath };
+    return { .Success = !diag.HasErrors (), .ObjPath = objPath };
 }
 }

@@ -30,6 +30,9 @@ ExecuteArguments () {
     if (!ExplainOpt.empty ()) {
         Explain ();
     }
+    if (CleanSub) {
+        CleanPackage ();
+    }
 }
 
 void
@@ -95,6 +98,12 @@ CheckPackage () {
 void
 FetchRegistry () {
     PrintOptUnimplementedError ("fetch");
+}
+
+void
+CleanPackage () {
+    const auto &pkgRoot = BuildDriver::GetProjectRoot (fs::current_path ());
+    fs::remove_all (pkgRoot / "build");
 }
 
 void

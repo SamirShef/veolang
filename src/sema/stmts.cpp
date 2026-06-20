@@ -1365,24 +1365,26 @@ Sema::analyzeImportStmt (ast::ImportStmt *is) {
     auto *importMod = driver::ModuleLoader::LoadModule (path);
     if (importMod == nullptr) {
         // TODO: report error
+        llvm::errs () << "mod " << path << " not found\n";
         return;
     }
-    auto *cur = _mod;
-    for (size_t i = 0; i < is->Path ().size () - 1; ++i) {
-        const auto &path = is->Path ()[i];
-        if (auto it = _mod->Imports.find (path.Val); it != _mod->Imports.end ()) {
-            cur = it->second;
-        } else {
-            auto *newMod = new Module (path.Val, cur);
-            if (cur == _mod) {
-                cur->Imports.emplace (path.Val, newMod);
-            } else {
-                cur->Submods.emplace (path.Val, newMod);
+    _mod->Imports.emplace (importMod->Name, importMod);
+
+    for (auto &[name, candidates] : importMod->Funcs) {
+        for (auto &func : candidates.Candidates) {
+            if (!func->IsGeneric) {
+                auto *funcNode = _builder.CreateFunction (
+                    func->Name,
+                    func->RetType,
+                    {},
+                    llvm::SMLoc (),
+                    llvm::SMLoc (),
+                    func.get (),
+                    func->MangleKind);
+                _funcs.emplace (func.get (), funcNode);
             }
-            cur = newMod;
         }
     }
-    cur->Submods.emplace (importMod->Name, importMod);
 }
 
 }

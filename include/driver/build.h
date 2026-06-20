@@ -48,6 +48,10 @@ private:
 
     static std::vector<std::string>
     resolveDeps (const std::string &absolutePath);
+
+    static bool
+    isArtefactsFresh (
+        const fs::path &srcPath, const fs::path &objPath, const fs::path &vmetaPath);
 };
 
 }

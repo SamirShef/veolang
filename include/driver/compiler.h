@@ -1,5 +1,6 @@
 #pragma once
 #include <basic/symbols/module.h>
+#include <basic/types/pool.h>
 #include <driver/cli_options.h>
 #include <filesystem>
 #include <llvm/IR/Module.h>
@@ -56,6 +57,7 @@ Compile (
     const fs::path     &filePath,
     const fs::path     &objPath,
     symbols::Module    *mod,
+    basic::TypePool    &typePool,
     const llvm::Triple &triple);
 
 }

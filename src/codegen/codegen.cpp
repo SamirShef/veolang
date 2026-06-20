@@ -568,6 +568,18 @@ CodeGen::generateInitFunction () {
         *_mod);
     llvm::BasicBlock *entry = llvm::BasicBlock::Create (_ctx, "entry", func);
     _builder.SetInsertPoint (entry);
+
+    for (auto &[name, importMod] : _semaMod->Imports) {
+        llvm::FunctionType *funcType
+            = llvm::FunctionType::get (_builder.getVoidTy (), false);
+        llvm::Function *func = llvm::Function::Create (
+            funcType,
+            llvm::GlobalValue::ExternalLinkage,
+            "__veo_init_mod_" + importMod->ToString (),
+            *_mod);
+        _builder.CreateCall (func);
+    }
+
     for (const auto *global : _hirGlobals) {
         if (global->IsDeclaration ()) {
             continue;
@@ -587,6 +599,7 @@ CodeGen::generateInitFunction () {
         }
         _builder.CreateStore (val, gv);
     }
+
     _builder.CreateRetVoid ();
 }
 
