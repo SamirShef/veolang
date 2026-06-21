@@ -5,6 +5,7 @@
 #include <basic/types/pointer.h>
 #include <basic/types/struct.h>
 #include <basic/types/trait.h>
+#include <llvm/Support/raw_ostream.h>
 #include <sema/sema.h>
 
 namespace veo {
@@ -53,14 +54,12 @@ Sema::resolveType (Type **type) {
         }
     }
     const auto &typeName = path.back ();
-    auto        structIt = curMod->Structs.find (typeName.Val);
-    if (structIt != curMod->Structs.end ()) {
-        *type = createType<StructType> (&structIt->second);
+    if (auto it = curMod->Structs.find (typeName.Val); it != curMod->Structs.end ()) {
+        *type = createType<StructType> (&it->second);
         return *type;
     }
-    auto traitIt = curMod->Traits.find (typeName.Val);
-    if (traitIt != curMod->Traits.end ()) {
-        *type = createType<TraitType> (&traitIt->second);
+    if (auto it = curMod->Traits.find (typeName.Val); it != curMod->Traits.end ()) {
+        *type = createType<TraitType> (&it->second);
         return *type;
     }
 

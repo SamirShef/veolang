@@ -743,6 +743,9 @@ Parser::tryParseAsTypeExpr () {
 Expr *
 Parser::parseChain (Expr *base, bool allowStruct) {
     std::vector<basic::NameObj> path;
+    if (base->Kind () == NodeKind::VarExpr) {
+        path.emplace_back (llvm::cast<VarExpr> (base)->Name ());
+    }
     while (true) {
         if (match (TokenKind::Dot)) {
             if (match (TokenKind::LParen)) { // cast
@@ -758,11 +761,12 @@ Parser::parseChain (Expr *base, bool allowStruct) {
             path.emplace_back (name);
 
             if (allowStruct && match (TokenKind::LBrace)) { // StructInstance
+                auto start  = path.front ().Start;
                 auto fields = parseFieldsForInstance ();
                 return createNode<StructInstance> (
                     createType<basic::NamedType> (std::move (path)),
                     std::move (fields),
-                    path.front ().Start,
+                    start,
                     _lastTok.End);
             }
 

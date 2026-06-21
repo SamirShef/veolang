@@ -851,6 +851,18 @@ Sema::analyzeFieldExpr (FieldExpr *fe, Type *expectedType) {
             }
             return res;
         }
+        if (auto it = mod->Structs.find (fe->Name ().Val); it != mod->Structs.end ()) {
+            return { Value (ValueKind::Type, createType<StructType> (&it->second)),
+                     nullptr };
+        }
+        if (auto it = mod->Submods.find (fe->Name ().Val); it != mod->Submods.end ()) {
+            return { Value (ValueKind::Mod, createType<ModuleType> (it->second)),
+                     nullptr };
+        }
+        if (auto it = mod->Imports.find (fe->Name ().Val); it != mod->Imports.end ()) {
+            return { Value (ValueKind::Mod, createType<ModuleType> (it->second)),
+                     nullptr };
+        }
         // TODO: report error
         return {};
     }
@@ -1050,7 +1062,7 @@ Sema::analyzeMethodCall (MethodCall *mc, Type *expectedType) {
         return res;
     }
     auto *s = targetType->IsStruct () ? targetType->AsStruct ()->BaseSymbol () : nullptr;
-    if (!s->IsComplete) {
+    if (s != nullptr && !s->IsComplete) {
         _diag
             .Report (
                 DiagCode::EIncompleteType,

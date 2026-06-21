@@ -1,9 +1,4 @@
-#include <basic/types/floating.h>
-#include <basic/types/integer.h>
-#include <basic/types/pointer.h>
-#include <basic/types/size.h>
-#include <basic/types/struct.h>
-#include <basic/types/trait.h>
+#include <basic/types/all.h>
 #include <bitcode/block_id.h>
 #include <bitcode/serializer.h>
 #include <llvm/Support/FileSystem.h>
@@ -65,6 +60,10 @@ Serializer::collectType (basic::Type *type) {
                 _modPool.GetID (sym->Parent);
             }
         }
+    } else if (type->IsAlias ()) {
+        auto *aliasType = cast (type, basic::AliasType *);
+        _strPool.GetID (aliasType->Name ().Val);
+        _typePool.GetID (aliasType->Base ());
     }
 }
 
@@ -256,7 +255,27 @@ Serializer::serializeTypePool (llvm::BitstreamWriter &writer) {
                 32);
             break;
         }
-        default: break;
+        case basic::TypeKind::Alias: {
+            auto *at = cast (type, basic::AliasType *);
+            writer.Emit (_strPool.GetID (at->Name ().Val), 32);
+            writer.Emit (_typePool.GetID (at->Base ()), 32);
+            break;
+        }
+        case basic::TypeKind::TraitThis: {
+            auto *tt   = cast (type, basic::TraitThisType *);
+            auto *tSym = tt->Trait ();
+            writer.Emit (_strPool.GetID (tSym->Name.Val), 32);
+            writer.Emit (
+                tSym->Parent != nullptr ? _modPool.GetID (tSym->Parent) : 0xFFFFFFFF,
+                32);
+            break;
+        }
+        case basic::TypeKind::Named:
+        case basic::TypeKind::Module:
+            // unreachable
+        case basic::TypeKind::Bool:
+        case basic::TypeKind::Char:
+        case basic::TypeKind::Noth: break;
         }
     }
 
@@ -376,17 +395,17 @@ Serializer::serializeModuleSymbols (llvm::BitstreamWriter &writer, symbols::Modu
         }
     }
 
-    writer.Emit (cast (mod->Imports.size (), uint32_t), 32);
-    for (auto &[name, impMod] : mod->Imports) {
-        writer.Emit (_strPool.GetID (name), 32);
-        writer.Emit (impMod != nullptr ? _modPool.GetID (impMod) : 0xFFFFFFFF, 32);
-    }
-
-    writer.Emit (cast (mod->Submods.size (), uint32_t), 32);
-    for (auto &[name, subMod] : mod->Submods) {
-        writer.Emit (_strPool.GetID (name), 32);
-        writer.Emit (subMod != nullptr ? _modPool.GetID (subMod) : 0xFFFFFFFF, 32);
-    }
+    // writer.Emit (cast (mod->Imports.size (), uint32_t), 32);
+    // for (auto &[name, impMod] : mod->Imports) {
+    //     writer.Emit (_strPool.GetID (name), 32);
+    //     writer.Emit (impMod != nullptr ? _modPool.GetID (impMod) : 0xFFFFFFFF, 32);
+    // }
+    //
+    // writer.Emit (cast (mod->Submods.size (), uint32_t), 32);
+    // for (auto &[name, subMod] : mod->Submods) {
+    //     writer.Emit (_strPool.GetID (name), 32);
+    //     writer.Emit (subMod != nullptr ? _modPool.GetID (subMod) : 0xFFFFFFFF, 32);
+    // }
 
     writer.ExitBlock ();
 }

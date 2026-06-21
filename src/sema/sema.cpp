@@ -181,15 +181,16 @@ Sema::typeToString (const Type *type) {
     if (!type->IsStruct () && !type->IsTrait ()) {
         return type->ToString ();
     }
-    std::string res    = type->IsStruct () ? type->AsStruct ()->BaseSymbol ()->Name.Val
-                                           : type->AsTrait ()->BaseSymbol ()->Name.Val;
-    Module     *curMod = type->IsStruct () ? type->AsStruct ()->BaseSymbol ()->Parent
-                                           : type->AsTrait ()->BaseSymbol ()->Parent;
+    auto    res    = type->IsStruct () ? type->AsStruct ()->BaseSymbol ()->Name.Val
+                                       : type->AsTrait ()->BaseSymbol ()->Name.Val;
+    Module *curMod = type->IsStruct () ? type->AsStruct ()->BaseSymbol ()->Parent
+                                       : type->AsTrait ()->BaseSymbol ()->Parent;
     while (curMod != nullptr) {
         if (*curMod == *_mod) {
             break;
         }
-        res = curMod->Name + '.' + res; // NOLINT
+        res    = curMod->Name + '.' + res; // NOLINT
+        curMod = curMod->Parent;
     }
     return res;
 }

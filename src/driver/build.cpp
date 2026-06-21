@@ -83,7 +83,7 @@ BuildDriver::Build () {
             }
             // TODO: report error
             llvm::errs () << "error\n";
-            break;
+            exit (1);
         }
 
         fs::create_directories (objPath.parent_path ());

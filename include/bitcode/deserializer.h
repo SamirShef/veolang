@@ -15,6 +15,28 @@ class Deserializer {
     std::vector<basic::Type *>     _typePool;
     std::vector<symbols::Module *> _modulePool;
 
+    struct StructFixup {
+        basic::StructType *Type;
+        uint32_t           NameID;
+        uint32_t           ParentModuleID;
+    };
+
+    struct TraitFixup {
+        basic::TraitType *Type;
+        uint32_t          NameID;
+        uint32_t          ParentModuleID;
+    };
+
+    struct TraitThisFixup {
+        basic::TraitThisType *Type;
+        uint32_t              NameID;
+        uint32_t              ParentModuleID;
+    };
+
+    std::vector<StructFixup>    _structFixups;
+    std::vector<TraitFixup>     _traitFixups;
+    std::vector<TraitThisFixup> _traitThisFixups;
+
 public:
     explicit Deserializer (basic::TypePool &globalTypePool)
         : _globalTypePool (globalTypePool) {}

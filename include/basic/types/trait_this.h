@@ -1,10 +1,12 @@
 #pragma once
 #include <basic/symbols/trait.h>
 #include <basic/types/type.h>
+#include <bitcode/deserializer.h>
 
 namespace veo::basic {
 
 class TraitThisType : public Type {
+    friend class bitcode::Deserializer;
     symbols::Trait *_trait;
 
 public:

@@ -1,6 +1,7 @@
 #include <basic/types/all.h>
 #include <driver/module_loader.h>
 #include <hir/mangle_kind.h>
+#include <llvm/Support/raw_ostream.h>
 #include <sema/sema.h>
 
 namespace veo {
@@ -1355,6 +1356,9 @@ Sema::analyzeExternStructDef (ast::StructDef *sd, hir::MangleKind mangleKind) {
 
 void
 Sema::analyzeImportStmt (ast::ImportStmt *is) {
+    if (!allowInScope (is)) {
+        return;
+    }
     std::string path;
     for (const auto &part : is->Path ()) {
         if (!path.empty ()) {
@@ -1368,7 +1372,21 @@ Sema::analyzeImportStmt (ast::ImportStmt *is) {
         llvm::errs () << "mod " << path << " not found\n";
         return;
     }
-    _mod->Imports.emplace (importMod->Name, importMod);
+
+    for (auto &[name, var] : importMod->Vars) {
+        auto *varNode = _builder.CreateVariable (
+            var.Name,
+            var.Type,
+            nullptr,
+            var.IsConst,
+            var.IsGlobal,
+            {},
+            {},
+            &var,
+            var.MangleKind,
+            true);
+        var.HIR = varNode;
+    }
 
     for (auto &[name, candidates] : importMod->Funcs) {
         for (auto &func : candidates.Candidates) {
@@ -1377,14 +1395,116 @@ Sema::analyzeImportStmt (ast::ImportStmt *is) {
                     func->Name,
                     func->RetType,
                     {},
-                    llvm::SMLoc (),
-                    llvm::SMLoc (),
+                    {},
+                    {},
                     func.get (),
                     func->MangleKind);
                 _funcs.emplace (func.get (), funcNode);
             }
         }
     }
+
+    for (auto &[name, s] : importMod->Structs) {
+        std::vector<hir::Field> fields;
+        fields.reserve (s.Fields.size ());
+        for (const auto &field : s.Fields) {
+            fields.emplace_back (field.Name, field.Type, field.IsStatic, field.IsConst);
+        }
+        _builder.CreateStruct (s.Name, std::move (fields), &s, {}, {});
+
+        auto *targetType = createType<StructType> (&s);
+        for (auto &[name, candidates] : s.Methods) {
+            for (auto &method : candidates.Candidates) {
+                if (!method->IsGeneric) {
+                    std::vector<hir::VarDef *> args;
+                    args.reserve (method->Func->Args.size ());
+                    for (auto &a : method->Func->Args) {
+                        args.emplace_back (_builder.CreateVariable (
+                            a.Name,
+                            a.Type,
+                            nullptr,
+                            false,
+                            false,
+                            a.Name.Start,
+                            a.Name.End,
+                            nullptr,
+                            hir::MangleKind::Veo,
+                            false,
+                            false));
+                    }
+                    auto *methodNode = _builder.CreateMethod (
+                        method->Func->Name,
+                        method->Func->RetType,
+                        std::move (args),
+                        {},
+                        {},
+                        method.get (),
+                        hir::MangleKind::Veo,
+                        targetType,
+                        method->IsStatic);
+                    _methods.emplace (method.get (), methodNode);
+                }
+            }
+        }
+    }
+
+    for (auto &[type, methods] : importMod->PrimitiveMethods) {
+        for (auto &[name, candidates] : methods) {
+            for (auto &method : candidates.Candidates) {
+                if (!method->IsGeneric) {
+                    std::vector<hir::VarDef *> args;
+                    args.reserve (method->Func->Args.size ());
+                    for (auto &a : method->Func->Args) {
+                        args.emplace_back (_builder.CreateVariable (
+                            a.Name,
+                            a.Type,
+                            nullptr,
+                            false,
+                            false,
+                            a.Name.Start,
+                            a.Name.End,
+                            nullptr,
+                            hir::MangleKind::Veo,
+                            false,
+                            false));
+                    }
+                    symbols::Function func (
+                        method->Func->Name,
+                        method->Func->RetType,
+                        method->Func->Args,
+                        method->Func->IsGeneric,
+                        method->Func->Parent,
+                        method->Func->MangleKind);
+                    auto newMethod = std::make_unique<symbols::Method> (
+                        std::make_unique<symbols::Function> (std::move (func)),
+                        method->Access,
+                        method->IsStatic,
+                        method->IsGeneric);
+                    auto *methodNode = _builder.CreateMethod (
+                        method->Func->Name,
+                        method->Func->RetType,
+                        std::move (args),
+                        {},
+                        {},
+                        method.get (),
+                        hir::MangleKind::Veo,
+                        type,
+                        method->IsStatic);
+                    _methods.emplace (newMethod.get (), methodNode);
+                    _mod->PrimitiveMethods[type][name].Candidates.emplace_back (
+                        std::move (newMethod));
+                }
+            }
+        }
+    }
+
+    for (auto &[type, traits] : importMod->PrimitiveTraitsImplement) {
+        for (auto &trait : traits) {
+            _mod->PrimitiveTraitsImplement[type].push_back (trait);
+        }
+    }
+
+    _mod->Imports.emplace (importMod->Name, importMod);
 }
 
 }
