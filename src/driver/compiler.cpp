@@ -219,7 +219,6 @@ Compile (
     fs::path filePathInBuild
         = projectPath / ("build/targets/" + triple.getTriple () + "/obj")
           / fs::absolute (filePath).lexically_relative (projectPath).lexically_normal ();
-    fs::create_directories (filePathInBuild.parent_path ());
     llvm::SourceMgr              mgr;
     diagnostic::DiagnosticEngine diag (mgr);
     auto bufferOrErr = llvm::MemoryBuffer::getFile (filePath.string ());
@@ -294,6 +293,8 @@ Compile (
                       << error << '\n';
         return { .Success = false, .ObjPath = "" };
     }
+    fs::create_directories (filePathInBuild.parent_path ());
+    fs::create_directories (objPath.parent_path ());
 
     std::string cpu = "generic";
     std::string features;

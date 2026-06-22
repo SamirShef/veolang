@@ -86,8 +86,6 @@ BuildDriver::Build () {
             exit (1);
         }
 
-        fs::create_directories (objPath.parent_path ());
-
         auto *mod = new symbols::Module (compileUnit.stem ().string ());
         ModuleLoader::AddModule (importPath, mod);
 

@@ -12,6 +12,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `@size_of` operator
 - Allowed naming identifiers with `@` at start
 
+### Fixed
+
+- Creating target directory if target is incorrect
+
 ## [0.22.0] - 2026-06-22
 
 ### Added
