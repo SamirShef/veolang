@@ -14,6 +14,7 @@
 #include <hir/load_glob_var_by_name.h>
 #include <hir/load_var.h>
 #include <hir/nil.h>
+#include <hir/ptr_arith.h>
 #include <hir/ref.h>
 #include <hir/ret.h>
 #include <hir/store.h>
@@ -154,7 +155,7 @@ public:
 
     LiteralExpr *
     CreateLiteral (basic::Value val, llvm::SMLoc start, llvm::SMLoc end) {
-        return _ctx.CreateNode<LiteralExpr> (val, start, end);
+        return _ctx.CreateNode<LiteralExpr> (std::move (val), start, end);
     }
 
     BinaryExpr *
@@ -290,6 +291,17 @@ public:
     NilExpr *
     CreateNil (llvm::SMLoc start, llvm::SMLoc end) {
         return _ctx.CreateNode<NilExpr> (start, end);
+    }
+
+    PtrArith *
+    CreatePtrArith (
+        ast::BinOp   op,
+        Node        *ptr,
+        Node        *offset,
+        basic::Type *resType,
+        llvm::SMLoc  start,
+        llvm::SMLoc  end) {
+        return _ctx.CreateNode<PtrArith> (op, ptr, offset, resType, start, end);
     }
 };
 

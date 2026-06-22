@@ -38,11 +38,14 @@ Sema::cast (
     if (newValue.Kind == ValueKind::Const) {
         ValueData newData;
         std::visit (
-            [&] (auto val) {
-                if (dst->IsIntOrSize ()) {
-                    newData = ValueData (static_cast<int64_t> (val));
-                } else if (dst->IsFloating ()) {
-                    newData = ValueData (static_cast<double> (val));
+            [&] (auto &val) {
+                using T = std::decay_t<decltype (val)>;
+                if constexpr (std::is_arithmetic_v<T>) {
+                    if (dst->IsIntOrSize ()) {
+                        newData = ValueData (static_cast<int64_t> (val));
+                    } else if (dst->IsFloating ()) {
+                        newData = ValueData (static_cast<double> (val));
+                    }
                 }
             },
             val.Val->Data);

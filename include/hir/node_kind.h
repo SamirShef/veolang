@@ -24,6 +24,7 @@ enum class NodeKind : uint8_t {
     RefExpr,
     DerefExpr,
     NilExpr,
+    PtrArith,
 };
 
 }

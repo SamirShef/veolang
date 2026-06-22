@@ -1,5 +1,6 @@
 #include <basic/types/struct.h>
 #include <basic/types/trait.h>
+#include <ranges>
 #include <sema/sema.h>
 
 namespace veo {
@@ -8,12 +9,10 @@ using namespace symbols;
 
 Variable *
 Sema::getVariable (const std::string &name) {
-    auto vars = _vars;
-    while (!vars.empty ()) {
-        if (auto it = vars.top ().Vars.find (name); it != vars.top ().Vars.end ()) {
-            return &it->second;
+    for (auto &var : std::views::reverse (_vars)) {
+        if (auto varIt = var.Vars.find (name); varIt != var.Vars.end ()) {
+            return &varIt->second;
         }
-        vars.pop ();
     }
     return nullptr;
 }

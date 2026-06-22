@@ -200,6 +200,7 @@ CodeGen::generateExpr (Node *node) {
         variant (RefExpr, generateRefExpr, RefExpr);
         variant (DerefExpr, generateDerefExpr, DerefExpr);
         variant (NilExpr, generateNilExpr, NilExpr);
+        variant (PtrArith, generatePtrArith, PtrArith);
     default: return nullptr;
     }
 #undef variant
@@ -224,6 +225,10 @@ CodeGen::generateLiteralExpr (LiteralExpr *le) {
             std::get<1> (val.Data));
     case basic::TypeKind::Bool: return _builder.getInt1 (std::get<0> (val.Data) != 0);
     case basic::TypeKind::Char: return _builder.getInt32 (std::get<0> (val.Data));
+    case basic::TypeKind::Pointer: {
+        const auto &str = std::get<2> (val.Data);
+        return _builder.CreateGlobalString (str);
+    }
     default: {
     }
     }
@@ -453,6 +458,20 @@ CodeGen::generateDerefExpr (hir::DerefExpr *de) {
 llvm::Value *
 CodeGen::generateNilExpr (hir::NilExpr *ne) {
     return llvm::ConstantPointerNull::get (_builder.getPtrTy ());
+}
+
+llvm::Value *
+CodeGen::generatePtrArith (PtrArith *pa) {
+    llvm::Value *ptrVal    = generateExpr (pa->Ptr ());
+    llvm::Value *offsetVal = generateExpr (pa->Offset ());
+
+    if (pa->Op () == ast::BinOp::Minus) {
+        offsetVal = _builder.CreateNeg (offsetVal);
+    }
+
+    llvm::Type *elemType = getType (pa->Type ()->AsPointer ()->Base ());
+
+    return _builder.CreateGEP (elemType, ptrVal, offsetVal);
 }
 
 llvm::Value *

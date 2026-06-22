@@ -52,15 +52,16 @@ class Sema {
     hir::Builder &_builder; // NOLINT(cppcoreguidelines-avoid-const-or-ref-data-members)
     ast::Context
         &_astContext; // NOLINT(cppcoreguidelines-avoid-const-or-ref-data-members)
-    std::stack<symbols::Scope> _vars;
-    std::stack<Type *>         _funcRetTypes;
+    std::vector<symbols::Scope> _vars;
+    std::stack<Type *>          _funcRetTypes;
 
     struct SemanticResult {
         OptValue   Val;
         hir::Node *Node;
 
         SemanticResult () : Val (Value::Incorrect ()), Node (nullptr) {}
-        SemanticResult (OptValue val, hir::Node *node) : Val (val), Node (node) {}
+        SemanticResult (OptValue val, hir::Node *node)
+            : Val (std::move (val)), Node (node) {}
     };
 
     enum class CastCost : uint16_t {
@@ -120,7 +121,7 @@ public:
           _mod (mod),
           _typePool (typePool),
           _ptrBitWidth (ptrBitWidth) {
-        _vars.emplace ();
+        _vars.emplace_back ();
     }
 
     void

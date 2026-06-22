@@ -122,11 +122,7 @@ Sema::analyzeExpr (Expr *expr, Type *expectedType) {
         auto  res   = SemanticResult (                                                   \
             value,                                                                       \
             _builder.CreateLiteral (value, le->Start (), le->End ()));                   \
-        if (expectedType == nullptr) {                                                   \
-            return res;                                                                  \
-        }                                                                                \
-        res = implicitlyCast (res, &expectedType, le->Start (), le->End ());             \
-        return res;                                                                      \
+        return implicitlyCast (res, &expectedType, le->Start (), le->End ());            \
     }
 
 #define float_lit(kind, floatingKind)                                                    \
@@ -139,11 +135,7 @@ Sema::analyzeExpr (Expr *expr, Type *expectedType) {
         auto res = SemanticResult (                                                      \
             value,                                                                       \
             _builder.CreateLiteral (value, le->Start (), le->End ()));                   \
-        if (expectedType == nullptr) {                                                   \
-            return res;                                                                  \
-        }                                                                                \
-        res = implicitlyCast (res, &expectedType, le->Start (), le->End ());             \
-        return res;                                                                      \
+        return implicitlyCast (res, &expectedType, le->Start (), le->End ());            \
     }
 
 Sema::SemanticResult
@@ -242,8 +234,7 @@ Sema::analyzeLiteralExpr (LiteralExpr *le, Type *expectedType) {
         auto res = SemanticResult (
             value,
             _builder.CreateLiteral (value, le->Start (), le->End ()));
-        res = implicitlyCast (res, &expectedType, le->Start (), le->End ());
-        return res;
+        return implicitlyCast (res, &expectedType, le->Start (), le->End ());
     }
     case TokenKind::BoolLit: {
         bool bval  = (val == "true");
@@ -251,11 +242,7 @@ Sema::analyzeLiteralExpr (LiteralExpr *le, Type *expectedType) {
         auto res   = SemanticResult (
             value,
             _builder.CreateLiteral (value, le->Start (), le->End ()));
-        if (expectedType == nullptr) {
-            return res;
-        }
-        res = implicitlyCast (res, &expectedType, le->Start (), le->End ());
-        return res;
+        return implicitlyCast (res, &expectedType, le->Start (), le->End ());
     }
     case TokenKind::CharLit: {
         int64_t cval = val.size () == 1 ? val[0] : 0;
@@ -263,11 +250,17 @@ Sema::analyzeLiteralExpr (LiteralExpr *le, Type *expectedType) {
         auto res   = SemanticResult (
             value,
             _builder.CreateLiteral (value, le->Start (), le->End ()));
-        if (expectedType == nullptr) {
-            return res;
-        }
-        res = implicitlyCast (res, &expectedType, le->Start (), le->End ());
-        return res;
+        return implicitlyCast (res, &expectedType, le->Start (), le->End ());
+    }
+    case TokenKind::StrLit: {
+        auto value = Value (
+            ValueKind::Const,
+            ValueData (std::move (val)),
+            createType<PointerType> (createType<IntegerType> (8, true)));
+        auto res = SemanticResult (
+            value,
+            _builder.CreateLiteral (value, le->Start (), le->End ()));
+        return implicitlyCast (res, &expectedType, le->Start (), le->End ());
     }
     default: return {};
     }
@@ -284,7 +277,38 @@ Sema::analyzeBinaryExpr (BinaryExpr *be, Type *expectedType) {
     }
     resolveType (&lhs.Val->Type);
     resolveType (&rhs.Val->Type);
-    BinOp op         = be->Op ();
+    BinOp op = be->Op ();
+
+    if (op == BinOp::Plus || op == BinOp::Minus) {
+        Type *lhsType = lhs.Val->Type->CanonicalType ();
+        Type *rhsType = rhs.Val->Type->CanonicalType ();
+
+        bool isLhsPtr = lhsType->IsPointer ();
+        bool isRhsPtr = rhsType->IsPointer ();
+        bool isLhsInt = lhsType->IsIntOrSize ();
+        bool isRhsInt = rhsType->IsIntOrSize ();
+
+        // 1. ptr + integer
+        // 2. ptr - integer
+        // 3. integer + ptr
+        if ((isLhsPtr && isRhsInt) || (op == BinOp::Plus && isRhsPtr && isLhsInt)) {
+            Type      *resType    = isLhsPtr ? lhs.Val->Type : rhs.Val->Type;
+            hir::Node *ptrNode    = isLhsPtr ? lhs.Node : rhs.Node;
+            hir::Node *offsetNode = isLhsPtr ? rhs.Node : lhs.Node;
+
+            auto *node = _builder.CreatePtrArith (
+                op,
+                ptrNode,
+                offsetNode,
+                resType,
+                be->Start (),
+                be->End ());
+
+            auto res = SemanticResult (Value (ValueKind::Unknown, resType), node);
+            return implicitlyCast (res, &expectedType, be->Start (), be->End ());
+        }
+    }
+
     Type *commonType = nullptr;
     Type *resType    = nullptr;
 
@@ -522,10 +546,7 @@ Sema::analyzeVarExpr (VarExpr *ve, Type *expectedType) {
             ve->End ());
     }
     auto res = SemanticResult (value, node);
-    if (expectedType != nullptr) {
-        res = implicitlyCast (res, &expectedType, ve->Start (), ve->End ());
-    }
-    return res;
+    return implicitlyCast (res, &expectedType, ve->Start (), ve->End ());
 }
 
 Sema::SemanticResult
@@ -796,9 +817,11 @@ Sema::analyzeAsgnField (
             .AddSpan (fieldExpr->Start (), fieldExpr->End ());
         return {};
     }
-    bool baseIsStatic     = base.Val->Kind == ValueKind::Type;
-    bool baseIsThis       = !baseIsStatic && _insideMethod.has_value ()
-                            && *_insideMethod->second == *targetType;
+    bool baseIsStatic = base.Val->Kind == ValueKind::Type;
+    bool baseIsThis = !baseIsStatic && _insideMethod.has_value ()
+                      && *_insideMethod->second == *targetType
+                      && fieldExpr->Base ()->Kind () == NodeKind::VarExpr
+                      && llvm::cast<VarExpr> (fieldExpr->Base ())->Name ().Val == "this";
     bool canAccessPrivate = baseIsThis
                             || baseIsStatic && _insideMethod.has_value ()
                                    && *_insideMethod->second == *targetType;
@@ -962,7 +985,9 @@ Sema::analyzeFieldExpr (FieldExpr *fe, Type *expectedType) {
     }
     bool baseIsStatic     = base.Val->Kind == ValueKind::Type;
     bool baseIsThis       = !baseIsStatic && _insideMethod.has_value ()
-                            && *_insideMethod->second == *targetType;
+                            && *_insideMethod->second == *targetType
+                            && fe->Base ()->Kind () == NodeKind::VarExpr
+                            && llvm::cast<VarExpr> (fe->Base ())->Name ().Val == "this";
     bool canAccessPrivate = baseIsThis
                             || baseIsStatic && _insideMethod.has_value ()
                                    && *_insideMethod->second == *targetType;
@@ -1159,7 +1184,9 @@ Sema::analyzeMethodCall (MethodCall *mc, Type *expectedType) {
                             && base.Node->Kind () == hir::NodeKind::LoadVar;
     bool baseIsStatic     = base.Val->Kind == ValueKind::Type;
     bool baseIsThis       = !baseIsStatic && _insideMethod.has_value ()
-                            && *_insideMethod->second == *targetType;
+                            && *_insideMethod->second == *targetType
+                            && mc->Base ()->Kind () == NodeKind::VarExpr
+                            && llvm::cast<VarExpr> (mc->Base ())->Name ().Val == "this";
     bool canAccessPrivate = baseIsThis
                             || baseIsStatic && _insideMethod.has_value ()
                                    && *_insideMethod->second == *targetType;
@@ -1503,6 +1530,9 @@ Sema::SemanticResult
 Sema::analyzeDerefExpr (DerefExpr *de, Type *expectedType) {
     auto expr = analyzeExpr (de->GetExpr (), nullptr);
     if (!expr.Val.has_value ()) {
+        return {};
+    }
+    if (expr.Val->Type == nullptr) {
         return {};
     }
     if (!expr.Val->Type->IsPointer ()) {

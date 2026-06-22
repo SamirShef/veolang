@@ -636,17 +636,18 @@ Parser::parsePrimaryExpr (bool allowStruct) {
         lit (F64Lit);
         lit (ISizeLit);
         lit (USizeLit);
+        lit (StrLit);
 
     case TokenKind::LParen: {
         Expr *expr = parseExpr ();
         if (expr == nullptr) {
             return nullptr;
         }
-        expr->Start () = tok.Start;
-        expr->End ()   = _lastTok.End;
         if (!expectTok (TokenKind::RParen, ")")) {
             return nullptr;
         }
+        expr->Start () = tok.Start;
+        expr->End ()   = _lastTok.End;
         return expr;
     }
     case TokenKind::Minus:
