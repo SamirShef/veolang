@@ -21,6 +21,7 @@
 #include <ast/stmts/func_def.h>
 #include <ast/stmts/if_else.h>
 #include <ast/stmts/impl_stmt.h>
+#include <ast/stmts/import_stmt.h>
 #include <ast/stmts/ret.h>
 #include <ast/stmts/struct_def.h>
 #include <ast/stmts/trait_stmt.h>
@@ -72,10 +73,13 @@ Parser::parseStmt (bool expectSemi) {
         return parseImplStmt ();
     }
     case TokenKind::Trait: {
-        return parseTraitStmt ();
+        return parseTraitStmt (access);
     }
     case TokenKind::Extern: {
         return parseExternStmt ();
+    }
+    case TokenKind::Import: {
+        return checkTrailingSemi (parseImportStmt (), expectSemi);
     }
     default: {
         Expr *expr = parseExpr ();
@@ -357,7 +361,7 @@ Parser::parseImplStmt () {
 }
 
 ast::Stmt *
-Parser::parseTraitStmt () {
+Parser::parseTraitStmt (ast::AccessModifier access) {
     const Token    firstTok = advance ();
     basic::NameObj name;
     if (!expectName (name)) {
@@ -379,6 +383,7 @@ Parser::parseTraitStmt () {
     return createNode<TraitStmt> (
         std::move (name),
         std::move (methods),
+        access,
         firstTok.Start,
         _lastTok.End);
 }
@@ -404,6 +409,24 @@ Parser::parseExternStmt () {
         std::move (body),
         firstTok.Start,
         _lastTok.End);
+}
+
+Stmt *
+Parser::parseImportStmt () {
+    const Token                 firstTok = advance ();
+    std::vector<basic::NameObj> path;
+    basic::NameObj              name;
+    if (!expectName (name)) {
+        return nullptr;
+    }
+    path.push_back (name);
+    while (match (TokenKind::Dot)) {
+        if (!expectName (name)) {
+            return nullptr;
+        }
+        path.push_back (name);
+    }
+    return createNode<ImportStmt> (std::move (path), firstTok.Start, _curTok.End);
 }
 
 std::vector<Argument>
@@ -721,6 +744,9 @@ Parser::tryParseAsTypeExpr () {
 Expr *
 Parser::parseChain (Expr *base, bool allowStruct) {
     std::vector<basic::NameObj> path;
+    if (base->Kind () == NodeKind::VarExpr) {
+        path.emplace_back (llvm::cast<VarExpr> (base)->Name ());
+    }
     while (true) {
         if (match (TokenKind::Dot)) {
             if (match (TokenKind::LParen)) { // cast
@@ -736,11 +762,12 @@ Parser::parseChain (Expr *base, bool allowStruct) {
             path.emplace_back (name);
 
             if (allowStruct && match (TokenKind::LBrace)) { // StructInstance
+                auto start  = path.front ().Start;
                 auto fields = parseFieldsForInstance ();
                 return createNode<StructInstance> (
                     createType<basic::NamedType> (std::move (path)),
                     std::move (fields),
-                    path.front ().Start,
+                    start,
                     _lastTok.End);
             }
 

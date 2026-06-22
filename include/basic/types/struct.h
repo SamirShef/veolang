@@ -1,9 +1,11 @@
 #pragma once
 #include <basic/symbols/struct.h>
+#include <bitcode/deserializer.h>
 
 namespace veo::basic {
 
 class StructType : public Type {
+    friend class bitcode::Deserializer;
     symbols::Struct *_base;
 
 public:

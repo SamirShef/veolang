@@ -20,6 +20,7 @@
 #include <ast/stmts/for_loop.h>
 #include <ast/stmts/if_else.h>
 #include <ast/stmts/impl_stmt.h>
+#include <ast/stmts/import_stmt.h>
 #include <ast/stmts/ret.h>
 #include <ast/stmts/trait_stmt.h>
 #include <ast/stmts/var_def.h>
@@ -58,6 +59,7 @@ private:
             variant (ImplStmt, dumpImplStmt, ImplStmt);
             variant (TraitStmt, dumpTraitStmt, TraitStmt);
             variant (ExternStmt, dumpExternStmt, ExternStmt);
+            variant (ImportStmt, dumpImportStmt, ImportStmt);
         default: {
         }
         }
@@ -96,6 +98,9 @@ private:
 
     void
     dumpExternStmt (ExternStmt *es);
+
+    void
+    dumpImportStmt (ImportStmt *is);
 
     void
     dumpExpr (Expr *expr) {

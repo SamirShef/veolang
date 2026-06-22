@@ -1,5 +1,3 @@
-#include "ast/stmts/func_def.h"
-
 #include <basic/types/all.h>
 #include <codegen/mangler.h>
 #include <sema/sema.h>
@@ -490,6 +488,14 @@ Sema::analyzeVarExpr (VarExpr *ve, Type *expectedType) {
         if (auto *s = getStruct (ve->Name ().Val)) {
             return { Value (ValueKind::Type, createType<StructType> (s)), nullptr };
         }
+        if (auto it = _mod->Submods.find (ve->Name ().Val); it != _mod->Submods.end ()) {
+            return { Value (ValueKind::Mod, createType<ModuleType> (it->second)),
+                     nullptr };
+        }
+        if (auto it = _mod->Imports.find (ve->Name ().Val); it != _mod->Imports.end ()) {
+            return { Value (ValueKind::Mod, createType<ModuleType> (it->second)),
+                     nullptr };
+        }
         _diag
             .Report (
                 DiagCode::EUndefined,
@@ -521,7 +527,10 @@ Sema::analyzeVarExpr (VarExpr *ve, Type *expectedType) {
 }
 
 Sema::SemanticResult
-Sema::analyzeFuncCall (FuncCall *fc, Type *expectedType) {
+Sema::analyzeFuncCall (FuncCall *fc, Type *expectedType, Module *baseSemaMod) {
+    if (baseSemaMod == nullptr) {
+        baseSemaMod = _mod;
+    }
     auto it = _mod->Funcs.find (fc->Name ().Val);
     if (it == _mod->Funcs.end ()) {
         _diag
@@ -548,6 +557,16 @@ Sema::analyzeFuncCall (FuncCall *fc, Type *expectedType) {
     auto *func = resolveBestOverload (candidates, argTypes, fc->Start (), fc->End ());
     if (func == nullptr) {
         return {};
+    }
+
+    if (_mod != baseSemaMod && func->Access != AccessModifier::Pub) {
+        _diag
+            .Report (
+                DiagCode::ECannotAccessToPrivMember,
+                "cannot call private function '" + fc->Name ().Val + "' from module '"
+                    + _mod->ToString () + "'",
+                Severity::Error)
+            .AddSpan (fc->Start (), fc->End ());
     }
 
     if (func->IsGeneric) {
@@ -710,12 +729,57 @@ Sema::analyzeAsgnField (
             fieldExpr->Start (),
             fieldExpr->End ());
     }
-    if (!targetType->IsStruct ()) {
+    if (!targetType->IsStruct () && !targetType->IsModule ()) {
         _diag
             .Report (
                 DiagCode::ECannotAccessFromNonStruct,
                 "attempted to access a field on a non-structure type '"
                     + typeToString (targetType) + "'",
+                Severity::Error)
+            .AddSpan (fieldExpr->Name ().Start, fieldExpr->Name ().End);
+        return {};
+    }
+    if (targetType->IsModule ()) {
+        auto *mod = targetType->AsModule ()->Base ();
+        if (auto it = mod->Vars.find (fieldExpr->Name ().Val); it != mod->Vars.end ()) {
+            if (it->second.Access != AccessModifier::Pub) {
+                _diag
+                    .Report (
+                        DiagCode::ECannotAccessToPrivMember,
+                        "cannot mutate private variable '" + fieldExpr->Name ().Val
+                            + "' from module '" + mod->ToString () + "'",
+                        Severity::Error)
+                    .AddSpan (fieldExpr->Start (), fieldExpr->End ());
+            }
+            auto *var = &it->second;
+            if (var->IsConst) {
+                _diag
+                    .Report (
+                        DiagCode::ECannotModifyConst,
+                        "cannot assign to a constant variable '" + var->Name.Val + "'",
+                        Severity::Error)
+                    .AddSpan (ae->Ptr ()->Start (), ae->Ptr ()->End ());
+                return {};
+            }
+            auto op = AsgnOpToBinOp (ae->Op ());
+            if (ae->Op () != AsgnOp::Eq) {
+                expr.Node = _builder.CreateBinary (
+                    op,
+                    expr.Val->Type,
+                    expr.Val->Type,
+                    ptr.Node,
+                    expr.Node,
+                    ae->Init ()->Start (),
+                    ae->Init ()->End ());
+            }
+            expr.Val = Value (ValueKind::Unknown, expr.Val->Type);
+            return expr;
+        }
+        _diag
+            .Report (
+                DiagCode::ECannotFindModMember,
+                "module '" + mod->ToString () + "' has no member named '"
+                    + fieldExpr->Name ().Val + "'",
                 Severity::Error)
             .AddSpan (fieldExpr->Name ().Start, fieldExpr->Name ().End);
         return {};
@@ -810,12 +874,76 @@ Sema::analyzeFieldExpr (FieldExpr *fe, Type *expectedType) {
             fe->Start (),
             fe->End ());
     }
-    if (!targetType->IsStruct ()) {
+    if (!targetType->IsStruct () && !targetType->IsModule ()) {
         _diag
             .Report (
                 DiagCode::ECannotAccessFromNonStruct,
                 "attempted to access a field on a non-structure type '"
                     + typeToString (targetType) + "'",
+                Severity::Error)
+            .AddSpan (fe->Name ().Start, fe->Name ().End);
+        return {};
+    }
+    if (targetType->IsModule ()) {
+        auto *mod = targetType->AsModule ()->Base ();
+        if (auto it = mod->Vars.find (fe->Name ().Val); it != mod->Vars.end ()) {
+            if (it->second.Access != AccessModifier::Pub) {
+                _diag
+                    .Report (
+                        DiagCode::ECannotAccessToPrivMember,
+                        "cannot access private variable '" + fe->Name ().Val
+                            + "' from module '" + mod->ToString () + "'",
+                        Severity::Error)
+                    .AddSpan (fe->Start (), fe->End ());
+            }
+            auto *var   = &it->second;
+            auto  value = Value (
+                var->IsConst ? ValueKind::Const : ValueKind::Unknown,
+                var->IsConst ? var->Val->Data : ValueData (),
+                var->Type);
+            hir::Node *node = nullptr;
+            if (var->IsConst && !value.Type->IsStruct ()) {
+                node = _builder.CreateLiteral (value, fe->Start (), fe->End ());
+            } else {
+                node = _builder.CreateLoadVar (
+                    var->HIR,
+                    var->Type,
+                    var->IsGlobal,
+                    fe->Start (),
+                    fe->End ());
+            }
+            auto res = SemanticResult (value, node);
+            if (expectedType != nullptr) {
+                res = implicitlyCast (res, &expectedType, fe->Start (), fe->End ());
+            }
+            return res;
+        }
+        if (auto it = mod->Structs.find (fe->Name ().Val); it != mod->Structs.end ()) {
+            if (it->second.Access != AccessModifier::Pub) {
+                _diag
+                    .Report (
+                        DiagCode::ECannotAccessToPrivMember,
+                        "cannot use private type '" + fe->Name ().Val + "' from module '"
+                            + mod->ToString () + "'",
+                        Severity::Error)
+                    .AddSpan (fe->Start (), fe->End ());
+            }
+            return { Value (ValueKind::Type, createType<StructType> (&it->second)),
+                     nullptr };
+        }
+        if (auto it = mod->Submods.find (fe->Name ().Val); it != mod->Submods.end ()) {
+            return { Value (ValueKind::Mod, createType<ModuleType> (it->second)),
+                     nullptr };
+        }
+        if (auto it = mod->Imports.find (fe->Name ().Val); it != mod->Imports.end ()) {
+            return { Value (ValueKind::Mod, createType<ModuleType> (it->second)),
+                     nullptr };
+        }
+        _diag
+            .Report (
+                DiagCode::ECannotFindModMember,
+                "module '" + mod->ToString () + "' has no member named '"
+                    + fe->Name ().Val + "'",
                 Severity::Error)
             .AddSpan (fe->Name ().Start, fe->Name ().End);
         return {};
@@ -1005,8 +1133,18 @@ Sema::analyzeMethodCall (MethodCall *mc, Type *expectedType) {
             mc->Start (),
             mc->End ());
     }
+    if (targetType->IsModule ()) {
+        auto *mod    = targetType->AsModule ()->Base ();
+        auto *oldMod = _mod;
+        _mod         = mod;
+        auto *fc
+            = createNode<FuncCall> (mc->Name (), mc->Args (), mc->Start (), mc->End ());
+        auto res = analyzeFuncCall (fc, expectedType, _mod);
+        _mod     = oldMod;
+        return res;
+    }
     auto *s = targetType->IsStruct () ? targetType->AsStruct ()->BaseSymbol () : nullptr;
-    if (!s->IsComplete) {
+    if (s != nullptr && !s->IsComplete) {
         _diag
             .Report (
                 DiagCode::EIncompleteType,
@@ -1324,6 +1462,9 @@ Sema::castIntegrals (Type *src, Type *dst) {
     getIntegralProps (dst, dstUnsigned, dstWidth);
 
     if (srcWidth < dstWidth) {
+        if (srcWidth == 1) {
+            return hir::CastKind::ZExt;
+        }
         return srcUnsigned ? hir::CastKind::ZExt : hir::CastKind::SExt;
     }
     if (srcWidth > dstWidth) {

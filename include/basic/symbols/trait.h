@@ -14,9 +14,10 @@ struct Trait {
     basic::NameObj                                    Name;
     std::unordered_map<std::string, MethodCandidates> Methods;
     Module                                           *Parent;
+    ast::AccessModifier                               Access;
 
-    Trait (basic::NameObj name, Module *parent)
-        : Name (std::move (name)), Parent (parent) {}
+    Trait (basic::NameObj name, Module *parent, ast::AccessModifier access)
+        : Name (std::move (name)), Parent (parent), Access (access) {}
 
     bool
     operator== (const Trait &other) const;

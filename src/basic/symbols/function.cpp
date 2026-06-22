@@ -10,7 +10,7 @@ Function::operator== (const Function &other) const {
 
     return Name.Val == other.Name.Val && *RetType == *other.RetType && Args == other.Args
            && IsGeneric == other.IsGeneric && *Parent == *other.Parent
-           && MangleKind == other.MangleKind;
+           && Access == other.Access && MangleKind == other.MangleKind;
 }
 
 }

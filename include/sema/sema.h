@@ -21,6 +21,7 @@
 #include <ast/stmts/for_loop.h>
 #include <ast/stmts/if_else.h>
 #include <ast/stmts/impl_stmt.h>
+#include <ast/stmts/import_stmt.h>
 #include <ast/stmts/ret.h>
 #include <ast/stmts/trait_stmt.h>
 #include <ast/stmts/var_def.h>
@@ -123,6 +124,15 @@ public:
 
     void
     Analyze (ParseResult &res) {
+        for (size_t i = 0; i < res.Count; ++i) {
+            if (res.Nodes[i] == nullptr) {
+                continue;
+            }
+            auto *stmt = llvm::cast<ast::Stmt> (res.Nodes[i]);
+            if (stmt->Kind () == ast::NodeKind::ImportStmt) {
+                analyzeImportStmt (llvm::cast<ast::ImportStmt> (stmt));
+            }
+        }
         for (size_t i = 0; i < res.Count; ++i) {
             if (res.Nodes[i] == nullptr) {
                 continue;
@@ -267,6 +277,9 @@ private:
     void
     analyzeExternStructDef (ast::StructDef *sd, hir::MangleKind mangleKind);
 
+    void
+    analyzeImportStmt (ast::ImportStmt *is);
+
     SemanticResult
     analyzeExpr (ast::Expr *expr, Type *expectedType);
 
@@ -286,7 +299,8 @@ private:
     analyzeVarExpr (ast::VarExpr *ve, Type *expectedType);
 
     SemanticResult
-    analyzeFuncCall (ast::FuncCall *fc, Type *expectedType);
+    analyzeFuncCall (
+        ast::FuncCall *fc, Type *expectedType, symbols::Module *baseSemaMod = nullptr);
 
     bool
     generateGenericFunc (

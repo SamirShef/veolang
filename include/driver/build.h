@@ -1,6 +1,9 @@
 #pragma once
+#include <basic/symbols/module.h>
+#include <driver/file.h>
 #include <filesystem>
 #include <string>
+#include <unordered_map>
 #include <utility>
 #include <vector>
 
@@ -16,7 +19,9 @@ struct Manifest {
 };
 
 class BuildDriver {
-    fs::path _projectRoot;
+    fs::path                              _projectRoot;
+    std::vector<std::string>              _compilationQueue;
+    std::unordered_map<std::string, File> _graph;
 
 public:
     explicit BuildDriver (fs::path projectRoot)
@@ -31,6 +36,22 @@ public:
 private:
     static Manifest
     parseManifest (const fs::path &path);
+
+    fs::path
+    resolveImportPathToFilePath (const std::string &importPath);
+
+    void
+    scanDeps (const std::string &importPath);
+
+    void
+    sortDeps (const std::string &importPath);
+
+    static std::vector<std::string>
+    resolveDeps (const std::string &absolutePath);
+
+    static bool
+    isArtefactsFresh (
+        const fs::path &srcPath, const fs::path &objPath, const fs::path &vmetaPath);
 };
 
 }

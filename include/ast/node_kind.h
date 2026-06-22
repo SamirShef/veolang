@@ -16,6 +16,7 @@ enum class NodeKind : uint8_t {
     ImplStmt,
     TraitStmt,
     ExternStmt,
+    ImportStmt,
     StmtEnd,
 
     ExprStart,

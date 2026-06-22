@@ -15,6 +15,7 @@ struct Function {
     std::vector<ast::Argument> Args;
     bool                       IsGeneric;
     Module                    *Parent;
+    ast::AccessModifier        Access;
     hir::MangleKind            MangleKind;
 
     Function (
@@ -23,12 +24,14 @@ struct Function {
         std::vector<ast::Argument> args,
         bool                       isGeneric,
         Module                    *parent,
+        ast::AccessModifier        access,
         hir::MangleKind            mangleKind = hir::MangleKind::Veo)
         : Name (std::move (name)),
           RetType (retType),
           Args (std::move (args)),
           IsGeneric (isGeneric),
           Parent (parent),
+          Access (access),
           MangleKind (mangleKind) {}
 
     bool

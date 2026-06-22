@@ -146,6 +146,9 @@ void
 FetchRegistry ();
 
 void
+CleanPackage ();
+
+void
 EmitIR (llvm::Module *mod, const fs::path &output);
 
 void

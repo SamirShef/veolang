@@ -1,10 +1,12 @@
 #pragma once
 #include <basic/name.h>
 #include <basic/types/type.h>
+#include <bitcode/deserializer.h>
 
 namespace veo::basic {
 
 class AliasType : public Type {
+    friend class bitcode::Deserializer;
     NameObj _name;
     Type   *_base;
 

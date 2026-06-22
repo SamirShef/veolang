@@ -1,5 +1,7 @@
 #include <basic/types/all.h>
+#include <driver/module_loader.h>
 #include <hir/mangle_kind.h>
+#include <llvm/Support/raw_ostream.h>
 #include <sema/sema.h>
 
 namespace veo {
@@ -119,6 +121,7 @@ Sema::analyzeVarDef (VarDef *vd) {
         vd->IsConst (),
         isGlobal,
         _mod,
+        vd->Access (),
         hir::MangleKind::Veo,
         val.Val);
     symbols::Variable *sym = nullptr;
@@ -220,6 +223,7 @@ Sema::declareFunc (FuncDef *fd, hir::MangleKind mangleKind) {
         fd->Args (),
         isGeneric,
         _mod,
+        fd->Access (),
         mangleKind);
     auto it = _mod->Funcs.find (func.Name.Val);
     if (it == _mod->Funcs.end ()) {
@@ -308,6 +312,7 @@ Sema::analyzeFuncDef (FuncDef *fd, bool generatingGeneric) {
                 false,
                 false,
                 nullptr,
+                AccessModifier::Priv,
                 hir::MangleKind::Veo,
                 std::nullopt,
                 funcNode != nullptr ? funcNode->Args ()[index] : nullptr));
@@ -538,7 +543,7 @@ Sema::analyzeStructDef (StructDef *sd) {
     std::vector<hir::Field> hirFields;
     hirFields.reserve (sd->Fields ().size ());
 
-    auto s = Struct (sd->Name (), {}, _mod);
+    auto s = Struct (sd->Name (), {}, _mod, sd->Access ());
     _mod->Structs.emplace (sd->Name ().Val, std::move (s));
 
     size_t index = 0;
@@ -824,8 +829,14 @@ Sema::declareImplMethod (
             .AddSpan (fd->Start (), fd->End ());
         return;
     }
-    auto func = Function (fd->Name (), fd->RetType (), fd->Args (), isGeneric, _mod);
-    auto m    = symbols::Method (
+    auto func = Function (
+        fd->Name (),
+        fd->RetType (),
+        fd->Args (),
+        isGeneric,
+        _mod,
+        fd->Access ());
+    auto m = symbols::Method (
         std::make_unique<Function> (func),
         fd->Access (),
         method.IsStatic,
@@ -1001,6 +1012,7 @@ Sema::analyzeImplMethodDef (
                 false,
                 false,
                 nullptr,
+                AccessModifier::Priv,
                 hir::MangleKind::Veo,
                 std::nullopt,
                 thisArg));
@@ -1014,6 +1026,7 @@ Sema::analyzeImplMethodDef (
                 false,
                 false,
                 nullptr,
+                AccessModifier::Priv,
                 hir::MangleKind::Veo,
                 std::nullopt,
                 m->IsGeneric ? nullptr : methodNode->Args ()[index]));
@@ -1048,7 +1061,7 @@ Sema::analyzeTraitStmt (TraitStmt *ts) {
             .AddSpan (ts->Name ().Start, ts->Name ().End, "redefined here");
         return;
     }
-    auto trait = symbols::Trait (ts->Name (), _mod);
+    auto trait = symbols::Trait (ts->Name (), _mod, ts->Access ());
     _mod->Traits.emplace (ts->Name ().Val, std::move (trait));
     auto *targetType = createType<TraitType> (&_mod->Traits.at (ts->Name ().Val));
     pushTypeScope ();
@@ -1092,8 +1105,14 @@ Sema::analyzeTraitStmt (TraitStmt *ts) {
                 isGeneric = true;
             }
         }
-        auto func = Function (fd->Name (), fd->RetType (), fd->Args (), isGeneric, _mod);
-        auto m    = symbols::Method (
+        auto func = Function (
+            fd->Name (),
+            fd->RetType (),
+            fd->Args (),
+            isGeneric,
+            _mod,
+            fd->Access ());
+        auto m = symbols::Method (
             std::make_unique<Function> (func),
             fd->Access (),
             method.IsStatic,
@@ -1206,6 +1225,7 @@ Sema::analyzeExternGlobalVar (VarDef *vd, hir::MangleKind mangleKind) {
         vd->IsConst (),
         true,
         _mod,
+        vd->Access (),
         mangleKind,
         std::nullopt);
 
@@ -1292,6 +1312,7 @@ Sema::analyzeExternFuncDef (ast::FuncDef *fd, hir::MangleKind mangleKind) {
         fd->Args (),
         isGeneric,
         _mod,
+        fd->Access (),
         mangleKind);
     auto it = _mod->Funcs.find (func.Name.Val);
     if (it == _mod->Funcs.end ()) {
@@ -1347,9 +1368,167 @@ Sema::analyzeExternStructDef (ast::StructDef *sd, hir::MangleKind mangleKind) {
             .AddSpan (sd->Start (), sd->End ());
         return;
     }
-    auto s       = Struct (sd->Name (), {}, _mod);
+    auto s       = Struct (sd->Name (), {}, _mod, sd->Access ());
     s.IsComplete = false;
     _mod->Structs.emplace (sd->Name ().Val, std::move (s));
+}
+
+void
+Sema::analyzeImportStmt (ast::ImportStmt *is) {
+    if (!allowInScope (is)) {
+        return;
+    }
+    std::string path;
+    for (const auto &part : is->Path ()) {
+        if (!path.empty ()) {
+            path += '.';
+        }
+        path += part.Val;
+    }
+    auto *importMod = driver::ModuleLoader::LoadModule (path);
+    if (importMod == nullptr) {
+        _diag
+            .Report (
+                DiagCode::EModNotFound,
+                "module '" + path + "' not found",
+                Severity::Error)
+            .AddSpan (is->Path ().front ().Start, is->Path ().back ().End);
+        return;
+    }
+
+    for (auto &[name, var] : importMod->Vars) {
+        auto *varNode = _builder.CreateVariable (
+            var.Name,
+            var.Type,
+            nullptr,
+            var.IsConst,
+            var.IsGlobal,
+            {},
+            {},
+            &var,
+            var.MangleKind,
+            true);
+        var.HIR = varNode;
+    }
+
+    for (auto &[name, candidates] : importMod->Funcs) {
+        for (auto &func : candidates.Candidates) {
+            if (!func->IsGeneric) {
+                auto *funcNode = _builder.CreateFunction (
+                    func->Name,
+                    func->RetType,
+                    {},
+                    {},
+                    {},
+                    func.get (),
+                    func->MangleKind);
+                _funcs.emplace (func.get (), funcNode);
+            }
+        }
+    }
+
+    for (auto &[name, s] : importMod->Structs) {
+        std::vector<hir::Field> fields;
+        fields.reserve (s.Fields.size ());
+        for (const auto &field : s.Fields) {
+            fields.emplace_back (field.Name, field.Type, field.IsStatic, field.IsConst);
+        }
+        _builder.CreateStruct (s.Name, std::move (fields), &s, {}, {});
+
+        auto *targetType = createType<StructType> (&s);
+        for (auto &[name, candidates] : s.Methods) {
+            for (auto &method : candidates.Candidates) {
+                if (!method->IsGeneric) {
+                    std::vector<hir::VarDef *> args;
+                    args.reserve (method->Func->Args.size ());
+                    for (auto &a : method->Func->Args) {
+                        args.emplace_back (_builder.CreateVariable (
+                            a.Name,
+                            a.Type,
+                            nullptr,
+                            false,
+                            false,
+                            a.Name.Start,
+                            a.Name.End,
+                            nullptr,
+                            hir::MangleKind::Veo,
+                            false,
+                            false));
+                    }
+                    auto *methodNode = _builder.CreateMethod (
+                        method->Func->Name,
+                        method->Func->RetType,
+                        std::move (args),
+                        {},
+                        {},
+                        method.get (),
+                        hir::MangleKind::Veo,
+                        targetType,
+                        method->IsStatic);
+                    _methods.emplace (method.get (), methodNode);
+                }
+            }
+        }
+    }
+
+    for (auto &[type, methods] : importMod->PrimitiveMethods) {
+        for (auto &[name, candidates] : methods) {
+            for (auto &method : candidates.Candidates) {
+                if (!method->IsGeneric) {
+                    std::vector<hir::VarDef *> args;
+                    args.reserve (method->Func->Args.size ());
+                    for (auto &a : method->Func->Args) {
+                        args.emplace_back (_builder.CreateVariable (
+                            a.Name,
+                            a.Type,
+                            nullptr,
+                            false,
+                            false,
+                            a.Name.Start,
+                            a.Name.End,
+                            nullptr,
+                            hir::MangleKind::Veo,
+                            false,
+                            false));
+                    }
+                    symbols::Function func (
+                        method->Func->Name,
+                        method->Func->RetType,
+                        method->Func->Args,
+                        method->Func->IsGeneric,
+                        method->Func->Parent,
+                        method->Func->Access,
+                        method->Func->MangleKind);
+                    auto newMethod = std::make_unique<symbols::Method> (
+                        std::make_unique<symbols::Function> (std::move (func)),
+                        method->Access,
+                        method->IsStatic,
+                        method->IsGeneric);
+                    auto *methodNode = _builder.CreateMethod (
+                        method->Func->Name,
+                        method->Func->RetType,
+                        std::move (args),
+                        {},
+                        {},
+                        method.get (),
+                        hir::MangleKind::Veo,
+                        type,
+                        method->IsStatic);
+                    _methods.emplace (newMethod.get (), methodNode);
+                    _mod->PrimitiveMethods[type][name].Candidates.emplace_back (
+                        std::move (newMethod));
+                }
+            }
+        }
+    }
+
+    for (auto &[type, traits] : importMod->PrimitiveTraitsImplement) {
+        for (auto &trait : traits) {
+            _mod->PrimitiveTraitsImplement[type].push_back (trait);
+        }
+    }
+
+    _mod->Imports.emplace (importMod->Name, importMod);
 }
 
 }

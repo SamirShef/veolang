@@ -15,11 +15,12 @@ public:
     TraitStmt (
         basic::NameObj      name,
         std::vector<Method> methods,
+        AccessModifier      access,
         llvm::SMLoc         start,
         llvm::SMLoc         end)
         : _name (std::move (name)),
           _methods (std::move (methods)),
-          Stmt (NodeKind::TraitStmt, start, end) {}
+          Stmt (access, NodeKind::TraitStmt, start, end) {}
 
     ast_classof (TraitStmt);
 

@@ -10,7 +10,7 @@ Trait::operator== (const Trait &other) const {
     }
 
     return Name.Val == other.Name.Val && Methods == other.Methods
-           && *Parent == *other.Parent;
+           && *Parent == *other.Parent && Access == other.Access;
 }
 
 }

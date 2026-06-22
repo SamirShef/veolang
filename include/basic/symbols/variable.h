@@ -1,4 +1,5 @@
 #pragma once
+#include <ast/access_modifier.h>
 #include <basic/name.h>
 #include <basic/types/type.h>
 #include <basic/value.h>
@@ -15,28 +16,31 @@ namespace veo::symbols {
 struct Module;
 
 struct Variable {
-    basic::NameObj  Name;
-    basic::Type    *Type;
-    basic::OptValue Val;
-    bool            IsConst;
-    bool            IsGlobal;
-    hir::VarDef    *HIR = nullptr;
-    Module         *Parent;
-    hir::MangleKind MangleKind;
+    basic::NameObj      Name;
+    basic::Type        *Type;
+    basic::OptValue     Val;
+    bool                IsConst;
+    bool                IsGlobal;
+    hir::VarDef        *HIR = nullptr;
+    Module             *Parent;
+    ast::AccessModifier Access;
+    hir::MangleKind     MangleKind;
 
     Variable (
-        basic::NameObj  name,
-        basic::Type    *type,
-        bool            isConst,
-        bool            isGlobal,
-        Module         *parent,
-        hir::MangleKind mangleKind = hir::MangleKind::Veo,
-        basic::OptValue val        = std::nullopt,
-        hir::VarDef    *hir        = nullptr)
+        basic::NameObj      name,
+        basic::Type        *type,
+        bool                isConst,
+        bool                isGlobal,
+        Module             *parent,
+        ast::AccessModifier access,
+        hir::MangleKind     mangleKind = hir::MangleKind::Veo,
+        basic::OptValue     val        = std::nullopt,
+        hir::VarDef        *hir        = nullptr)
         : Name (std::move (name)),
           Type (type),
           IsConst (isConst),
           IsGlobal (isGlobal),
+          Access (access),
           MangleKind (mangleKind),
           Val (val),
           HIR (hir),

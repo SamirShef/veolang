@@ -111,17 +111,20 @@ struct Struct {
     std::unordered_map<std::string, MethodCandidates> Methods;
     std::unordered_set<Trait *>                       TraitsImplements;
     Module                                           *Parent;
+    ast::AccessModifier                               Access;
     hir::MangleKind                                   MangleKind;
     bool                                              IsComplete = true;
 
     Struct (
-        basic::NameObj     name,
-        std::vector<Field> fields,
-        Module            *parent,
-        hir::MangleKind    mangleKind = hir::MangleKind::Veo)
+        basic::NameObj      name,
+        std::vector<Field>  fields,
+        Module             *parent,
+        ast::AccessModifier access,
+        hir::MangleKind     mangleKind = hir::MangleKind::Veo)
         : Name (std::move (name)),
           Fields (std::move (fields)),
           Parent (parent),
+          Access (access),
           MangleKind (mangleKind) {}
 
     bool
