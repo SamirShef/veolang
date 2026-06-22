@@ -116,7 +116,7 @@ private:
     parseImplStmt ();
 
     ast::Stmt *
-    parseTraitStmt ();
+    parseTraitStmt (ast::AccessModifier access);
 
     ast::Stmt *
     parseExternStmt ();

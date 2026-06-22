@@ -299,7 +299,8 @@ private:
     analyzeVarExpr (ast::VarExpr *ve, Type *expectedType);
 
     SemanticResult
-    analyzeFuncCall (ast::FuncCall *fc, Type *expectedType);
+    analyzeFuncCall (
+        ast::FuncCall *fc, Type *expectedType, symbols::Module *baseSemaMod = nullptr);
 
     bool
     generateGenericFunc (

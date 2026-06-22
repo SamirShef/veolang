@@ -55,10 +55,28 @@ Sema::resolveType (Type **type) {
     }
     const auto &typeName = path.back ();
     if (auto it = curMod->Structs.find (typeName.Val); it != curMod->Structs.end ()) {
+        if (curMod != _mod && it->second.Access != ast::AccessModifier::Pub) {
+            _diag
+                .Report (
+                    DiagCode::ECannotAccessToPrivMember,
+                    "cannot use private type '" + typeName.Val + "' from module '"
+                        + curMod->ToString () + "'",
+                    Severity::Error)
+                .AddSpan (path.front ().Start, path.back ().End);
+        }
         *type = createType<StructType> (&it->second);
         return *type;
     }
     if (auto it = curMod->Traits.find (typeName.Val); it != curMod->Traits.end ()) {
+        if (curMod != _mod && it->second.Access != ast::AccessModifier::Pub) {
+            _diag
+                .Report (
+                    DiagCode::ECannotAccessToPrivMember,
+                    "cannot use private type '" + typeName.Val + "' from module '"
+                        + curMod->ToString () + "'",
+                    Severity::Error)
+                .AddSpan (path.front ().Start, path.back ().End);
+        }
         *type = createType<TraitType> (&it->second);
         return *type;
     }

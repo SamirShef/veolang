@@ -51,11 +51,12 @@ BuildDriver::Build () {
     sortDeps (entryModImportPath);
 
     std::vector<std::string> objFiles;
-    auto         artefactDir     = manif.ManifestPath.parent_path () / "build" / "obj";
-    std::string  targetTripleStr = TargetTripleOpt.empty ()
-                                       ? llvm::sys::getDefaultTargetTriple ()
-                                       : TargetTripleOpt.getValue ();
-    llvm::Triple triple (targetTripleStr);
+    std::string              targetTripleStr = TargetTripleOpt.empty ()
+                                                   ? llvm::sys::getDefaultTargetTriple ()
+                                                   : TargetTripleOpt.getValue ();
+    llvm::Triple             triple (targetTripleStr);
+    auto artefactDir = manif.ManifestPath.parent_path ()
+                       / ("build/targets/" + targetTripleStr + "/obj");
 
     basic::TypePool       typePool;
     bitcode::Serializer   serializer;
@@ -81,8 +82,7 @@ BuildDriver::Build () {
                               << '\n';
                 continue;
             }
-            // TODO: report error
-            llvm::errs () << "error\n";
+            llvm::errs () << "Module " + vmetaPath.string () + " was not be loaded\n";
             exit (1);
         }
 
@@ -225,8 +225,10 @@ BuildDriver::sortDeps (const std::string &importPath) {
     auto &file = it->second;
 
     if (file.State == VisitState::Visiting) {
-        // TODO: report error
-        return;
+        llvm::errs ().changeColor (llvm::raw_fd_ostream::RED)
+            << "Cyclic dependency detected in " << llvm::raw_fd_ostream::RESET << "'"
+            << file.Path.string () << "'\n";
+        exit (1);
     }
     if (file.State == VisitState::Visited) {
         return;

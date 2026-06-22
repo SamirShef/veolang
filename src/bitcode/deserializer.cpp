@@ -302,6 +302,7 @@ Deserializer::deserializeModuleSymbols (
         uint32_t typeID     = cursor.Read (32).get ();
         bool     isConst    = cursor.Read (1).get () == 1;
         bool     isGlobal   = cursor.Read (1).get () == 1;
+        auto     access     = static_cast<ast::AccessModifier> (cursor.Read (8).get ());
         auto     mangleKind = static_cast<hir::MangleKind> (cursor.Read (8).get ());
         auto     parentID   = cursor.Read (32).get ();
 
@@ -314,6 +315,7 @@ Deserializer::deserializeModuleSymbols (
             isConst,
             isGlobal,
             parentID != 0xFFFFFFFF ? _modulePool[parentID] : mod,
+            access,
             mangleKind);
         mod->Vars.emplace (nameObj.Val, std::move (var));
     }
@@ -327,9 +329,10 @@ Deserializer::deserializeModuleSymbols (
         uint32_t numCandidates = cursor.Read (32).get ();
         mod->Funcs[nameObj.Val].Candidates.reserve (numCandidates);
         for (uint32_t j = 0; j < numCandidates; ++j) {
-            uint32_t retTypeID  = cursor.Read (32).get ();
-            bool     isGeneric  = cursor.Read (1).get () == 1;
-            uint32_t parentID   = cursor.Read (32).get ();
+            uint32_t retTypeID = cursor.Read (32).get ();
+            bool     isGeneric = cursor.Read (1).get () == 1;
+            uint32_t parentID  = cursor.Read (32).get ();
+            auto     access = static_cast<ast::AccessModifier> (cursor.Read (8).get ());
             auto     mangleKind = static_cast<hir::MangleKind> (cursor.Read (8).get ());
 
             symbols::Function func (
@@ -338,6 +341,7 @@ Deserializer::deserializeModuleSymbols (
                 {},
                 isGeneric,
                 parentID != 0xFFFFFFFF ? _modulePool[parentID] : mod,
+                access,
                 mangleKind);
 
             uint32_t numArgs = cursor.Read (32).get ();
@@ -356,6 +360,7 @@ Deserializer::deserializeModuleSymbols (
     uint32_t numStructs = cursor.Read (32).get ();
     for (uint32_t i = 0; i < numStructs; ++i) {
         uint32_t nameID     = cursor.Read (32).get ();
+        auto     access     = static_cast<ast::AccessModifier> (cursor.Read (8).get ());
         auto     mangleKind = static_cast<hir::MangleKind> (cursor.Read (8).get ());
         bool     isComplete = cursor.Read (1).get () == 1;
         uint32_t parentID   = cursor.Read (32).get ();
@@ -396,14 +401,17 @@ Deserializer::deserializeModuleSymbols (
                 uint32_t retTypeID       = cursor.Read (32).get ();
                 bool     isGenericUnused = cursor.Read (1).get () == 1;
                 uint32_t parentID        = cursor.Read (32).get ();
+                auto     accessUnused
+                    = static_cast<ast::AccessModifier> (cursor.Read (8).get ());
                 auto mangleKind = static_cast<hir::MangleKind> (cursor.Read (8).get ());
 
                 symbols::Function func (
                     methodNameObj,
                     _typePool[retTypeID],
                     {},
-                    isGeneric,
+                    isGenericUnused,
                     parentID != 0xFFFFFFFF ? _modulePool[parentID] : mod,
+                    accessUnused,
                     mangleKind);
 
                 uint32_t numArgs = cursor.Read (32).get ();
@@ -430,6 +438,7 @@ Deserializer::deserializeModuleSymbols (
             nameObj,
             std::move (fields),
             parentID != 0xFFFFFFFF ? _modulePool[parentID] : mod,
+            access,
             mangleKind);
         s.Methods = std::move (methods);
         mod->Structs.emplace (nameObj.Val, std::move (s));
@@ -440,6 +449,7 @@ Deserializer::deserializeModuleSymbols (
     for (uint32_t i = 0; i < numTraits; ++i) {
         uint32_t nameID   = cursor.Read (32).get ();
         uint32_t parentID = cursor.Read (32).get ();
+        auto     access   = static_cast<ast::AccessModifier> (cursor.Read (8).get ());
         auto     nameObj  = basic::NameObj (_stringPool[nameID], {}, {});
 
         uint32_t numMethods = cursor.Read (32).get ();
@@ -459,6 +469,8 @@ Deserializer::deserializeModuleSymbols (
                 uint32_t retTypeID       = cursor.Read (32).get ();
                 bool     isGenericUnused = cursor.Read (1).get () == 1;
                 uint32_t parentID        = cursor.Read (32).get ();
+                auto     accessUnused
+                    = static_cast<ast::AccessModifier> (cursor.Read (8).get ());
                 auto mangleKind = static_cast<hir::MangleKind> (cursor.Read (8).get ());
 
                 symbols::Function func (
@@ -467,6 +479,7 @@ Deserializer::deserializeModuleSymbols (
                     {},
                     isGeneric,
                     parentID != 0xFFFFFFFF ? _modulePool[parentID] : mod,
+                    accessUnused,
                     mangleKind);
 
                 uint32_t numArgs = cursor.Read (32).get ();
@@ -489,7 +502,8 @@ Deserializer::deserializeModuleSymbols (
         }
         symbols::Trait trait (
             std::move (nameObj),
-            parentID != 0xFFFFFFFF ? _modulePool[parentID] : mod);
+            parentID != 0xFFFFFFFF ? _modulePool[parentID] : mod,
+            access);
         trait.Methods = std::move (methods);
         mod->Traits.emplace (trait.Name.Val, std::move (trait));
     }
@@ -517,6 +531,8 @@ Deserializer::deserializeModuleSymbols (
                 uint32_t retTypeID       = cursor.Read (32).get ();
                 bool     isGenericUnused = cursor.Read (1).get () == 1;
                 uint32_t parentID        = cursor.Read (32).get ();
+                auto     accessUnused
+                    = static_cast<ast::AccessModifier> (cursor.Read (8).get ());
                 auto mangleKind = static_cast<hir::MangleKind> (cursor.Read (8).get ());
 
                 symbols::Function func (
@@ -525,6 +541,7 @@ Deserializer::deserializeModuleSymbols (
                     {},
                     isGeneric,
                     parentID != 0xFFFFFFFF ? _modulePool[parentID] : mod,
+                    accessUnused,
                     mangleKind);
 
                 uint32_t numArgs = cursor.Read (32).get ();

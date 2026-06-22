@@ -64,6 +64,8 @@ enum class DiagCode : uint8_t {
     EExternVarMustHaveType,
     EExternFuncCannotHaveBody,
     EExternStructCannotHaveBody,
+    EModNotFound,
+    ECannotFindModMember,
 
     WUnusedVar,
     WLossPrecision,

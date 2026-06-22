@@ -3,6 +3,7 @@
 #include <filesystem>
 #include <fstream>
 #include <llvm/Support/raw_ostream.h>
+#include <llvm/TargetParser/Host.h>
 
 namespace veo::driver {
 
@@ -102,8 +103,14 @@ FetchRegistry () {
 
 void
 CleanPackage () {
-    const auto &pkgRoot = BuildDriver::GetProjectRoot (fs::current_path ());
-    fs::remove_all (pkgRoot / "build");
+    const auto &pkgRoot   = BuildDriver::GetProjectRoot (fs::current_path ());
+    const auto &tripleStr = TargetTripleOpt.empty ()
+                                ? llvm::sys::getDefaultTargetTriple ()
+                                : TargetTripleOpt.getValue ();
+    const auto &targetDir = pkgRoot / ("build/targets/" + tripleStr);
+    if (fs::exists (targetDir)) {
+        fs::remove_all (targetDir);
+    }
 }
 
 void

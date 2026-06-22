@@ -5,6 +5,16 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.22.0] - 2026-06-22
+
+### Added
+
+- Import modules
+- Serialization/deserialization modules to `.vmeta` file
+- Changed artifact directory from `build/obj/` to `build/targets/<target>/obj/`, where `<target>` is target triple of your machine
+- Logic for `clean` compiler command (deletes `build/obj/targets/<target>` if exists)
+- Fix bugs
+
 ## [0.21.0] - 2026-06-14
 
 ### Added

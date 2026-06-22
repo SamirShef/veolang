@@ -217,7 +217,7 @@ Compile (
     TypePool           &typePool,
     const llvm::Triple &triple) {
     fs::path filePathInBuild
-        = projectPath / "build" / "obj"
+        = projectPath / ("build/targets/" + triple.getTriple () + "/obj")
           / fs::absolute (filePath).lexically_relative (projectPath).lexically_normal ();
     fs::create_directories (filePathInBuild.parent_path ());
     llvm::SourceMgr              mgr;

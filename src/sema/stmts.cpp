@@ -121,6 +121,7 @@ Sema::analyzeVarDef (VarDef *vd) {
         vd->IsConst (),
         isGlobal,
         _mod,
+        vd->Access (),
         hir::MangleKind::Veo,
         val.Val);
     symbols::Variable *sym = nullptr;
@@ -222,6 +223,7 @@ Sema::declareFunc (FuncDef *fd, hir::MangleKind mangleKind) {
         fd->Args (),
         isGeneric,
         _mod,
+        fd->Access (),
         mangleKind);
     auto it = _mod->Funcs.find (func.Name.Val);
     if (it == _mod->Funcs.end ()) {
@@ -310,6 +312,7 @@ Sema::analyzeFuncDef (FuncDef *fd, bool generatingGeneric) {
                 false,
                 false,
                 nullptr,
+                AccessModifier::Priv,
                 hir::MangleKind::Veo,
                 std::nullopt,
                 funcNode != nullptr ? funcNode->Args ()[index] : nullptr));
@@ -540,7 +543,7 @@ Sema::analyzeStructDef (StructDef *sd) {
     std::vector<hir::Field> hirFields;
     hirFields.reserve (sd->Fields ().size ());
 
-    auto s = Struct (sd->Name (), {}, _mod);
+    auto s = Struct (sd->Name (), {}, _mod, sd->Access ());
     _mod->Structs.emplace (sd->Name ().Val, std::move (s));
 
     size_t index = 0;
@@ -826,8 +829,14 @@ Sema::declareImplMethod (
             .AddSpan (fd->Start (), fd->End ());
         return;
     }
-    auto func = Function (fd->Name (), fd->RetType (), fd->Args (), isGeneric, _mod);
-    auto m    = symbols::Method (
+    auto func = Function (
+        fd->Name (),
+        fd->RetType (),
+        fd->Args (),
+        isGeneric,
+        _mod,
+        fd->Access ());
+    auto m = symbols::Method (
         std::make_unique<Function> (func),
         fd->Access (),
         method.IsStatic,
@@ -1003,6 +1012,7 @@ Sema::analyzeImplMethodDef (
                 false,
                 false,
                 nullptr,
+                AccessModifier::Priv,
                 hir::MangleKind::Veo,
                 std::nullopt,
                 thisArg));
@@ -1016,6 +1026,7 @@ Sema::analyzeImplMethodDef (
                 false,
                 false,
                 nullptr,
+                AccessModifier::Priv,
                 hir::MangleKind::Veo,
                 std::nullopt,
                 m->IsGeneric ? nullptr : methodNode->Args ()[index]));
@@ -1050,7 +1061,7 @@ Sema::analyzeTraitStmt (TraitStmt *ts) {
             .AddSpan (ts->Name ().Start, ts->Name ().End, "redefined here");
         return;
     }
-    auto trait = symbols::Trait (ts->Name (), _mod);
+    auto trait = symbols::Trait (ts->Name (), _mod, ts->Access ());
     _mod->Traits.emplace (ts->Name ().Val, std::move (trait));
     auto *targetType = createType<TraitType> (&_mod->Traits.at (ts->Name ().Val));
     pushTypeScope ();
@@ -1094,8 +1105,14 @@ Sema::analyzeTraitStmt (TraitStmt *ts) {
                 isGeneric = true;
             }
         }
-        auto func = Function (fd->Name (), fd->RetType (), fd->Args (), isGeneric, _mod);
-        auto m    = symbols::Method (
+        auto func = Function (
+            fd->Name (),
+            fd->RetType (),
+            fd->Args (),
+            isGeneric,
+            _mod,
+            fd->Access ());
+        auto m = symbols::Method (
             std::make_unique<Function> (func),
             fd->Access (),
             method.IsStatic,
@@ -1208,6 +1225,7 @@ Sema::analyzeExternGlobalVar (VarDef *vd, hir::MangleKind mangleKind) {
         vd->IsConst (),
         true,
         _mod,
+        vd->Access (),
         mangleKind,
         std::nullopt);
 
@@ -1294,6 +1312,7 @@ Sema::analyzeExternFuncDef (ast::FuncDef *fd, hir::MangleKind mangleKind) {
         fd->Args (),
         isGeneric,
         _mod,
+        fd->Access (),
         mangleKind);
     auto it = _mod->Funcs.find (func.Name.Val);
     if (it == _mod->Funcs.end ()) {
@@ -1349,7 +1368,7 @@ Sema::analyzeExternStructDef (ast::StructDef *sd, hir::MangleKind mangleKind) {
             .AddSpan (sd->Start (), sd->End ());
         return;
     }
-    auto s       = Struct (sd->Name (), {}, _mod);
+    auto s       = Struct (sd->Name (), {}, _mod, sd->Access ());
     s.IsComplete = false;
     _mod->Structs.emplace (sd->Name ().Val, std::move (s));
 }
@@ -1368,8 +1387,12 @@ Sema::analyzeImportStmt (ast::ImportStmt *is) {
     }
     auto *importMod = driver::ModuleLoader::LoadModule (path);
     if (importMod == nullptr) {
-        // TODO: report error
-        llvm::errs () << "mod " << path << " not found\n";
+        _diag
+            .Report (
+                DiagCode::EModNotFound,
+                "module '" + path + "' not found",
+                Severity::Error)
+            .AddSpan (is->Path ().front ().Start, is->Path ().back ().End);
         return;
     }
 
@@ -1474,6 +1497,7 @@ Sema::analyzeImportStmt (ast::ImportStmt *is) {
                         method->Func->Args,
                         method->Func->IsGeneric,
                         method->Func->Parent,
+                        method->Func->Access,
                         method->Func->MangleKind);
                     auto newMethod = std::make_unique<symbols::Method> (
                         std::make_unique<symbols::Function> (std::move (func)),

@@ -73,7 +73,7 @@ Parser::parseStmt (bool expectSemi) {
         return parseImplStmt ();
     }
     case TokenKind::Trait: {
-        return parseTraitStmt ();
+        return parseTraitStmt (access);
     }
     case TokenKind::Extern: {
         return parseExternStmt ();
@@ -361,7 +361,7 @@ Parser::parseImplStmt () {
 }
 
 ast::Stmt *
-Parser::parseTraitStmt () {
+Parser::parseTraitStmt (ast::AccessModifier access) {
     const Token    firstTok = advance ();
     basic::NameObj name;
     if (!expectName (name)) {
@@ -383,6 +383,7 @@ Parser::parseTraitStmt () {
     return createNode<TraitStmt> (
         std::move (name),
         std::move (methods),
+        access,
         firstTok.Start,
         _lastTok.End);
 }

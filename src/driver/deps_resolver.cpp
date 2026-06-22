@@ -25,13 +25,23 @@ DepsResolver::Deps () {
             res += maybeId.Val;
 
             bool ok = true;
-            while (nextToken ().Kind == TokenKind::Dot) {
+            while (isspace (*_curPtr) != 0) {
+                ++_curPtr;
+            }
+            while (*_curPtr == '.') {
+                while (isspace (*_curPtr) != 0) {
+                    ++_curPtr;
+                }
+                nextToken (); // skip '.'
                 const auto &maybeId = nextToken ();
                 if (maybeId.Kind != TokenKind::Id) {
                     ok = false;
                     break;
                 }
                 res += '.' + maybeId.Val;
+                while (isspace (*_curPtr) != 0) {
+                    ++_curPtr;
+                }
             }
             if (ok) {
                 deps.push_back (std::move (res));

@@ -311,6 +311,7 @@ Serializer::serializeModuleSymbols (llvm::BitstreamWriter &writer, symbols::Modu
         writer.Emit (_typePool.GetID (var.Type), 32);
         writer.Emit (cast (var.IsConst, uint32_t), 1);
         writer.Emit (cast (var.IsGlobal, uint32_t), 1);
+        writer.Emit (cast (var.Access, uint32_t), 8);
         writer.Emit (cast (var.MangleKind, uint32_t), 8);
         writer.Emit (
             var.Parent != nullptr ? _modPool.GetID (var.Parent) : 0xFFFFFFFF,
@@ -329,6 +330,7 @@ Serializer::serializeModuleSymbols (llvm::BitstreamWriter &writer, symbols::Modu
     writer.Emit (cast (mod->Structs.size (), uint32_t), 32);
     for (auto &[name, s] : mod->Structs) {
         writer.Emit (_strPool.GetID (name), 32);
+        writer.Emit (cast (s.Access, uint32_t), 8);
         writer.Emit (cast (s.MangleKind, uint32_t), 8);
         writer.Emit (cast (s.IsComplete, uint32_t), 1);
         writer.Emit (s.Parent != nullptr ? _modPool.GetID (s.Parent) : 0xFFFFFFFF, 32);
@@ -359,6 +361,7 @@ Serializer::serializeModuleSymbols (llvm::BitstreamWriter &writer, symbols::Modu
         writer.Emit (
             trait.Parent != nullptr ? _modPool.GetID (trait.Parent) : 0xFFFFFFFF,
             32);
+        writer.Emit (cast (trait.Access, uint32_t), 8);
 
         writer.Emit (cast (trait.Methods.size (), uint32_t), 32);
         for (auto &[mName, candidates] : trait.Methods) {
@@ -416,6 +419,7 @@ Serializer::serializeFunction (
     writer.Emit (_typePool.GetID (func.RetType), 32);
     writer.Emit (cast (func.IsGeneric, uint32_t), 1);
     writer.Emit (func.Parent != nullptr ? _modPool.GetID (func.Parent) : 0xFFFFFFFF, 32);
+    writer.Emit (cast (func.Access, uint32_t), 8);
     writer.Emit (cast (func.MangleKind, uint32_t), 8);
 
     writer.Emit (cast (func.Args.size (), uint32_t), 32);
