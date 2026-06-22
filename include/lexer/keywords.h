@@ -40,6 +40,7 @@ static const std::unordered_map<std::string, TokenKind> keywords{
     { "import",   TokenKind::Import   },
     { "static",   TokenKind::Static   },
     { "extern",   TokenKind::Extern   },
+    { "@size_of", TokenKind::Sizeof   },
 };
 
 }

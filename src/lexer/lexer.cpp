@@ -34,7 +34,7 @@ Lexer::NextToken () {
     if (_curPtr >= _bufEnd) {
         return { TokenKind::Eof, "", loc (_bufEnd), loc (_bufEnd) };
     }
-    if ((isalpha (peek ()) != 0) || peek () == '_') {
+    if ((isalpha (peek ()) != 0) || peek () == '_' || peek () == '@') {
         return tokenizeId (_curPtr);
     }
     if ((isdigit (peek ()) != 0) || peek () == '.' && (isdigit (peek (1)) != 0)) {
@@ -51,7 +51,8 @@ Lexer::NextToken () {
 
 Token
 Lexer::tokenizeId (const char *tokStart) {
-    while ((isalnum (peek ()) != 0) || peek () == '_') {
+    while ((isalnum (peek ()) != 0) || peek () == '_'
+           || (peek () == '@' && _curPtr == tokStart)) {
         ++_curPtr;
     }
     std::string val (tokStart, _curPtr - tokStart);
@@ -63,6 +64,9 @@ Lexer::tokenizeId (const char *tokStart) {
 
     if (const auto &it = keywords.find (val); it != keywords.end ()) {
         return tok (it->second);
+    }
+    if (val[0] == '@') {
+        val.erase (0, 1);
     }
     return tok (TokenKind::Id);
 
@@ -221,7 +225,6 @@ Lexer::tokenizeOp (const char *tokStart) {
         simple ('}', RBrace);
         simple ('[', LBracket);
         simple (']', RBracket);
-        simple ('@', At);
         simple ('~', Tilde);
         simple ('?', Question);
         simple (':', Colon);

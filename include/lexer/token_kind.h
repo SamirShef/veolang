@@ -39,6 +39,7 @@ enum class TokenKind : uint8_t {
     Import,   // keyword `import`
     Static,   // keyword `static`
     Extern,   // keyword `extern`
+    Sizeof,   // keyword `@size_of`
 
     BoolLit,  // bool literal
     CharLit,  // character literal
@@ -68,7 +69,6 @@ enum class TokenKind : uint8_t {
     RBrace,    // `{`
     LBracket,  // `[`
     RBracket,  // `]`
-    At,        // `@`
     Tilde,     // `~`
     Question,  // `?`
     Colon,     // `:`
