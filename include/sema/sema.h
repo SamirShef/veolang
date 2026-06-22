@@ -10,6 +10,7 @@
 #include <ast/exprs/method_call.h>
 #include <ast/exprs/nil.h>
 #include <ast/exprs/ref.h>
+#include <ast/exprs/sizeof_expr.h>
 #include <ast/exprs/struct_instance.h>
 #include <ast/exprs/ternary_expr.h>
 #include <ast/exprs/type_expr.h>
@@ -362,6 +363,9 @@ private:
 
     SemanticResult
     analyzeTypeExpr (ast::TypeExpr *te, Type *expectedType);
+
+    SemanticResult
+    analyzeSizeofExpr (ast::SizeofExpr *se, Type *expectedType);
 
     static hir::CastKind
     castInts (const IntegerType *src, const IntegerType *dst);

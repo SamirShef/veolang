@@ -9,6 +9,7 @@
 #include <ast/exprs/method_call.h>
 #include <ast/exprs/nil.h>
 #include <ast/exprs/ref.h>
+#include <ast/exprs/sizeof_expr.h>
 #include <ast/exprs/struct_instance.h>
 #include <ast/exprs/ternary_expr.h>
 #include <ast/exprs/type_expr.h>
@@ -695,6 +696,19 @@ Parser::parsePrimaryExpr (bool allowStruct) {
     }
     case TokenKind::Nil: {
         return createNode<NilExpr> (tok.Start, tok.End);
+    }
+    case TokenKind::Sizeof: {
+        if (!expectTok (TokenKind::LParen, "(")) {
+            return nullptr;
+        }
+        Expr *expr = parseExpr ();
+        if (expr == nullptr) {
+            return nullptr;
+        }
+        if (!expectTok (TokenKind::RParen, ")")) {
+            return nullptr;
+        }
+        return createNode<SizeofExpr> (expr, tok.Start, _curTok.End);
     }
     default: {
     }

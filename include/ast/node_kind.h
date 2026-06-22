@@ -35,6 +35,7 @@ enum class NodeKind : uint8_t {
     DerefExpr,
     NilExpr,
     TypeExpr,
+    SizeofExpr,
     ExprEnd
 };
 
