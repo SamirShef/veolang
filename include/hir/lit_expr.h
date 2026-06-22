@@ -9,7 +9,7 @@ class LiteralExpr : public Node {
 
 public:
     LiteralExpr (basic::Value val, llvm::SMLoc start, llvm::SMLoc end)
-        : _val (val), Node (NodeKind::LitExpr, start, end) {}
+        : _val (std::move (val)), Node (NodeKind::LitExpr, start, end) {}
 
     hir_classof (LitExpr);
 

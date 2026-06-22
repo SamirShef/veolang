@@ -52,8 +52,8 @@ class Sema {
     hir::Builder &_builder; // NOLINT(cppcoreguidelines-avoid-const-or-ref-data-members)
     ast::Context
         &_astContext; // NOLINT(cppcoreguidelines-avoid-const-or-ref-data-members)
-    std::stack<symbols::Scope> _vars;
-    std::stack<Type *>         _funcRetTypes;
+    std::vector<symbols::Scope> _vars;
+    std::stack<Type *>          _funcRetTypes;
 
     struct SemanticResult {
         OptValue   Val;
@@ -121,7 +121,7 @@ public:
           _mod (mod),
           _typePool (typePool),
           _ptrBitWidth (ptrBitWidth) {
-        _vars.emplace ();
+        _vars.emplace_back ();
     }
 
     void

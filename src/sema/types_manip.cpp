@@ -109,10 +109,15 @@ Sema::getCommonType (Type *lhs, Type *rhs, llvm::SMLoc start, llvm::SMLoc end) {
         || lhs->IsInteger () && rhs->IsFloating ()) {
         return getCommonFloatingAndInteger (lhs, rhs, start, end);
     }
+    if (lhs->IsPointer () && rhs->IsIntOrSize ()
+        || lhs->IsIntOrSize () && rhs->IsPointer ()) {
+        return lhs->IsPointer () ? lhs : rhs;
+    }
     _diag
         .Report (
             DiagCode::ECannotFindCommonType,
-            "cannot find common type",
+            "cannot find common type between '" + typeToString (lhs) + "' and '"
+                + typeToString (rhs) + "'",
             Severity::Error)
         .AddSpan (start, end)
         .AddNote ("сonsider using an explicit cast");

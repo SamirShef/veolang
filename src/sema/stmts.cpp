@@ -30,8 +30,8 @@ Sema::analyzeStmt (Stmt *stmt) {
 
 void
 Sema::analyzeVarDef (VarDef *vd) {
-    if (auto it = _vars.top ().Vars.find (vd->Name ().Val);
-        it != _vars.top ().Vars.end ()) {
+    if (auto it = _vars.back ().Vars.find (vd->Name ().Val);
+        it != _vars.back ().Vars.end ()) {
         auto var = it->second;
         _diag
             .Report (
@@ -125,8 +125,8 @@ Sema::analyzeVarDef (VarDef *vd) {
         hir::MangleKind::Veo,
         val.Val);
     symbols::Variable *sym = nullptr;
-    _vars.top ().Vars.emplace (var.Name.Val, var);
-    sym = &_vars.top ().Vars.at (var.Name.Val);
+    _vars.back ().Vars.emplace (var.Name.Val, var);
+    sym = &_vars.back ().Vars.at (var.Name.Val);
     if (isGlobal) {
         _mod->Vars.emplace (var.Name.Val, var);
         sym = &_mod->Vars.at (var.Name.Val);
@@ -142,8 +142,8 @@ Sema::analyzeVarDef (VarDef *vd) {
         isGlobal ? sym : nullptr,
         hir::MangleKind::Veo,
         false);
-    sym->HIR                                = node;
-    _vars.top ().Vars.at (var.Name.Val).HIR = node;
+    sym->HIR                                 = node;
+    _vars.back ().Vars.at (var.Name.Val).HIR = node;
 }
 
 void
@@ -298,13 +298,13 @@ Sema::analyzeFuncDef (FuncDef *fd, bool generatingGeneric) {
     }
 
     _funcRetTypes.push (fd->RetType ());
-    _vars.emplace ();
+    _vars.emplace_back ();
 
     _localsCount = 0;
 
     size_t index = 0;
     for (const auto &arg : fd->Args ()) {
-        _vars.top ().Vars.emplace (
+        _vars.back ().Vars.emplace (
             arg.Name.Val,
             Variable (
                 arg.Name,
@@ -326,7 +326,7 @@ Sema::analyzeFuncDef (FuncDef *fd, bool generatingGeneric) {
         _builder.CreateRet (nullptr, fd->Name ().Start, fd->Name ().End);
     }
 
-    _vars.pop ();
+    _vars.pop_back ();
     _funcRetTypes.pop ();
 }
 
@@ -378,21 +378,21 @@ Sema::analyzeIfElseStmt (IfElseStmt *ies) {
         bool                 condRes     = std::get<0> (cond.Val->Data) != 0;
         std::vector<Stmt *> &realBranch  = condRes ? ies->Then () : ies->Else ();
         std::vector<Stmt *> &otherBranch = condRes ? ies->Else () : ies->Then ();
-        _vars.emplace ();
+        _vars.emplace_back ();
         for (const auto &stmt : realBranch) {
             analyzeStmt (stmt);
         }
-        _vars.pop ();
+        _vars.pop_back ();
 
         auto *lastBlock = _builder.InsertBlock ();
         _builder.SetInsertionPoint (
             nullptr); // analyze statements but do not add to the block
 
-        _vars.emplace ();
+        _vars.emplace_back ();
         for (const auto &stmt : otherBranch) {
             analyzeStmt (stmt);
         }
-        _vars.pop ();
+        _vars.pop_back ();
 
         _builder.SetInsertionPoint (lastBlock);
         return;
@@ -412,20 +412,20 @@ Sema::analyzeIfElseStmt (IfElseStmt *ies) {
 
     // then
     _builder.SetInsertionPoint (thenBB);
-    _vars.emplace ();
+    _vars.emplace_back ();
     for (const auto &stmt : ies->Then ()) {
         analyzeStmt (stmt);
     }
-    _vars.pop ();
+    _vars.pop_back ();
     _builder.CreateBr (mergeBB, ies->Cond ()->Start (), ies->Cond ()->End ());
 
     if (elseBB != nullptr) { // else
         _builder.SetInsertionPoint (elseBB);
-        _vars.emplace ();
+        _vars.emplace_back ();
         for (const auto &stmt : ies->Else ()) {
             analyzeStmt (stmt);
         }
-        _vars.pop ();
+        _vars.pop_back ();
         _builder.CreateBr (mergeBB, ies->Cond ()->Start (), ies->Cond ()->End ());
     }
 
@@ -445,7 +445,7 @@ Sema::analyzeForLoop (ForLoopStmt *fls) {
     auto *mergeBB     = _builder.CreateBasicBlock (_builder.Parent (), "merge");
     _builder.CreateBr (indexatorBB, fls->Start (), fls->End ());
 
-    _vars.emplace ();
+    _vars.emplace_back ();
     _loops.emplace (mergeBB, iterationBB);
 
     // indexator
@@ -497,7 +497,7 @@ Sema::analyzeForLoop (ForLoopStmt *fls) {
     _builder.SetInsertionPoint (mergeBB);
 
     _loops.pop ();
-    _vars.pop ();
+    _vars.pop_back ();
 }
 
 void
@@ -997,14 +997,14 @@ Sema::analyzeImplMethodDef (
 
     _insideMethod = { m, targetType };
     _funcRetTypes.push (fd->RetType ());
-    _vars.emplace ();
+    _vars.emplace_back ();
 
     _localsCount = 0;
 
     auto index = static_cast<size_t> (!m->IsStatic);
     if (methodNode != nullptr && !method.IsStatic) {
         auto *thisArg = methodNode->Args ()[0];
-        _vars.top ().Vars.emplace (
+        _vars.back ().Vars.emplace (
             thisArg->Name ().Val,
             Variable (
                 thisArg->Name (),
@@ -1018,7 +1018,7 @@ Sema::analyzeImplMethodDef (
                 thisArg));
     }
     for (const auto &arg : fd->Args ()) {
-        _vars.top ().Vars.emplace (
+        _vars.back ().Vars.emplace (
             arg.Name.Val,
             Variable (
                 arg.Name,
@@ -1040,7 +1040,7 @@ Sema::analyzeImplMethodDef (
         _builder.CreateRet (nullptr, fd->Name ().Start, fd->Name ().End);
     }
 
-    _vars.pop ();
+    _vars.pop_back ();
     _funcRetTypes.pop ();
     _insideMethod = std::nullopt;
 }
@@ -1229,7 +1229,7 @@ Sema::analyzeExternGlobalVar (VarDef *vd, hir::MangleKind mangleKind) {
         mangleKind,
         std::nullopt);
 
-    _vars.top ().Vars.emplace (var.Name.Val, var);
+    _vars.back ().Vars.emplace (var.Name.Val, var);
     _mod->Vars.emplace (var.Name.Val, var);
     auto *sym = &_mod->Vars.at (var.Name.Val);
 
@@ -1245,8 +1245,8 @@ Sema::analyzeExternGlobalVar (VarDef *vd, hir::MangleKind mangleKind) {
         mangleKind,
         true);
 
-    sym->HIR                                = node;
-    _vars.top ().Vars.at (var.Name.Val).HIR = node;
+    sym->HIR                                 = node;
+    _vars.back ().Vars.at (var.Name.Val).HIR = node;
 }
 
 void

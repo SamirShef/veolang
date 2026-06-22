@@ -200,6 +200,7 @@ CodeGen::generateExpr (Node *node) {
         variant (RefExpr, generateRefExpr, RefExpr);
         variant (DerefExpr, generateDerefExpr, DerefExpr);
         variant (NilExpr, generateNilExpr, NilExpr);
+        variant (PtrArith, generatePtrArith, PtrArith);
     default: return nullptr;
     }
 #undef variant
@@ -457,6 +458,20 @@ CodeGen::generateDerefExpr (hir::DerefExpr *de) {
 llvm::Value *
 CodeGen::generateNilExpr (hir::NilExpr *ne) {
     return llvm::ConstantPointerNull::get (_builder.getPtrTy ());
+}
+
+llvm::Value *
+CodeGen::generatePtrArith (PtrArith *pa) {
+    llvm::Value *ptrVal    = generateExpr (pa->Ptr ());
+    llvm::Value *offsetVal = generateExpr (pa->Offset ());
+
+    if (pa->Op () == ast::BinOp::Minus) {
+        offsetVal = _builder.CreateNeg (offsetVal);
+    }
+
+    llvm::Type *elemType = getType (pa->Type ()->AsPointer ()->Base ());
+
+    return _builder.CreateGEP (elemType, ptrVal, offsetVal);
 }
 
 llvm::Value *

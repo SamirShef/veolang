@@ -643,11 +643,11 @@ Parser::parsePrimaryExpr (bool allowStruct) {
         if (expr == nullptr) {
             return nullptr;
         }
-        expr->Start () = tok.Start;
-        expr->End ()   = _lastTok.End;
         if (!expectTok (TokenKind::RParen, ")")) {
             return nullptr;
         }
+        expr->Start () = tok.Start;
+        expr->End ()   = _lastTok.End;
         return expr;
     }
     case TokenKind::Minus:

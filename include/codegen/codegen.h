@@ -12,6 +12,7 @@
 #include <hir/load_glob_var_by_name.h>
 #include <hir/load_var.h>
 #include <hir/nil.h>
+#include <hir/ptr_arith.h>
 #include <hir/ref.h>
 #include <hir/ret.h>
 #include <hir/store.h>
@@ -169,6 +170,9 @@ private:
 
     llvm::Value *
     generateNilExpr (hir::NilExpr *ne);
+
+    llvm::Value *
+    generatePtrArith (hir::PtrArith *pa);
 
     llvm::Value *
     generateLValue (hir::Node *node);

@@ -94,6 +94,9 @@ private:
     hir::Node *
     linearizeNilExpr (hir::NilExpr *ne);
 
+    hir::Node *
+    linearizePtrArith (hir::PtrArith *pa);
+
     size_t
     getTmpId () {
         return _nextTmpId++;

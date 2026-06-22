@@ -95,6 +95,7 @@ HIRLinearizer::linearizeExpr (Node *expr) {
         variant (RefExpr, linearizeRefExpr, RefExpr);
         variant (DerefExpr, linearizeDerefExpr, DerefExpr);
         variant (NilExpr, linearizeNilExpr, NilExpr);
+        variant (PtrArith, linearizePtrArith, PtrArith);
     default: {
     }
 #undef variant
@@ -300,6 +301,24 @@ HIRLinearizer::linearizeNilExpr (NilExpr *ne) {
     return ne;
 }
 // NOLINTEND(readability-convert-member-functions-to-static)
+
+Node *
+HIRLinearizer::linearizePtrArith (PtrArith *pa) {
+    auto *ptr    = linearizeExpr (pa->Ptr ());
+    auto *offset = linearizeExpr (pa->Offset ());
+
+    return emitToTmp (
+        _builder.CreatePtrArith (
+            pa->Op (),
+            ptr,
+            offset,
+            pa->Type (),
+            pa->Start (),
+            pa->End ()),
+        pa->Type (),
+        pa->Start (),
+        pa->End ());
+}
 
 Node *
 HIRLinearizer::emitToTmp (
