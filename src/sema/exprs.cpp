@@ -1,6 +1,7 @@
 #include <basic/types/all.h>
 #include <codegen/mangler.h>
 #include <sema/sema.h>
+#include <sema/type_size_evaluator.h>
 
 namespace veo {
 
@@ -77,6 +78,7 @@ Sema::analyzeExpr (Expr *expr, Type *expectedType) {
         variant (DerefExpr, analyzeDerefExpr, DerefExpr);
         variant (NilExpr, analyzeNilExpr, NilExpr);
         variant (TypeExpr, analyzeTypeExpr, TypeExpr);
+        variant (SizeofExpr, analyzeSizeofExpr, SizeofExpr);
     default: return {};
     }
 #undef variant
@@ -1559,4 +1561,22 @@ Sema::analyzeTypeExpr (TypeExpr *te, Type *expectedType) {
     res      = implicitlyCast (res, &expectedType, te->Start (), te->End ());
     return res;
 }
+
+Sema::SemanticResult
+Sema::analyzeSizeofExpr (ast::SizeofExpr *se, Type *expectedType) {
+    auto val = analyzeExpr (se->GetExpr (), nullptr);
+    if (!val.Val.has_value ()) {
+        return {};
+    }
+    auto     *resType = createType<basic::SizeType> (true);
+    ValueData data (
+        static_cast<int64_t> (
+            TypeSizeEvaluator::EvaluateSize (_ptrBitWidth, val.Val->Type)));
+    auto sizeVal = Value (ValueKind::Const, data, resType);
+    auto res     = SemanticResult (
+        sizeVal,
+        _builder.CreateLiteral (sizeVal, se->Start (), se->End ()));
+    return implicitlyCast (res, &expectedType, se->Start (), se->End ());
+}
+
 }

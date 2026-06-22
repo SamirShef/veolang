@@ -439,4 +439,12 @@ Dumper::dumpTypeExpr (TypeExpr *te) {
     print ("TypeExpr: " + te->Type ()->ToString () + '\n');
 }
 
+void
+Dumper::dumpSizeofExpr (SizeofExpr *se) {
+    print ("SizeofExpr:\n");
+    ++_indentLvl;
+    dumpExpr (se->GetExpr ());
+    --_indentLvl;
+}
+
 }
