@@ -122,11 +122,7 @@ Sema::analyzeExpr (Expr *expr, Type *expectedType) {
         auto  res   = SemanticResult (                                                   \
             value,                                                                       \
             _builder.CreateLiteral (value, le->Start (), le->End ()));                   \
-        if (expectedType == nullptr) {                                                   \
-            return res;                                                                  \
-        }                                                                                \
-        res = implicitlyCast (res, &expectedType, le->Start (), le->End ());             \
-        return res;                                                                      \
+        return implicitlyCast (res, &expectedType, le->Start (), le->End ());            \
     }
 
 #define float_lit(kind, floatingKind)                                                    \
@@ -139,11 +135,7 @@ Sema::analyzeExpr (Expr *expr, Type *expectedType) {
         auto res = SemanticResult (                                                      \
             value,                                                                       \
             _builder.CreateLiteral (value, le->Start (), le->End ()));                   \
-        if (expectedType == nullptr) {                                                   \
-            return res;                                                                  \
-        }                                                                                \
-        res = implicitlyCast (res, &expectedType, le->Start (), le->End ());             \
-        return res;                                                                      \
+        return implicitlyCast (res, &expectedType, le->Start (), le->End ());            \
     }
 
 Sema::SemanticResult
@@ -242,8 +234,7 @@ Sema::analyzeLiteralExpr (LiteralExpr *le, Type *expectedType) {
         auto res = SemanticResult (
             value,
             _builder.CreateLiteral (value, le->Start (), le->End ()));
-        res = implicitlyCast (res, &expectedType, le->Start (), le->End ());
-        return res;
+        return implicitlyCast (res, &expectedType, le->Start (), le->End ());
     }
     case TokenKind::BoolLit: {
         bool bval  = (val == "true");
@@ -251,11 +242,7 @@ Sema::analyzeLiteralExpr (LiteralExpr *le, Type *expectedType) {
         auto res   = SemanticResult (
             value,
             _builder.CreateLiteral (value, le->Start (), le->End ()));
-        if (expectedType == nullptr) {
-            return res;
-        }
-        res = implicitlyCast (res, &expectedType, le->Start (), le->End ());
-        return res;
+        return implicitlyCast (res, &expectedType, le->Start (), le->End ());
     }
     case TokenKind::CharLit: {
         int64_t cval = val.size () == 1 ? val[0] : 0;
@@ -263,11 +250,17 @@ Sema::analyzeLiteralExpr (LiteralExpr *le, Type *expectedType) {
         auto res   = SemanticResult (
             value,
             _builder.CreateLiteral (value, le->Start (), le->End ()));
-        if (expectedType == nullptr) {
-            return res;
-        }
-        res = implicitlyCast (res, &expectedType, le->Start (), le->End ());
-        return res;
+        return implicitlyCast (res, &expectedType, le->Start (), le->End ());
+    }
+    case TokenKind::StrLit: {
+        auto value = Value (
+            ValueKind::Const,
+            ValueData (std::move (val)),
+            createType<PointerType> (createType<IntegerType> (8, true)));
+        auto res = SemanticResult (
+            value,
+            _builder.CreateLiteral (value, le->Start (), le->End ()));
+        return implicitlyCast (res, &expectedType, le->Start (), le->End ());
     }
     default: return {};
     }

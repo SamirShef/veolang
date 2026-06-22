@@ -60,7 +60,8 @@ class Sema {
         hir::Node *Node;
 
         SemanticResult () : Val (Value::Incorrect ()), Node (nullptr) {}
-        SemanticResult (OptValue val, hir::Node *node) : Val (val), Node (node) {}
+        SemanticResult (OptValue val, hir::Node *node)
+            : Val (std::move (val)), Node (node) {}
     };
 
     enum class CastCost : uint16_t {

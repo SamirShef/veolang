@@ -636,6 +636,7 @@ Parser::parsePrimaryExpr (bool allowStruct) {
         lit (F64Lit);
         lit (ISizeLit);
         lit (USizeLit);
+        lit (StrLit);
 
     case TokenKind::LParen: {
         Expr *expr = parseExpr ();

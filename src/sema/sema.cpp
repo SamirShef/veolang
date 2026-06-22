@@ -12,25 +12,27 @@ Sema::canFit (Value &val, const Type *targetType) {
         [&] (auto &&arg) -> bool {
             using T = std::decay_t<decltype (arg)>;
 
-            if (targetType->IsIntOrSize ()) {
-                unsigned bits       = targetType->IsInteger ()
-                                          ? targetType->AsInteger ()->BitWidth ()
-                                          : 32;
-                bool     isUnsigned = targetType->IsInteger ()
-                                          ? targetType->AsInteger ()->IsUnsigned ()
-                                          : targetType->AsSize ()->IsUnsigned ();
+            if constexpr (std::is_arithmetic_v<T>) {
+                if (targetType->IsIntOrSize ()) {
+                    unsigned bits       = targetType->IsInteger ()
+                                              ? targetType->AsInteger ()->BitWidth ()
+                                              : 32;
+                    bool     isUnsigned = targetType->IsInteger ()
+                                              ? targetType->AsInteger ()->IsUnsigned ()
+                                              : targetType->AsSize ()->IsUnsigned ();
 
-                if (isUnsigned) {
-                    if (arg < 0) {
-                        return false;
+                    if (isUnsigned) {
+                        if (arg < 0) {
+                            return false;
+                        }
+                        auto uval = static_cast<uint64_t> (arg);
+                        auto umax = (bits == 64) ? ~0ULL : (1ULL << bits) - 1;
+                        return uval <= umax;
                     }
-                    auto uval = static_cast<uint64_t> (arg);
-                    auto umax = (bits == 64) ? ~0ULL : (1ULL << bits) - 1;
-                    return uval <= umax;
+                    auto min = -static_cast<int64_t> ((1ULL << (bits - 1)));
+                    auto max = static_cast<uint64_t> ((1ULL << (bits - 1))) - 1;
+                    return arg >= min && static_cast<uint64_t> (arg) <= max;
                 }
-                auto min = -static_cast<int64_t> ((1ULL << (bits - 1)));
-                auto max = static_cast<uint64_t> ((1ULL << (bits - 1))) - 1;
-                return arg >= min && static_cast<uint64_t> (arg) <= max;
             }
 
             return false;

@@ -224,6 +224,10 @@ CodeGen::generateLiteralExpr (LiteralExpr *le) {
             std::get<1> (val.Data));
     case basic::TypeKind::Bool: return _builder.getInt1 (std::get<0> (val.Data) != 0);
     case basic::TypeKind::Char: return _builder.getInt32 (std::get<0> (val.Data));
+    case basic::TypeKind::Pointer: {
+        const auto &str = std::get<2> (val.Data);
+        return _builder.CreateGlobalString (str);
+    }
     default: {
     }
     }

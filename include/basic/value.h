@@ -4,7 +4,7 @@
 
 namespace veo::basic {
 
-using ValueData = std::variant<int64_t, double>;
+using ValueData = std::variant<int64_t, double, std::string>;
 
 struct Value;
 using OptValue = std::optional<Value>;
@@ -17,7 +17,7 @@ struct Value {
     class Type *Type;
 
     Value (ValueKind kind, ValueData data, class Type *type)
-        : Kind (kind), Data (data), Type (type) {}
+        : Kind (kind), Data (std::move (data)), Type (type) {}
     Value (ValueKind kind, class Type *type) : Kind (kind), Type (type) {}
 
     bool

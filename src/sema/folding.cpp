@@ -18,34 +18,38 @@ Sema::foldBinary (
                     using LType = std::decay_t<decltype (l)>;
                     using RType = std::decay_t<decltype (r)>;
 
-                    if ((op == ast::BinOp::Div || op == ast::BinOp::Rem) && r == 0) {
-                        _diag
-                            .Report (
-                                DiagCode::EDivByZero,
-                                "division by zero",
-                                Severity::Error)
-                            .AddSpan (start, end);
-                        return std::nullopt;
-                    }
+                    if constexpr (std::is_arithmetic_v<LType>
+                                  && std::is_arithmetic_v<RType>) {
+                        if ((op == ast::BinOp::Div || op == ast::BinOp::Rem) && r == 0) {
+                            _diag
+                                .Report (
+                                    DiagCode::EDivByZero,
+                                    "division by zero",
+                                    Severity::Error)
+                                .AddSpan (start, end);
+                            return std::nullopt;
+                        }
 
-                    ValueData resData;
-                    switch (op) {
+                        ValueData resData;
+                        switch (op) {
 #define variant(kind, op)                                                                \
     case ast::BinOp::kind: resData = l op r; break;
-                        variant (Plus, +);
-                        variant (Minus, -);
-                        variant (Mul, *);
-                        variant (Div, /);
-                        variant (Eq, ==);
-                        variant (NEq, !=);
-                        variant (Lt, <);
-                        variant (LtEq, <=);
-                        variant (Gt, >);
-                        variant (GtEq, >=);
-                    default: return std::nullopt;
+                            variant (Plus, +);
+                            variant (Minus, -);
+                            variant (Mul, *);
+                            variant (Div, /);
+                            variant (Eq, ==);
+                            variant (NEq, !=);
+                            variant (Lt, <);
+                            variant (LtEq, <=);
+                            variant (Gt, >);
+                            variant (GtEq, >=);
+                        default: return std::nullopt;
 #undef variant
+                        }
+                        return Value (ValueKind::Const, resData, resType);
                     }
-                    return Value (ValueKind::Const, resData, resType);
+                    return Value (ValueKind::Const, resType);
                 },
                 rhs.Data);
         },
@@ -88,24 +92,26 @@ Sema::foldUnary (
             using T = std::decay_t<decltype (r)>;
             ValueData resData;
 
-            switch (op) {
-            case ast::UnOp::Minus: resData = -r; break;
-            case ast::UnOp::Not: {
-                if constexpr (std::is_same_v<T, int64_t>) {
-                    resData = !r;
-                } else {
-                    _diag
-                        .Report (
-                            DiagCode::ECannotApplyOp,
-                            "cannot apply operator '!' with type '"
-                                + typeToString (rhs.Type) + "'",
-                            Severity::Error)
-                        .AddSpan (start, end);
-                    return std::nullopt;
+            if constexpr (std::is_arithmetic_v<T>) {
+                switch (op) {
+                case ast::UnOp::Minus: resData = -r; break;
+                case ast::UnOp::Not: {
+                    if constexpr (std::is_same_v<T, int64_t>) {
+                        resData = !r;
+                    } else {
+                        _diag
+                            .Report (
+                                DiagCode::ECannotApplyOp,
+                                "cannot apply operator '!' with type '"
+                                    + typeToString (rhs.Type) + "'",
+                                Severity::Error)
+                            .AddSpan (start, end);
+                        return std::nullopt;
+                    }
+                    break;
                 }
-                break;
-            }
-            default: return std::nullopt;
+                default: return std::nullopt;
+                }
             }
 
             return Value (ValueKind::Const, resData, resType);
