@@ -11,7 +11,7 @@ import std.io;
 
 func main() {
     let message = "Hello, Veo!";
-    std.io.Println(message);
+    io.println(message);
 }
 ```
 
