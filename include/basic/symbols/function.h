@@ -14,6 +14,7 @@ struct Function {
     basic::Type               *RetType;
     std::vector<ast::Argument> Args;
     bool                       IsGeneric;
+    bool                       IsExternDeclaration;
     Module                    *Parent;
     ast::AccessModifier        Access;
     hir::MangleKind            MangleKind;
@@ -23,6 +24,7 @@ struct Function {
         basic::Type               *retType,
         std::vector<ast::Argument> args,
         bool                       isGeneric,
+        bool                       isExternDeclaration,
         Module                    *parent,
         ast::AccessModifier        access,
         hir::MangleKind            mangleKind = hir::MangleKind::Veo)
@@ -30,6 +32,7 @@ struct Function {
           RetType (retType),
           Args (std::move (args)),
           IsGeneric (isGeneric),
+          IsExternDeclaration (isExternDeclaration),
           Parent (parent),
           Access (access),
           MangleKind (mangleKind) {}

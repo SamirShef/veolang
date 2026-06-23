@@ -80,6 +80,9 @@ BuildDriver::Build () {
             if (loadedMod != nullptr) {
                 llvm::errs () << "  Loaded precompiled metadata for: " << importPath
                               << '\n';
+                if (driver::ModuleLoader::LoadModule (importPath) == nullptr) {
+                    driver::ModuleLoader::AddModule (importPath, loadedMod);
+                }
                 continue;
             }
             llvm::errs () << "Module " + vmetaPath.string () + " was not be loaded\n";

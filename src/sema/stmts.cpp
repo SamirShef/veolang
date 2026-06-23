@@ -222,6 +222,7 @@ Sema::declareFunc (FuncDef *fd, hir::MangleKind mangleKind) {
         fd->RetType (),
         fd->Args (),
         isGeneric,
+        false,
         _mod,
         fd->Access (),
         mangleKind);
@@ -834,6 +835,7 @@ Sema::declareImplMethod (
         fd->RetType (),
         fd->Args (),
         isGeneric,
+        false,
         _mod,
         fd->Access ());
     auto m = symbols::Method (
@@ -1110,6 +1112,7 @@ Sema::analyzeTraitStmt (TraitStmt *ts) {
             fd->RetType (),
             fd->Args (),
             isGeneric,
+            false,
             _mod,
             fd->Access ());
         auto m = symbols::Method (
@@ -1311,6 +1314,7 @@ Sema::analyzeExternFuncDef (ast::FuncDef *fd, hir::MangleKind mangleKind) {
         fd->RetType (),
         fd->Args (),
         isGeneric,
+        true,
         _mod,
         fd->Access (),
         mangleKind);
@@ -1413,6 +1417,9 @@ Sema::analyzeImportStmt (ast::ImportStmt *is) {
 
     for (auto &[name, candidates] : importMod->Funcs) {
         for (auto &func : candidates.Candidates) {
+            if (func->IsExternDeclaration) {
+                continue;
+            }
             if (!func->IsGeneric) {
                 auto *funcNode = _builder.CreateFunction (
                     func->Name,
@@ -1496,6 +1503,7 @@ Sema::analyzeImportStmt (ast::ImportStmt *is) {
                         method->Func->RetType,
                         method->Func->Args,
                         method->Func->IsGeneric,
+                        method->Func->IsExternDeclaration,
                         method->Func->Parent,
                         method->Func->Access,
                         method->Func->MangleKind);

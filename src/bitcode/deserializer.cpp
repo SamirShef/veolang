@@ -277,7 +277,6 @@ Deserializer::deserializeModulePool (llvm::BitstreamCursor &cursor) {
         auto *mod = driver::ModuleLoader::LoadModule (modName);
         if (mod == nullptr) {
             mod = new symbols::Module (modName); // NOLINT
-            driver::ModuleLoader::AddModule (modName, mod);
         }
         _modulePool[i] = mod;
     }
@@ -329,9 +328,10 @@ Deserializer::deserializeModuleSymbols (
         uint32_t numCandidates = cursor.Read (32).get ();
         mod->Funcs[nameObj.Val].Candidates.reserve (numCandidates);
         for (uint32_t j = 0; j < numCandidates; ++j) {
-            uint32_t retTypeID = cursor.Read (32).get ();
-            bool     isGeneric = cursor.Read (1).get () == 1;
-            uint32_t parentID  = cursor.Read (32).get ();
+            uint32_t retTypeID           = cursor.Read (32).get ();
+            bool     isGeneric           = cursor.Read (1).get () == 1;
+            bool     isExternDeclaration = cursor.Read (1).get () == 1;
+            uint32_t parentID            = cursor.Read (32).get ();
             auto     access = static_cast<ast::AccessModifier> (cursor.Read (8).get ());
             auto     mangleKind = static_cast<hir::MangleKind> (cursor.Read (8).get ());
 
@@ -340,6 +340,7 @@ Deserializer::deserializeModuleSymbols (
                 _typePool[retTypeID],
                 {},
                 isGeneric,
+                isExternDeclaration,
                 parentID != 0xFFFFFFFF ? _modulePool[parentID] : mod,
                 access,
                 mangleKind);
@@ -398,9 +399,10 @@ Deserializer::deserializeModuleSymbols (
                 bool isGeneric = cursor.Read (1).get () == 1;
                 bool isConst   = cursor.Read (1).get () == 1;
 
-                uint32_t retTypeID       = cursor.Read (32).get ();
-                bool     isGenericUnused = cursor.Read (1).get () == 1;
-                uint32_t parentID        = cursor.Read (32).get ();
+                uint32_t retTypeID           = cursor.Read (32).get ();
+                bool     isGenericUnused     = cursor.Read (1).get () == 1;
+                bool     isExternDeclaration = cursor.Read (1).get () == 1;
+                uint32_t parentID            = cursor.Read (32).get ();
                 auto     accessUnused
                     = static_cast<ast::AccessModifier> (cursor.Read (8).get ());
                 auto mangleKind = static_cast<hir::MangleKind> (cursor.Read (8).get ());
@@ -410,6 +412,7 @@ Deserializer::deserializeModuleSymbols (
                     _typePool[retTypeID],
                     {},
                     isGenericUnused,
+                    isExternDeclaration,
                     parentID != 0xFFFFFFFF ? _modulePool[parentID] : mod,
                     accessUnused,
                     mangleKind);
@@ -466,9 +469,10 @@ Deserializer::deserializeModuleSymbols (
                 bool isGeneric = cursor.Read (1).get () == 1;
                 bool isConst   = cursor.Read (1).get () == 1;
 
-                uint32_t retTypeID       = cursor.Read (32).get ();
-                bool     isGenericUnused = cursor.Read (1).get () == 1;
-                uint32_t parentID        = cursor.Read (32).get ();
+                uint32_t retTypeID           = cursor.Read (32).get ();
+                bool     isGenericUnused     = cursor.Read (1).get () == 1;
+                bool     isExternDeclaration = cursor.Read (1).get () == 1;
+                uint32_t parentID            = cursor.Read (32).get ();
                 auto     accessUnused
                     = static_cast<ast::AccessModifier> (cursor.Read (8).get ());
                 auto mangleKind = static_cast<hir::MangleKind> (cursor.Read (8).get ());
@@ -478,6 +482,7 @@ Deserializer::deserializeModuleSymbols (
                     _typePool[retTypeID],
                     {},
                     isGeneric,
+                    isExternDeclaration,
                     parentID != 0xFFFFFFFF ? _modulePool[parentID] : mod,
                     accessUnused,
                     mangleKind);
@@ -528,9 +533,10 @@ Deserializer::deserializeModuleSymbols (
                 bool isGeneric = cursor.Read (1).get () == 1;
                 bool isConst   = cursor.Read (1).get () == 1;
 
-                uint32_t retTypeID       = cursor.Read (32).get ();
-                bool     isGenericUnused = cursor.Read (1).get () == 1;
-                uint32_t parentID        = cursor.Read (32).get ();
+                uint32_t retTypeID           = cursor.Read (32).get ();
+                bool     isGenericUnused     = cursor.Read (1).get () == 1;
+                bool     isExternDeclaration = cursor.Read (1).get () == 1;
+                uint32_t parentID            = cursor.Read (32).get ();
                 auto     accessUnused
                     = static_cast<ast::AccessModifier> (cursor.Read (8).get ());
                 auto mangleKind = static_cast<hir::MangleKind> (cursor.Read (8).get ());
@@ -540,6 +546,7 @@ Deserializer::deserializeModuleSymbols (
                     _typePool[retTypeID],
                     {},
                     isGeneric,
+                    isExternDeclaration,
                     parentID != 0xFFFFFFFF ? _modulePool[parentID] : mod,
                     accessUnused,
                     mangleKind);

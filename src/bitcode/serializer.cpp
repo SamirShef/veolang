@@ -418,6 +418,7 @@ Serializer::serializeFunction (
     llvm::BitstreamWriter &writer, const symbols::Function &func) {
     writer.Emit (_typePool.GetID (func.RetType), 32);
     writer.Emit (cast (func.IsGeneric, uint32_t), 1);
+    writer.Emit (cast (func.IsExternDeclaration, uint32_t), 1);
     writer.Emit (func.Parent != nullptr ? _modPool.GetID (func.Parent) : 0xFFFFFFFF, 32);
     writer.Emit (cast (func.Access, uint32_t), 8);
     writer.Emit (cast (func.MangleKind, uint32_t), 8);
