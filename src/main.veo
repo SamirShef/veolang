@@ -1,6 +1,9 @@
+import std;
 import std.io;
 
 func main(): i32 {
-    io.println("Hello world!");
-    return 0;
+    let s = std.String.from("Hello world!");
+    io.println(s.data());
+    let c = s.get(14uz);
+    return c.unwrap();
 }

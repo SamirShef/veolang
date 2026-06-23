@@ -1,14 +1,12 @@
-import std.string;
-
 pub func print(str: *u8) {
     write(1, str, strlen(str));
 }
 
 pub func println(str: *u8) {
-    let s = string.String.from(str);
-    s.set(s.len() - 1uz, 10u8);
-    write(1, s.data(), s.len());
+    write(1, str, strlen(str));
+    putchar(10); // '\n' character
 }
 
+extern "C" func putchar(c: i32): i32;
 extern "C" func strlen(s: *u8): usize;
 extern "C" func write(fd: i32, buf: *u8, count: usize): isize;
