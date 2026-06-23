@@ -1,0 +1,3 @@
+[package]
+name = "veoc"
+entry = "src/main.veo"
