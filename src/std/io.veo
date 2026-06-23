@@ -3,7 +3,7 @@ pub func print(str: *u8) {
 }
 
 pub func println(str: *u8) {
-    write(1, str, strlen(str));
+    print(str);
     putchar(10); // '\n' character
 }
 

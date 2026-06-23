@@ -1448,6 +1448,24 @@ Sema::analyzeImportStmt (ast::ImportStmt *is) {
                 if (!method->IsGeneric) {
                     std::vector<hir::VarDef *> args;
                     args.reserve (method->Func->Args.size ());
+                    if (!method->IsStatic) {
+                        auto *node = _builder.CreateVariable (
+                            basic::NameObj (
+                                "this",
+                                method->Func->Name.Start,
+                                method->Func->Name.End),
+                            createType<PointerType> (targetType),
+                            nullptr,
+                            false,
+                            false,
+                            method->Func->Name.Start,
+                            method->Func->Name.End,
+                            nullptr,
+                            hir::MangleKind::Veo,
+                            false,
+                            false);
+                        args.emplace_back (node);
+                    }
                     for (auto &a : method->Func->Args) {
                         args.emplace_back (_builder.CreateVariable (
                             a.Name,
@@ -1484,6 +1502,24 @@ Sema::analyzeImportStmt (ast::ImportStmt *is) {
                 if (!method->IsGeneric) {
                     std::vector<hir::VarDef *> args;
                     args.reserve (method->Func->Args.size ());
+                    if (!method->IsStatic) {
+                        auto *node = _builder.CreateVariable (
+                            basic::NameObj (
+                                "this",
+                                method->Func->Name.Start,
+                                method->Func->Name.End),
+                            createType<PointerType> (type),
+                            nullptr,
+                            false,
+                            false,
+                            method->Func->Name.Start,
+                            method->Func->Name.End,
+                            nullptr,
+                            hir::MangleKind::Veo,
+                            false,
+                            false);
+                        args.emplace_back (node);
+                    }
                     for (auto &a : method->Func->Args) {
                         args.emplace_back (_builder.CreateVariable (
                             a.Name,

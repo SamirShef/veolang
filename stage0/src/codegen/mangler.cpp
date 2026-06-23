@@ -104,6 +104,7 @@ Mangler::MangleType (const basic::Type *type, hir::MangleKind mangleKind) {
     case basic::TypeKind::Integer: {
         const auto *it = llvm::cast<basic::IntegerType> (type);
         switch (it->BitWidth ()) {
+        case 8: return "b";
         case 16: return "s";
         case 32: return "i";
         case 64: return "l";
@@ -112,14 +113,20 @@ Mangler::MangleType (const basic::Type *type, hir::MangleKind mangleKind) {
     }
     case basic::TypeKind::Floating:
         return llvm::cast<basic::FloatingType> (type)->IsFloat () ? "f" : "d";
-    case basic::TypeKind::Bool: return "b";
+    case basic::TypeKind::Bool: return "B";
     case basic::TypeKind::Char: return "c";
     case basic::TypeKind::Struct: {
         auto *sym = type->AsStruct ()->BaseSymbol ();
         return "S" + std::to_string (sym->Name.Val.size ()) + sym->Name.Val;
     }
-    default: {
-    }
+    case basic::TypeKind::Size: return "z";
+    case basic::TypeKind::Pointer: return "P" + MangleType (type->AsPointer ()->Base ());
+    case basic::TypeKind::Noth: return "n";
+    case basic::TypeKind::Alias: return MangleType (type->AsAlias ()->Base ());
+    case basic::TypeKind::Trait:
+    case basic::TypeKind::Named:
+    case basic::TypeKind::TraitThis:
+    case basic::TypeKind::Module: break;
     }
     return "";
 }
