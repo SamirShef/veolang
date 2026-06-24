@@ -126,8 +126,31 @@ Lexer::tokenizeNumLit (const char *tokStart) {
 Token
 Lexer::tokenizeStrLit (const char *tokStart) {
     ++_curPtr;
+    std::string val;
     while (peek () != '\0' && peek () != '\"') {
-        ++_curPtr;
+        if (peek () == '\\') {
+            ++_curPtr;
+            if (peek () == '\0') {
+                break;
+            }
+
+            switch (peek ()) {
+            case 'n': val += '\n'; break;
+            case 't': val += '\t'; break;
+            case 'r': val += '\r'; break;
+            case '0': val += '\0'; break;
+            case '\\': val += '\\'; break;
+            case '"': val += '"'; break;
+            case '\'': val += '\''; break;
+            default:
+                val += '\\';
+                val += peek ();
+                break;
+            }
+            ++_curPtr;
+        } else {
+            val += *_curPtr++;
+        }
     }
     if (peek () == '\0') {
         _diag
@@ -137,7 +160,6 @@ Lexer::tokenizeStrLit (const char *tokStart) {
                 Severity::Error)
             .AddSpan (loc (tokStart), loc (_curPtr));
     }
-    std::string val (tokStart + 1, _curPtr - tokStart - 1);
     ++_curPtr;
     return { TokenKind::StrLit, val, loc (tokStart), loc (_curPtr) };
 }
@@ -145,9 +167,32 @@ Lexer::tokenizeStrLit (const char *tokStart) {
 Token
 Lexer::tokenizeCharLit (const char *tokStart) {
     ++_curPtr;
-    unsigned len = 0;
+    std::string val;
+    unsigned    len = 0;
     while (peek () != '\0' && peek () != '\'') {
-        ++_curPtr;
+        if (peek () == '\\') {
+            ++_curPtr; // Пропускаем '\'
+            if (peek () == '\0') {
+                break;
+            }
+
+            switch (peek ()) {
+            case 'n': val += '\n'; break;
+            case 't': val += '\t'; break;
+            case 'r': val += '\r'; break;
+            case '0': val += '\0'; break;
+            case '\\': val += '\\'; break;
+            case '"': val += '"'; break;
+            case '\'': val += '\''; break;
+            default:
+                val += '\\';
+                val += peek ();
+                break;
+            }
+            ++_curPtr;
+        } else {
+            val += *_curPtr++;
+        }
         ++len;
     }
     bool unclosed = false;
@@ -176,7 +221,6 @@ Lexer::tokenizeCharLit (const char *tokStart) {
                 Severity::Error)
             .AddSpan (loc (tokStart), loc (_curPtr));
     }
-    std::string val (tokStart + 1, _curPtr - tokStart - 2);
     return { TokenKind::CharLit, val, loc (tokStart), loc (_curPtr) };
 }
 

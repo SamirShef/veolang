@@ -1,5 +1,5 @@
 import std.math;
-import std.io;
+import std.sys;
 
 pub struct String {
     data: *u8;
@@ -9,19 +9,20 @@ pub struct String {
 
 impl String {
     pub static func from(str: *u8): This {
-        let len = strlen(str);
-        let data = malloc(@size_of(u8) * (len + 1uz));
+        let len = sys.strlen(str);
+        let cap = len + 1uz;
+        let data = sys.malloc(@size_of(u8) * cap);
         for let i = 0uz; i < len; i += 1 {
             *(data + i) = *(str + i);
         }
         *(data + len) = 0u8;
-        return This { data: data, len: len, cap: len };
+        return This { data: data, len: len, cap: cap };
     }
 
     pub func append(other: String) {
         if this.cap < this.len + other.len() {
             this.cap = math.max(this.cap * 2uz, this.len + other.len());
-            this.data = realloc(this.data, this.cap);
+            this.data = sys.realloc(this.data, this.cap + 1uz);
         }
         for let i = 0uz; i < other.len(); i += 1 {
             *(this.data + this.len + i) = *(other.data() + i);
@@ -31,10 +32,10 @@ impl String {
     }
 
     pub func append(other: *u8) {
-        let other_len = strlen(other);
+        let other_len = sys.strlen(other);
         if this.cap < this.len + other_len {
             this.cap = math.max(this.cap * 2uz, this.len + other_len);
-            this.data = realloc(this.data, this.cap);
+            this.data = sys.realloc(this.data, this.cap + 1uz);
         }
         for let i = 0uz; i < other_len; i += 1 {
             *(this.data + this.len + i) = *(other + i);
@@ -46,7 +47,7 @@ impl String {
     pub func append(other: u8) {
         if this.cap < this.len + 1uz {
             this.cap = math.max(this.cap * 2uz, this.len + 1uz);
-            this.data = realloc(this.data, this.cap);
+            this.data = sys.realloc(this.data, this.cap + 1uz);
         }
         *(this.data + this.len) = other;
         this.len += 1;
@@ -54,7 +55,7 @@ impl String {
     }
 
     pub func free() {
-        free(this.data);
+        sys.free(this.data);
     }
 
     pub func data(): *u8 {
@@ -119,10 +120,10 @@ impl OptionU8 {
 }
 
 pub func panic(err: *u8) {
-    io.print("veo panic: ");
-    io.println(err);
-    io.println("aborting execution...");
-    exit(1);
+    sys.write(2, "veo panic: ", 11uz);
+    sys.write(2, err, sys.strlen(err));
+    sys.write(2, "\naborting execution...\n", 23uz);
+    sys.exit(1);
 }
 
 pub trait ToString {
@@ -131,8 +132,12 @@ pub trait ToString {
 
 impl ToString for usize {
     pub func to_string(): String {
-        let s: String;
         let val = *this;
+        if val == 0uz {
+            return String.from("0");
+        }
+
+        let s: String;
         for val != 0uz; {
             s.append('0'.(u8) + (val % 10uz).(u8));
             val /= 10uz;
@@ -146,9 +151,3 @@ impl ToString for usize {
         return s;
     }
 }
-
-extern "C" func exit(code: i32);
-extern "C" func strlen(s: *u8): usize;
-extern "C" func malloc(size: usize): *u8;
-extern "C" func realloc(ptr: *u8, size: usize): *u8;
-extern "C" func free(ptr: *u8);

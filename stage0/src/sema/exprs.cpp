@@ -554,8 +554,8 @@ Sema::analyzeFuncCall (FuncCall *fc, Type *expectedType, Module *baseSemaMod) {
     if (baseSemaMod == nullptr) {
         baseSemaMod = _mod;
     }
-    auto it = _mod->Funcs.find (fc->Name ().Val);
-    if (it == _mod->Funcs.end ()) {
+    auto it = baseSemaMod->Funcs.find (fc->Name ().Val);
+    if (it == baseSemaMod->Funcs.end ()) {
         _diag
             .Report (
                 DiagCode::ECannotFindFunction,
@@ -587,7 +587,7 @@ Sema::analyzeFuncCall (FuncCall *fc, Type *expectedType, Module *baseSemaMod) {
             .Report (
                 DiagCode::ECannotAccessToPrivMember,
                 "cannot call private function '" + fc->Name ().Val + "' from module '"
-                    + _mod->ToString () + "'",
+                    + baseSemaMod->ToString () + "'",
                 Severity::Error)
             .AddSpan (fc->Start (), fc->End ());
     }
@@ -1161,13 +1161,10 @@ Sema::analyzeMethodCall (MethodCall *mc, Type *expectedType) {
             mc->End ());
     }
     if (targetType->IsModule ()) {
-        auto *mod    = targetType->AsModule ()->Base ();
-        auto *oldMod = _mod;
-        _mod         = mod;
+        auto *mod = targetType->AsModule ()->Base ();
         auto *fc
             = createNode<FuncCall> (mc->Name (), mc->Args (), mc->Start (), mc->End ());
-        auto res = analyzeFuncCall (fc, expectedType, _mod);
-        _mod     = oldMod;
+        auto res = analyzeFuncCall (fc, expectedType, mod);
         return res;
     }
     auto *s = targetType->IsStruct () ? targetType->AsStruct ()->BaseSymbol () : nullptr;

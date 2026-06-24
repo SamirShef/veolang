@@ -39,6 +39,11 @@ CodeGen::generateVarDef (VarDef *vd) {
                                     : vd->Name ().Val;
     auto       *type     = getType (vd->Type ());
     if (isGlobal) {
+        if (auto *existing = _mod->getGlobalVariable (name)) {
+            _globals.emplace (vd, existing);
+            return;
+        }
+
         llvm::Value *init = nullptr;
         if (vd->IsConst ()) {
             init = generateExpr (vd->Init ());
@@ -71,6 +76,11 @@ CodeGen::declareFunc (Function *fd) {
         = fd->MethodBaseType () == nullptr
               ? Mangler::MangleFunction (fd, fd->GetMangleKind ())
               : Mangler::MangleMethod (fd->MethodBaseType (), fd, fd->GetMangleKind ());
+    if (auto *existing = _mod->getFunction (name)) {
+        _funcsMap.emplace (fd, existing);
+        return;
+    }
+
     std::vector<llvm::Type *> args;
     for (auto &a : fd->Args ()) {
         args.emplace_back (getType (a->Type ()));

@@ -1,12 +1,20 @@
+import std;
+import std.sys;
+
 pub func print(str: *u8) {
-    write(1, str, strlen(str));
+    sys.write(1, str, sys.strlen(str));
+}
+
+pub func print(str: std.String) {
+    sys.write(1, str.data(), str.len());
 }
 
 pub func println(str: *u8) {
     print(str);
-    putchar(10); // '\n' character
+    sys.putchar('\n'.(u8));
 }
 
-extern "C" func putchar(c: i32): i32;
-extern "C" func strlen(s: *u8): usize;
-extern "C" func write(fd: i32, buf: *u8, count: usize): isize;
+pub func println(str: std.String) {
+    print(str);
+    sys.putchar('\n'.(u8));
+}

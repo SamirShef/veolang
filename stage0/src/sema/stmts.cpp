@@ -1417,9 +1417,6 @@ Sema::analyzeImportStmt (ast::ImportStmt *is) {
 
     for (auto &[name, candidates] : importMod->Funcs) {
         for (auto &func : candidates.Candidates) {
-            if (func->IsExternDeclaration) {
-                continue;
-            }
             if (!func->IsGeneric) {
                 auto *funcNode = _builder.CreateFunction (
                     func->Name,
