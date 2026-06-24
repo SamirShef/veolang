@@ -18,6 +18,7 @@ struct Function {
     Module                    *Parent;
     ast::AccessModifier        Access;
     hir::MangleKind            MangleKind;
+    ast::FuncDef              *AST{};
 
     Function (
         basic::NameObj             name,

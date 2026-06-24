@@ -1,4 +1,5 @@
 import std.math;
+import std.mem;
 import std.sys;
 
 pub struct String {
@@ -8,10 +9,10 @@ pub struct String {
 }
 
 impl String {
-    pub static func from(str: *u8): This {
+    pub static func from(alloc: mem.Allocator, str: *u8): This {
         let len = sys.strlen(str);
         let cap = len + 1uz;
-        let data = sys.malloc(@size_of(u8) * cap);
+        let data = alloc.alloc(@size_of(u8) * cap);
         for let i = 0uz; i < len; i += 1 {
             *(data + i) = *(str + i);
         }
@@ -19,10 +20,14 @@ impl String {
         return This { data: data, len: len, cap: cap };
     }
 
-    pub func append(other: String) {
-        if this.cap < this.len + other.len() {
-            this.cap = math.max(this.cap * 2uz, this.len + other.len());
-            this.data = sys.realloc(this.data, this.cap + 1uz);
+    pub static func init(data: *u8, len: usize, cap: usize): This {
+        return This { data: data, len: len, cap: cap };
+    }
+
+    pub func append(alloc: mem.Allocator, other: String) {
+        if this.cap < this.len + other.len() + 1uz {
+            this.cap = math.max(this.cap * 2uz, this.len + other.len() + 1uz);
+            this.data = alloc.realloc(this.data, this.cap);
         }
         for let i = 0uz; i < other.len(); i += 1 {
             *(this.data + this.len + i) = *(other.data() + i);
@@ -31,11 +36,11 @@ impl String {
         *(this.data + this.len) = 0u8;
     }
 
-    pub func append(other: *u8) {
+    pub func append(alloc: mem.Allocator, other: *u8) {
         let other_len = sys.strlen(other);
-        if this.cap < this.len + other_len {
-            this.cap = math.max(this.cap * 2uz, this.len + other_len);
-            this.data = sys.realloc(this.data, this.cap + 1uz);
+        if this.cap < this.len + other_len + 1uz {
+            this.cap = math.max(this.cap * 2uz, this.len + other_len + 1uz);
+            this.data = alloc.realloc(this.data, this.cap);
         }
         for let i = 0uz; i < other_len; i += 1 {
             *(this.data + this.len + i) = *(other + i);
@@ -44,18 +49,18 @@ impl String {
         *(this.data + this.len) = 0u8;
     }
 
-    pub func append(other: u8) {
-        if this.cap < this.len + 1uz {
-            this.cap = math.max(this.cap * 2uz, this.len + 1uz);
-            this.data = sys.realloc(this.data, this.cap + 1uz);
+    pub func append(alloc: mem.Allocator, other: u8) {
+        if this.cap < this.len + 2uz {
+            this.cap = math.max(this.cap * 2uz, this.len + 2uz);
+            this.data = alloc.realloc(this.data, this.cap);
         }
         *(this.data + this.len) = other;
         this.len += 1;
         *(this.data + this.len) = 0u8;
     }
 
-    pub func free() {
-        sys.free(this.data);
+    pub func free(alloc: mem.Allocator) {
+        alloc.destroy(this.data);
     }
 
     pub func data(): *u8 {
@@ -68,11 +73,12 @@ impl String {
 
     pub func set(i: usize, c: u8) {
         if i >= this.len {
-            let msg = String.from("index out of bounds in String.set (index: ");
-            msg.append(i.to_string());
-            msg.append(", length: ");
-            msg.append(this.len.to_string());
-            msg.append(")");
+            let alloc: mem.MallocAllocator;
+            let msg = String.from(alloc, "index out of bounds in String.set (index: ");
+            msg.append(alloc, i.to_string(alloc));
+            msg.append(alloc, ", length: ");
+            msg.append(alloc, this.len.to_string(alloc));
+            msg.append(alloc, ")");
             panic(msg.data());
         }
         *(this.data + i) = c;
@@ -127,19 +133,19 @@ pub func panic(err: *u8) {
 }
 
 pub trait ToString {
-    pub func to_string(): String;
+    pub func to_string(alloc: mem.Allocator): String;
 }
 
 impl ToString for usize {
-    pub func to_string(): String {
+    pub func to_string(alloc: mem.Allocator): String {
         let val = *this;
         if val == 0uz {
-            return String.from("0");
+            return String.from(alloc, "0");
         }
 
         let s: String;
         for val != 0uz; {
-            s.append('0'.(u8) + (val % 10uz).(u8));
+            s.append(alloc, '0'.(u8) + (val % 10uz).(u8));
             val /= 10uz;
         }
         for let i = 0uz; i < s.len() / 2uz; i += 1 {

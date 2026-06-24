@@ -694,11 +694,17 @@ CodeGen::generateCheckNil (llvm::Value *ptr, llvm::SMLoc start) {
     _builder.CreateCondBr (cond, thenBB, mergeBB);
 
     _builder.SetInsertPoint (thenBB);
-    auto               bufferId   = _srcMgr.FindBufferContainingLoc (start);
-    const auto        &buffer     = _srcMgr.getBufferInfo (bufferId);
-    const std::string &bufferName = buffer.Buffer->getBufferIdentifier ().str ();
-    auto               lineCol    = _srcMgr.getLineAndColumn (start);
-    auto              *msg        = _builder.CreateGlobalString (
+    auto        bufferId = _srcMgr.FindBufferContainingLoc (start);
+    std::string bufferName;
+    if (bufferId != 0) {
+        const auto &buffer = _srcMgr.getBufferInfo (bufferId);
+        bufferName         = buffer.Buffer->getBufferIdentifier ().str ();
+    } else {
+        bufferName = "<unknown>";
+    }
+    auto  lineCol = bufferId != 0 ? _srcMgr.getLineAndColumn (start)
+                                  : std::pair<unsigned, unsigned>{ -1, -1 };
+    auto *msg     = _builder.CreateGlobalString (
         "Null pointer dereferencing at: " + bufferName + ":"
         + std::to_string (lineCol.first) + ":" + std::to_string (lineCol.second) + '\n');
     auto *printfFunc = _mod->getFunction ("printf");

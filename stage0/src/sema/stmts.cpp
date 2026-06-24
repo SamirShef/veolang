@@ -249,6 +249,7 @@ Sema::declareFunc (FuncDef *fd, hir::MangleKind mangleKind) {
             = std::ranges::find_if (candidates, [&] (const std::unique_ptr<Function> &f) {
                   return func == *f;
               });
+        it->get ()->AST = fd;
         _genericFuncs.emplace (it->get (), fd);
     }
 }
@@ -875,6 +876,7 @@ Sema::declareImplMethod (
             [&] (const std::unique_ptr<symbols::Method> &method) {
                 return *method == *candidates.back ();
             });
+        it->get ()->Func->AST = fd;
         _genericMethods.emplace (it->get (), fd);
     }
 }
@@ -954,7 +956,11 @@ Sema::analyzeImplMethodDef (
     for (auto &f : candidates->Candidates) {
         if (f->Func->Args == fd->Args ()) {
             m = f.get ();
+            break;
         }
+    }
+    if (m->IsGeneric) {
+        return;
     }
 
     auto *methodNode = m->IsGeneric ? nullptr : _methods.at (m);
@@ -962,7 +968,7 @@ Sema::analyzeImplMethodDef (
     _builder.SetInsertionPoint (entry);
 
     std::vector<hir::VarDef *> args;
-    args.reserve (fd->Args ().size () + (method.IsStatic ? 1 : 0));
+    args.reserve (fd->Args ().size () + (method.IsStatic ? 0 : 1));
     if (!method.IsStatic) {
         auto *node = _builder.CreateVariable (
             basic::NameObj ("this", fd->Name ().Start, fd->Name ().End),
@@ -997,7 +1003,8 @@ Sema::analyzeImplMethodDef (
         methodNode->Args () = std::move (args);
     }
 
-    _insideMethod = { m, targetType };
+    auto oldInsideMethod = _insideMethod;
+    _insideMethod        = { m, targetType };
     _funcRetTypes.push (fd->RetType ());
     _vars.emplace_back ();
 
@@ -1044,7 +1051,7 @@ Sema::analyzeImplMethodDef (
 
     _vars.pop_back ();
     _funcRetTypes.pop ();
-    _insideMethod = std::nullopt;
+    _insideMethod = oldInsideMethod;
 }
 
 void
@@ -1357,6 +1364,7 @@ Sema::analyzeExternFuncDef (ast::FuncDef *fd, hir::MangleKind mangleKind) {
             = std::ranges::find_if (candidates, [&] (const std::unique_ptr<Function> &f) {
                   return func == *f;
               });
+        it->get ()->AST = fd;
         _genericFuncs.emplace (it->get (), fd);
     }
 }
@@ -1427,6 +1435,8 @@ Sema::analyzeImportStmt (ast::ImportStmt *is) {
                     func.get (),
                     func->MangleKind);
                 _funcs.emplace (func.get (), funcNode);
+            } else {
+                _genericFuncs.emplace (func.get (), func->AST);
             }
         }
     }
@@ -1488,6 +1498,8 @@ Sema::analyzeImportStmt (ast::ImportStmt *is) {
                         targetType,
                         method->IsStatic);
                     _methods.emplace (method.get (), methodNode);
+                } else {
+                    _genericMethods.emplace (method.get (), method->Func->AST);
                 }
             }
         }
@@ -1558,6 +1570,8 @@ Sema::analyzeImportStmt (ast::ImportStmt *is) {
                     _methods.emplace (newMethod.get (), methodNode);
                     _mod->PrimitiveMethods[type][name].Candidates.emplace_back (
                         std::move (newMethod));
+                } else {
+                    _genericMethods.emplace (method.get (), method->Func->AST);
                 }
             }
         }

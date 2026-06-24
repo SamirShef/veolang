@@ -1,4 +1,5 @@
 #pragma once
+#include <ast/context.h>
 #include <basic/symbols/module.h>
 #include <basic/types/pool.h>
 #include <driver/cli_options.h>
@@ -58,6 +59,7 @@ Compile (
     const fs::path     &objPath,
     symbols::Module    *mod,
     basic::TypePool    &typePool,
+    ast::Context       &astContext,
     const llvm::Triple &triple);
 
 }

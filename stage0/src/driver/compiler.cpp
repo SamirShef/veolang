@@ -215,6 +215,7 @@ Compile (
     const fs::path     &objPath,
     symbols::Module    *mod,
     TypePool           &typePool,
+    ast::Context       &astContext,
     const llvm::Triple &triple) {
     fs::path filePathInBuild
         = projectPath / ("build/targets/" + triple.getTriple () + "/obj")
@@ -232,10 +233,9 @@ Compile (
     }
     unsigned bufferId = mgr.AddNewSourceBuffer (std::move (*bufferOrErr), llvm::SMLoc ());
 
-    ast::Context astContext;
-    Lexer        lex (diag, mgr, bufferId);
-    Parser       parser (diag, lex, typePool, astContext);
-    ParseResult  parseRes = parser.Parse ();
+    Lexer       lex (diag, mgr, bufferId);
+    Parser      parser (diag, lex, typePool, astContext);
+    ParseResult parseRes = parser.Parse ();
     if (diag.HasErrors ()) {
         parseRes.HasErrors = true;
     }

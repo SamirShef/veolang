@@ -1,3 +1,6 @@
 [package]
 name = "veoc"
 entry = "src/main.veo"
+
+[c]
+sources = ["src/std/fs_runtime.c"]

@@ -423,7 +423,7 @@ Sema::analyzeUnaryExpr (UnaryExpr *ue, Type *expectedType) {
 
     switch (op) {
     case UnOp::Minus:
-        if (!rhs.Val->Type->IsInteger () && !rhs.Val->Type->IsFloating ()) {
+        if (!rhs.Val->Type->IsNumber ()) {
             _diag
                 .Report (
                     DiagCode::ECannotApplyOp,

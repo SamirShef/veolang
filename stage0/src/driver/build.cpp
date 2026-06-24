@@ -58,6 +58,7 @@ BuildDriver::Build () {
     auto artefactDir = manif.ManifestPath.parent_path ()
                        / ("build/targets/" + targetTripleStr + "/obj");
 
+    ast::Context          astContext;
     basic::TypePool       typePool;
     bitcode::Serializer   serializer;
     bitcode::Deserializer deserializer (typePool);
@@ -94,8 +95,14 @@ BuildDriver::Build () {
 
         llvm::errs () << "  Compilation module " << mod->Name << '\n';
 
-        auto compileRes
-            = Compile (_projectRoot, compileUnit, objPath, mod, typePool, triple);
+        auto compileRes = Compile (
+            _projectRoot,
+            compileUnit,
+            objPath,
+            mod,
+            typePool,
+            astContext,
+            triple);
         if (!compileRes.Success) {
             exit (1);
         }
