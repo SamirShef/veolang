@@ -15,12 +15,12 @@ test_func (Parser, ForEmptyCond) {
     assert_diag (
         context.Diag.Builders ()[0],
         diagnostic::DiagCode::EExpectedExpr,
-        "expected expression, found ';'",
+        "expected expression, found ','",
         diagnostic::Severity::Error);
     assert_diag (
         context.Diag.Builders ()[1],
-        diagnostic::DiagCode::EExpectedExpr,
-        "expected expression, found '{'",
+        diagnostic::DiagCode::EUnexpectedToken,
+        "expected ',', found 'break'",
         diagnostic::Severity::Error);
     assert_diag (
         context.Diag.Builders ()[2],

@@ -158,3 +158,29 @@ impl ToString for usize {
         return s;
     }
 }
+
+impl ToString for i32 {
+    pub func to_string(alloc: mem.Allocator): String {
+        let val = *this;
+        if val == 0 {
+            return String.from(alloc, "0");
+        }
+
+        let s: String;
+        if val < 0 {
+            s.append(alloc, '-'.(u8));
+            val = -val;
+        }
+        for val != 0 {
+            s.append(alloc, '0'.(u8) + (val % 10uz).(u8));
+            val /= 10;
+        }
+        for let i = 0uz, i < s.len() / 2uz, i += 1 {
+            let i_from_end = s.len() - 1uz - i;
+            let tmp = s.get(i).unwrap();
+            s.set(i, s.get(i_from_end).unwrap());
+            s.set(i_from_end, tmp);
+        }
+        return s;
+    }
+}

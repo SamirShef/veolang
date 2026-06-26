@@ -11,16 +11,11 @@ test_func (Parser, ForMissingSemi) {
     assert_eq (res.HasErrors, true);
     const auto &expectedSnaphot = "";
     assert_snaphot_eq (snaphot, expectedSnaphot);
-    assert_eq (context.Diag.Builders ().size (), 2);
+    assert_eq (context.Diag.Builders ().size (), 1);
     assert_diag (
         context.Diag.Builders ()[0],
         diagnostic::DiagCode::EUnexpectedToken,
-        "expected ';', found 'i'",
-        diagnostic::Severity::Error);
-    assert_diag (
-        context.Diag.Builders ()[1],
-        diagnostic::DiagCode::EUnexpectedToken,
-        "expected ';', found '{'",
+        "expected ',', found 'i'",
         diagnostic::Severity::Error);
     return true;
 }
