@@ -9,19 +9,19 @@ pub struct String {
 }
 
 impl String {
-    pub static func from(alloc: mem.Allocator, str: *u8): This {
+    pub static func from(alloc: mem.Allocator, str: *u8): String {
         let len = sys.strlen(str);
         let cap = len + 1uz;
         let data = alloc.alloc(@size_of(u8) * cap);
-        for let i = 0uz; i < len; i += 1 {
+        for let i = 0uz, i < len, i += 1 {
             *(data + i) = *(str + i);
         }
         *(data + len) = 0u8;
-        return This { data: data, len: len, cap: cap };
+        return String { data: data, len: len, cap: cap };
     }
 
-    pub static func init(data: *u8, len: usize, cap: usize): This {
-        return This { data: data, len: len, cap: cap };
+    pub static func init(data: *u8, len: usize, cap: usize): String {
+        return String { data: data, len: len, cap: cap };
     }
 
     pub func append(alloc: mem.Allocator, other: String) {
@@ -29,7 +29,7 @@ impl String {
             this.cap = math.max(this.cap * 2uz, this.len + other.len() + 1uz);
             this.data = alloc.realloc(this.data, this.cap);
         }
-        for let i = 0uz; i < other.len(); i += 1 {
+        for let i = 0uz, i < other.len(), i += 1 {
             *(this.data + this.len + i) = *(other.data() + i);
         }
         this.len += other.len();
@@ -42,7 +42,7 @@ impl String {
             this.cap = math.max(this.cap * 2uz, this.len + other_len + 1uz);
             this.data = alloc.realloc(this.data, this.cap);
         }
-        for let i = 0uz; i < other_len; i += 1 {
+        for let i = 0uz, i < other_len, i += 1 {
             *(this.data + this.len + i) = *(other + i);
         }
         this.len += other_len;
@@ -73,13 +73,14 @@ impl String {
 
     pub func set(i: usize, c: u8) {
         if i >= this.len {
-            let alloc: mem.MallocAllocator;
-            let msg = String.from(alloc, "index out of bounds in String.set (index: ");
-            msg.append(alloc, i.to_string(alloc));
-            msg.append(alloc, ", length: ");
-            msg.append(alloc, this.len.to_string(alloc));
-            msg.append(alloc, ")");
-            panic(msg.data());
+            sys.write(2, "veo panic: ", 11uz);
+            sys.write(2, "index out of bounds in String.set (index: ", 42uz);
+            sys.__veo_print_u64(2, i.(u64));
+            sys.write(2, ", length: ", 10uz);
+            sys.__veo_print_u64(2, this.len.(u64));
+            sys.write(2, ")", 1uz);
+            sys.write(2, "\naborting execution...\n", 23uz);
+            sys.exit(1);
         }
         *(this.data + i) = c;
     }
@@ -98,12 +99,12 @@ pub struct OptionU8 {
 }
 
 impl OptionU8 {
-    pub static func some(val: u8): This {
-        return This { has_val: true, val: val };
+    pub static func some(val: u8): OptionU8 {
+        return OptionU8 { has_val: true, val: val };
     }
 
-    pub static func none(): This {
-        return This { has_val: false };
+    pub static func none(): OptionU8 {
+        return OptionU8 { has_val: false };
     }
 
     pub func has_val(): bool {
@@ -144,11 +145,11 @@ impl ToString for usize {
         }
 
         let s: String;
-        for val != 0uz; {
+        for val != 0uz {
             s.append(alloc, '0'.(u8) + (val % 10uz).(u8));
             val /= 10uz;
         }
-        for let i = 0uz; i < s.len() / 2uz; i += 1 {
+        for let i = 0uz, i < s.len() / 2uz, i += 1 {
             let i_from_end = s.len() - 1uz - i;
             let tmp = s.get(i).unwrap();
             s.set(i, s.get(i_from_end).unwrap());

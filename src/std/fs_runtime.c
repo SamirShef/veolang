@@ -2,12 +2,12 @@
 #include <stdio.h>
 
 void *
-veo_fs_open (const char *path, const char *mode) {
+__veo_fs_open (const char *path, const char *mode) {
     return (void *) fopen (path, mode);
 }
 
 int32_t
-veo_fs_close (void *handle) {
+__veo_fs_close (void *handle) {
     if (!handle) {
         return -1;
     }
@@ -15,7 +15,7 @@ veo_fs_close (void *handle) {
 }
 
 int64_t
-veo_fs_read (void *handle, void *buf, uint64_t size) {
+__veo_fs_read (void *handle, void *buf, uint64_t size) {
     if (!handle) {
         return -1;
     }
@@ -23,7 +23,7 @@ veo_fs_read (void *handle, void *buf, uint64_t size) {
 }
 
 int64_t
-veo_fs_write (void *handle, const void *buf, uint64_t size) {
+__veo_fs_write (void *handle, const void *buf, uint64_t size) {
     if (!handle) {
         return -1;
     }
@@ -31,7 +31,7 @@ veo_fs_write (void *handle, const void *buf, uint64_t size) {
 }
 
 int64_t
-veo_fs_seek (void *handle, int64_t offset, int32_t whence) {
+__veo_fs_seek (void *handle, int64_t offset, int32_t whence) {
     if (!handle) {
         return -1;
     }
@@ -39,7 +39,7 @@ veo_fs_seek (void *handle, int64_t offset, int32_t whence) {
 }
 
 int64_t
-veo_fs_tell (void *handle) {
+__veo_fs_tell (void *handle) {
     if (!handle) {
         return -1;
     }

@@ -7,9 +7,9 @@ pub struct File {
 }
 
 impl File {
-    pub static func open(path: *u8, mode: *u8): This {
-        let h = sys.veo_fs_open(path, mode);
-        return This { handle: h };
+    pub static func open(path: *u8, mode: *u8): File {
+        let h = sys.__veo_fs_open(path, mode);
+        return File { handle: h };
     }
 
     pub func is_open(): bool {
@@ -20,7 +20,7 @@ impl File {
         if this.handle == nil {
             return 0;
         }
-        let res = sys.veo_fs_close(this.handle);
+        let res = sys.__veo_fs_close(this.handle);
         this.handle = nil;
         return res;
     }
@@ -29,14 +29,14 @@ impl File {
         if this.handle == nil {
             return -1.(isize);
         }
-        return sys.veo_fs_read(this.handle, buf, size);
+        return sys.__veo_fs_read(this.handle, buf, size);
     }
 
     pub func write(buf: *u8, size: usize): isize {
         if this.handle == nil {
             return -1iz;
         }
-        return sys.veo_fs_write(this.handle, buf, size);
+        return sys.__veo_fs_write(this.handle, buf, size);
     }
 
     pub func size(): isize {
@@ -44,10 +44,10 @@ impl File {
             return -1iz;
         }
 
-        let current = sys.veo_fs_tell(this.handle);
-        sys.veo_fs_seek(this.handle, 0.(isize), 2); // SEEK_END
-        let total = sys.veo_fs_tell(this.handle);
-        sys.veo_fs_seek(this.handle, current, 0);   // SEEK_SET
+        let current = sys.__veo_fs_tell(this.handle);
+        sys.__veo_fs_seek(this.handle, 0.(isize), 2); // SEEK_END
+        let total = sys.__veo_fs_tell(this.handle);
+        sys.__veo_fs_seek(this.handle, current, 0);   // SEEK_SET
 
         return total;
     }
@@ -65,7 +65,7 @@ impl File {
         let size = file_size.(usize);
 
         let raw_data = alloc.alloc(@size_of(u8) * (size + 1uz));
-        let read_bytes = sys.veo_fs_read(this.handle, raw_data, size);
+        let read_bytes = sys.__veo_fs_read(this.handle, raw_data, size);
 
         if read_bytes < 0iz {
             alloc.destroy(raw_data);

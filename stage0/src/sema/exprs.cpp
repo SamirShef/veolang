@@ -1306,9 +1306,12 @@ Sema::generateGenericMethod (
         oldMethod->Access (),
         oldMethod->Start (),
         oldMethod->End ());
-    auto newMethod = ast::Method (newFunc, (*method)->IsStatic);
+    auto  newMethod = ast::Method (newFunc, (*method)->IsStatic);
+    auto *oldMod    = _mod;
+    _mod            = (*method)->Func->Parent;
     declareImplMethod (newMethod, s, targetType);
     analyzeImplMethodDef (newMethod, s, targetType);
+    _mod = oldMod;
     _builder.SetInsertionPoint (lastBB);
     *method = resolveBestOverload (candidates, argTypes, mc->Start (), mc->End ());
     return method != nullptr;

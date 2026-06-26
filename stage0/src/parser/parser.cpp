@@ -247,26 +247,18 @@ Parser::parseForLoop () {
     Stmt       *iteration = nullptr;
 
     if (!check (TokenKind::LBrace)) {
-        if (!match (TokenKind::Semi)) {
-            if (check (TokenKind::Let)) {
-                indexator = parseStmt (); // consume semi
-                if (indexator == nullptr) {
-                    return nullptr;
-                }
+        if (_curTok.Kind == TokenKind::Let) {
+            indexator = parseStmt (false);
+            if (!expectTok (TokenKind::Comma, ",")) {
+                return nullptr;
             }
         }
         cond = parseExpr ();
-        if (cond == nullptr) {
-            return nullptr;
-        }
-        if (!expectSemi ()) {
-            return nullptr;
-        }
-        if (!check (TokenKind::LBrace)) {
-            iteration = parseStmt (false);
-            if (iteration == nullptr) {
+        if (_curTok.Kind != TokenKind::LBrace) {
+            if (!expectTok (TokenKind::Comma, ",")) {
                 return nullptr;
             }
+            iteration = parseStmt (false);
         }
     }
 
