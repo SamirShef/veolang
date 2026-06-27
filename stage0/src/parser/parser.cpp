@@ -253,7 +253,7 @@ Parser::parseForLoop () {
                 return nullptr;
             }
         }
-        cond = parseExpr ();
+        cond = parseExpr ((int) Precedence::Lowest, false);
         if (_curTok.Kind != TokenKind::LBrace) {
             if (!expectTok (TokenKind::Comma, ",")) {
                 return nullptr;

@@ -3,7 +3,7 @@
 
 #ifdef _WIN32
 
-#inclde < io.h>
+#include <io.h>
 #define sys_write _write
 
 #else

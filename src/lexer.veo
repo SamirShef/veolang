@@ -27,10 +27,12 @@ impl Token {
 impl std.ToString for Token {
     pub func to_string(alloc: mem.Allocator): std.String {
         let s: std.String;
-        s.append(alloc, std.i32_to_string(alloc, this.kind));
+        let kind_str = std.i32_to_string(alloc, this.kind);
+        s.append(alloc, kind_str);
         s.append(alloc, '('.(u8));
         s.append(alloc, this.val);
         s.append(alloc, ')'.(u8));
+        kind_str.free(alloc);
         return s;
     }
 }

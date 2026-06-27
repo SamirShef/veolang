@@ -220,7 +220,7 @@ impl ListString {
 
     pub func add(alloc: mem.Allocator, val: String) {
         if this.cap < this.count + 1uz {
-            this.cap *= 2;
+            this.cap = math.max(this.cap * 2uz, this.count + 1uz);
             this.data = alloc.realloc(
                             this.data.(*u8),
                             this.cap * @size_of(String)
@@ -279,19 +279,36 @@ pub func i32_to_string(alloc: mem.Allocator, val: i32): String {
     }
 
     let s: String;
+    let is_neg = false;
+
     if val < 0 {
         s.append(alloc, '-'.(u8));
-        val = -val;
+        is_neg = true;
     }
+
     for val != 0 {
-        s.append(alloc, '0'.(u8) + (val % 10).(u8));
+        let rem = val % 10;
+        if rem < 0 {
+            rem = -rem;
+        }
+        s.append(alloc, '0'.(u8) + rem.(u8));
         val /= 10;
     }
-    for let i = 0uz, i < s.len() / 2uz, i += 1 {
-        let i_from_end = s.len() - 1uz - i;
-        let tmp = s.get(i).unwrap();
-        s.set(i, s.get(i_from_end).unwrap());
-        s.set(i_from_end, tmp);
+
+    let left = 0uz;
+    if is_neg {
+        left = 1uz;
     }
+
+    let right = s.len() - 1uz;
+    for left < right {
+        let tmp = s.get(left).unwrap();
+        s.set(left, s.get(right).unwrap());
+        s.set(right, tmp);
+
+        left += 1uz;
+        right -= 1uz;
+    }
+
     return s;
 }
