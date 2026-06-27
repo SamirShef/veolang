@@ -645,8 +645,11 @@ Sema::generateGenericFunc (
         oldFunc->Access (),
         oldFunc->Start (),
         oldFunc->End ());
+    auto *oldMod = _mod;
+    _mod         = (*func)->Parent;
     declareFunc (newFunc);
     analyzeFuncDef (newFunc, true);
+    _mod = oldMod;
     _builder.SetInsertionPoint (lastBB);
     *func = resolveBestOverload (candidates, argTypes, fc->Start (), fc->End ());
     return func != nullptr;

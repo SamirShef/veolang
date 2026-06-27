@@ -1,7 +1,6 @@
 #include <basic/types/all.h>
 #include <driver/module_loader.h>
 #include <hir/mangle_kind.h>
-#include <llvm/Support/raw_ostream.h>
 #include <sema/sema.h>
 
 namespace veo {
@@ -273,6 +272,9 @@ Sema::analyzeFuncDef (FuncDef *fd, bool generatingGeneric) {
         if (f->Args == fd->Args ()) {
             func = f.get ();
         }
+    }
+    if (func->IsGeneric) {
+        return;
     }
     auto *funcNode = func->IsGeneric ? nullptr : _funcs.at (func);
     auto *entry    = _builder.CreateBasicBlock (funcNode, "entry");
