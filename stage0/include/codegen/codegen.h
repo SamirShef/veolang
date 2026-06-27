@@ -82,6 +82,9 @@ public:
         generateRuntime ();
 
         for (auto &s : _hirStructs) {
+            declareStruct (s);
+        }
+        for (auto &s : _hirStructs) {
             generateStruct (s);
         }
         for (auto &f : _hirFuncs) {
@@ -125,6 +128,9 @@ private:
 
     void
     generateBranch (hir::Branch *br);
+
+    void
+    declareStruct (hir::StructDef *sd);
 
     void
     generateStruct (hir::StructDef *sd);

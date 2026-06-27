@@ -7,11 +7,18 @@ import std.fs;
 import std.mem;
 import std.io;
 import std.sys;
+import llvm.source_mgr;
 
 let alloc: mem.MallocAllocator;
 
 func main(): i32 {
-    let tok = lexer.Token.new(lexer.TOK_ID, std.String.from(alloc, "foo"), basic.Span{});
-    io.println(tok.to_string(alloc));
+    let main_file = fs.File.open("src/main.veo", "r");
+    if !main_file.is_open() {
+        std.panic("Cannot open file src/main.veo");
+    }
+    let content = main_file.read_all(alloc);
+    let mgr = source_mgr.SourceMgr.new(alloc);
+    let buffer_id = mgr.add_buffer(alloc, content);
+    let lexer = lexer.Lexer.new(mgr, buffer_id);
     return 0;
 }

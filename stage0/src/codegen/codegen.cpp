@@ -166,6 +166,12 @@ CodeGen::generateBranch (Branch *br) {
 }
 
 void
+CodeGen::declareStruct (hir::StructDef *sd) {
+    const auto &name = Mangler::MangleStruct (sd, sd->GetMangleKind ());
+    llvm::StructType::create (_ctx, name);
+}
+
+void
 CodeGen::generateStruct (hir::StructDef *sd) {
     const auto               &name = Mangler::MangleStruct (sd, sd->GetMangleKind ());
     std::vector<llvm::Type *> fields;
@@ -186,7 +192,8 @@ CodeGen::generateStruct (hir::StructDef *sd) {
                 fieldName);
         }
     }
-    llvm::StructType::create (_ctx, fields, name);
+    auto *structType = llvm::StructType::getTypeByName (_ctx, name);
+    structType->setBody (fields);
 }
 
 llvm::Value *

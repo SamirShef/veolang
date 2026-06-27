@@ -36,6 +36,18 @@ impl String {
         *(this.data + this.len) = 0u8;
     }
 
+    pub func append(alloc: mem.Allocator, other: StringView) {
+        if this.cap < this.len + other.len() + 1uz {
+            this.cap = math.max(this.cap * 2uz, this.len + other.len() + 1uz);
+            this.data = alloc.realloc(this.data, this.cap);
+        }
+        for let i = 0uz, i < other.len(), i += 1 {
+            *(this.data + this.len + i) = *(other.data() + i);
+        }
+        this.len += other.len();
+        *(this.data + this.len) = 0u8;
+    }
+
     pub func append(alloc: mem.Allocator, other: *u8) {
         let other_len = sys.strlen(other);
         if this.cap < this.len + other_len + 1uz {
@@ -93,6 +105,29 @@ impl String {
     }
 }
 
+pub struct StringView {
+    data: *u8;
+    len: usize;
+}
+
+impl StringView {
+    pub static func from(data: *u8): StringView {
+        return StringView { data: data, len: sys.strlen(data) };
+    }
+
+    pub static func from(data: *u8, len: usize): StringView {
+        return StringView { data: data, len: len };
+    }
+
+    pub func data(): *u8 {
+        return this.data;
+    }
+
+    pub func len(): usize {
+        return this.len;
+    }
+}
+
 pub struct OptionU8 {
     has_val: bool;
     val: u8;
@@ -126,11 +161,93 @@ impl OptionU8 {
     }
 }
 
+pub struct OptionString {
+    has_val: bool;
+    val: String;
+}
+
+impl OptionString {
+    pub static func some(val: String): OptionString {
+        return OptionString { has_val: true, val: val };
+    }
+
+    pub static func none(): OptionString {
+        return OptionString { has_val: false };
+    }
+
+    pub func has_val(): bool {
+        return this.has_val;
+    }
+
+    pub func unwrap(): String {
+        if !this.has_val {
+            panic("Called unwrap() on a 'None' value (Option is empty)");
+        }
+        return this.val;
+    }
+
+    pub func unwrap_or(err_val: String): String {
+        if !this.has_val {
+            return err_val;
+        }
+        return this.val;
+    }
+}
+
 pub func panic(err: *u8) {
     sys.write(2, "veo panic: ", 11uz);
     sys.write(2, err, sys.strlen(err));
     sys.write(2, "\naborting execution...\n", 23uz);
     sys.exit(1);
+}
+
+pub struct ListString {
+    data: *String;
+    count: usize;
+    cap: usize;
+}
+
+impl ListString {
+    pub static func new(alloc: mem.Allocator): ListString {
+        let cap = 4uz;
+        let data = alloc.alloc(cap * @size_of(String)).(*String);
+        return ListString {
+            data: data,
+            count: 0,
+            cap: cap
+        };
+    }
+
+    pub func add(alloc: mem.Allocator, val: String) {
+        if this.cap < this.count + 1uz {
+            this.cap *= 2;
+            this.data = alloc.realloc(
+                            this.data.(*u8),
+                            this.cap * @size_of(String)
+                        ).(*String);
+        }
+        *(this.data + this.count) = val;
+        this.count += 1;
+    }
+
+    pub func get(index: usize): OptionString {
+        if index < this.count {
+            return OptionString.some(*(this.data + index));
+        }
+        return OptionString.none();
+    }
+
+    pub func data(): *String {
+        return this.data;
+    }
+
+    pub func count(): usize {
+        return this.count;
+    }
+
+    pub func capacity(): usize {
+        return this.cap;
+    }
 }
 
 pub trait ToString {
