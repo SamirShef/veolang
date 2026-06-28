@@ -1,7 +1,7 @@
 extern "C" {
     /**
-     * @brief prints UTF-8 character to stdout
-     * @param c: UTF-8 character
+     * @brief prints character to stdout
+     * @param c: character
      * @return passed character on success or EOF on failure
      */
     pub func putchar(c: i32): i32;
@@ -106,7 +106,7 @@ extern "C" {
      * @brief prints u64 number to passed file descriptor
      * @param fd: file descriptor
      * @param val: u64 number for printing
-     * @note from Veo C-bridge runtime (fs_runtime.c)
+     * @note from Veo C-bridge runtime (runtime.c)
      */
     pub func __veo_print_u64(fd: i32, val: u64);
 
@@ -114,7 +114,7 @@ extern "C" {
      * @brief prints i64 number to passed file descriptor
      * @param fd: file descriptor
      * @param val: i64 number for printing
-     * @note from Veo C-bridge runtime (fs_runtime.c)
+     * @note from Veo C-bridge runtime (runtime.c)
      */
     pub func __veo_print_i64(fd: i32, val: i64);
 
@@ -122,7 +122,7 @@ extern "C" {
      * @brief prints f64 number to passed file descriptor
      * @param fd: file descriptor
      * @param val: f64 number for printing
-     * @note from Veo C-bridge runtime (fs_runtime.c)
+     * @note from Veo C-bridge runtime (runtime.c)
      */
     pub func __veo_print_f64(fd: i32, val: f64);
 }

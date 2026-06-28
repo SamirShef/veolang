@@ -526,13 +526,38 @@ pub func i32_to_string(alloc: mem.Allocator, val: i32): String {
     return s;
 }
 
-impl char {
-    /**
-     * @brief checks if the character is an ASCII alphabetic letter
-     * @return true if the character is within 'A'-'Z' or 'a'-'z', false otherwise
-     */
-    pub func is_ascii_letter(): bool {
-        let val = *this;
-        return val >= 'A' && val <= 'Z' || val >= 'a' && val <= 'z';
-    }
+/**
+ * @brief checks if the character is an ASCII alphabetic letter
+ * @param val: character
+ * @return true if the character is within 'A'-'Z' or 'a'-'z', false otherwise
+ */
+pub func is_ascii_letter(val: char): bool {
+    return val >= 'A' && val <= 'Z' || val >= 'a' && val <= 'z';
+}
+
+/**
+ * @brief checks if the character is an ASCII digit
+ * @param val: character
+ * @return true if the character is within '0'-'9', false otherwise
+ */
+pub func is_ascii_digit(val: char): bool {
+    return val >= '0' && val <= '9';
+}
+
+/**
+ * @brief checks if the character is an ASCII alphabetic letter or digit
+ * @param val: character
+ * @return true if the character is within 'A'-'Z' or 'a'-'z' or '0'-'9', false otherwise
+ */
+pub func is_ascii_letter_or_digit(val: char): bool {
+    return is_ascii_letter(val) || is_ascii_digit(val);
+}
+
+/**
+ * @brief checks if the character is an ASCII white-space
+ * @param val: character
+ * @return true if the character is within 9-13 codes or ' ', false otherwise
+ */
+pub func is_ascii_whitespace(val: char): bool {
+    return val >= 9.(char) && val <= 13.(char) || val == ' ';
 }
