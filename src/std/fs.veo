@@ -2,20 +2,37 @@ import std;
 import std.mem;
 import std.sys;
 
+/**
+ * @brief file in file system
+ */
 pub struct File {
     handle: *u8;
 }
 
 impl File {
+    /**
+     * @brief opens file by path
+     * @param path: path to the file (from disk root or current directory)
+     * @param mode: mode for opening file (C-standard)
+     * @return opened file
+     */
     pub static func open(path: *u8, mode: *u8): File {
         let h = sys.__veo_fs_open(path, mode);
         return File { handle: h };
     }
 
+    /**
+     * @brief determines whether the file is open
+     * @return is the file open
+     */
     pub func is_open(): bool {
         return this.handle != nil;
     }
 
+    /**
+     * @brief closes an open file stream and flushes any unwritten buffered data
+     * @return 0 on success or EOF on failure
+     */
     pub func close(): i32 {
         if this.handle == nil {
             return 0;
@@ -25,6 +42,12 @@ impl File {
         return res;
     }
 
+    /**
+     * @brief reads opened file content to an external buffer of some size
+     * @param buf: external buffer for reading
+     * @param size: size of content for reading
+     * @return number of bytes read on success or -1 if file is closed
+     */
     pub func read(buf: *u8, size: usize): isize {
         if this.handle == nil {
             return -1.(isize);
@@ -32,6 +55,12 @@ impl File {
         return sys.__veo_fs_read(this.handle, buf, size);
     }
 
+    /**
+     * @brief writes external buffer of some size into opened file
+     * @param buf: external buffer for writing
+     * @param size: size of content for writing
+     * @return number of bytes read on success or -1 if file is closed
+     */
     pub func write(buf: *u8, size: usize): isize {
         if this.handle == nil {
             return -1iz;
@@ -39,6 +68,10 @@ impl File {
         return sys.__veo_fs_write(this.handle, buf, size);
     }
 
+    /**
+     * @brief size of opened file
+     * @return the total file size in bytes on success, or -1 if the file is closed
+     */
     pub func size(): isize {
         if this.handle == nil {
             return -1iz;
@@ -52,6 +85,12 @@ impl File {
         return total;
     }
 
+    /**
+     * @brief reads all of opened file content
+     * @param alloc: external allocator
+     * @return allocated to std.String file content
+     * @note returns empty string if file is closed
+     */
     pub func read_all(alloc: mem.Allocator): std.String {
         if !this.is_open() {
             return std.String.from(alloc, "");
