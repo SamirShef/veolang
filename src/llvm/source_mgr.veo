@@ -29,7 +29,7 @@ impl SourceMgr {
      * @return the unique ID assigned to the newly added buffer
      */
     pub func add_buffer(alloc: mem.Allocator, buffer: std.String): usize {
-        let id = this.buffers.count();
+        let id = this.buffers.len();
         this.buffers.add(alloc, buffer);
         return id;
     }

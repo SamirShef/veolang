@@ -447,7 +447,7 @@ pub func panic(err: *u8) {
  */
 pub struct ListString {
     data: *String;
-    count: usize;
+    len: usize;
     cap: usize;
 }
 
@@ -463,7 +463,7 @@ impl ListString {
         let data = alloc.alloc(cap * @size_of(String)).(*String);
         return ListString {
             data: data,
-            count: 0,
+            len: 0,
             cap: cap
         };
     }
@@ -476,15 +476,15 @@ impl ListString {
      * @note if capacity less then needs, it increases by 2 times
      */
     pub func add(alloc: mem.Allocator, val: String) {
-        if this.cap < this.count + 1uz {
-            this.cap = math.max(this.cap * 2uz, this.count + 1uz);
+        if this.cap < this.len + 1uz {
+            this.cap = math.max(this.cap * 2uz, this.len + 1uz);
             this.data = alloc.realloc(
                             this.data.(*u8),
                             this.cap * @size_of(String)
                         ).(*String);
         }
-        *(this.data + this.count) = val;
-        this.count += 1;
+        *(this.data + this.len) = val;
+        this.len += 1;
     }
 
     /**
@@ -493,7 +493,7 @@ impl ListString {
      * @return optional element value (some if index in bounds and none otherwise)
      */
     pub func get(index: usize): OptionString {
-        if index < this.count {
+        if index < this.len {
             return OptionString.some(*(this.data + index));
         }
         return OptionString.none();
@@ -508,11 +508,11 @@ impl ListString {
     }
 
     /**
-     * @brief list elements count
-     * @return list elements count
+     * @brief list lenght
+     * @return list lenght
      */
-    pub func count(): usize {
-        return this.count;
+    pub func len(): usize {
+        return this.len;
     }
 
     /**
