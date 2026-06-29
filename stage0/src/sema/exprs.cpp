@@ -334,7 +334,7 @@ Sema::analyzeBinaryExpr (BinaryExpr *be, Type *expectedType) {
         return {};
     }
     if (op >= BinOp::BitAnd && op <= BinOp::BitOr) {
-        if (!lhs.Val->Type->IsInteger () || !rhs.Val->Type->IsInteger ()) {
+        if (!lhs.Val->Type->IsIntOrSize () || !rhs.Val->Type->IsIntOrSize ()) {
             _diag
                 .Report (
                     DiagCode::ECannotApplyOp,

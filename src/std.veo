@@ -131,6 +131,9 @@ impl String {
      */
     pub func destroy(alloc: mem.Allocator) {
         alloc.destroy(this.data);
+        this.data = nil;
+        this.len = 0;
+        this.cap = 0;
     }
 
     /**
@@ -231,6 +234,22 @@ impl StringView {
     pub func len(): usize {
         return this.len;
     }
+
+    pub func compare_to(other: StringView): i32 {
+        if this.len > other.len() {
+            return 1;
+        } else if this.len < other.len() {
+            return -1;
+        }
+        for let i = 0uz, i < this.len(), i += 1 {
+            if *(this.data + i) > *(other.data() + i) {
+                return 1;
+            } else if *(this.data + i) < *(other.data() + i) {
+                return -1;
+            }
+        }
+        return 0;
+    }
 }
 
 /**
@@ -285,6 +304,65 @@ impl OptionU8 {
      * @return value in optional or err_val if haven't
      */
     pub func unwrap_or(err_val: u8): u8 {
+        if !this.has_val {
+            return err_val;
+        }
+        return this.val;
+    }
+}
+
+/**
+ * @brief standard optional value (for i32 type)
+ */
+pub struct OptionI32 {
+    has_val: bool;
+    val: i32;
+}
+
+impl OptionI32 {
+    /**
+     * @brief initialize optional with real value
+     * @param val: real value
+     * @return optional with real value
+     */
+    pub static func some(val: i32): OptionI32 {
+        return OptionI32 { has_val: true, val: val };
+    }
+
+    /**
+     * @brief initialize optional without value
+     * @return optional without value
+     */
+    pub static func none(): OptionI32 {
+        return OptionI32 { has_val: false };
+    }
+
+    /**
+     * @brief is has value
+     * @return true if has value or false otherwise
+     */
+    pub func has_val(): bool {
+        return this.has_val;
+    }
+
+    /**
+     * @brief gets value in optional
+     * @return value in optional
+     * @safety panics if optional does not have value
+     */
+    pub func unwrap(): i32 {
+        if !this.has_val {
+            panic("Called unwrap() on a 'None' value (Option is empty)");
+        }
+        return this.val;
+    }
+
+    /**
+     * @brief gets value in optional
+     * @param err_val: value which returns if optional does not have value
+     * @return value in optional or err_val if haven't
+     */
+    pub func unwrap_or(err_val: i32): i32 {
         if !this.has_val {
             return err_val;
         }

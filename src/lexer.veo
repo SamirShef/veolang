@@ -6,6 +6,8 @@ import std;
 import std.sys;
 import llvm.source_mgr;
 
+let alloc: mem.MallocAllocator;
+
 pub const TOK_ID         =                  0;
 pub const TOK_BOOL       = TOK_ID         + 1;
 pub const TOK_CHAR       = TOK_BOOL       + 1;
@@ -96,6 +98,8 @@ pub const TOK_LT_EQ      = TOK_GT_EQ      + 1;
 pub const TOK_CARET      = TOK_LT_EQ      + 1;
 pub const TOK_UNKNOWN    = TOK_CARET      + 1;
 pub const TOK_EOF        = TOK_UNKNOWN    + 1;
+
+let keywords = init_keywords();
 
 pub struct Token {
     pub kind: i32;
@@ -227,6 +231,19 @@ impl Lexer {
             this.advance();
         }
         let val = std.StringView.from(start, this.cur.(usize) - start.(usize));
+        let keyword = keywords.get(val);
+        if keyword.has_val() {
+            return OptionToken.some(
+                Token.new(
+                    keyword.unwrap(),
+                    val,
+                    basic.Span.new(
+                        smloc.SMLoc.new(start),
+                        smloc.SMLoc.new(this.cur)
+                    )
+                )
+            );
+        }
         return OptionToken.some(
             Token.new(
                 TOK_ID,
@@ -705,4 +722,185 @@ func skip_whitespace(this: *Lexer): OptionToken {
 
 func next_token(this: *Lexer): OptionToken {
     return this.next_token();
+}
+
+const MAP_STATE_EMPTY     = 0;
+const MAP_STATE_OCCUPIED  = 1;
+const MAP_STATE_TOMBSTONE = 2;
+
+struct HashMapStringTokenKindEntry {
+    pub key: std.StringView;
+    pub val: i32;
+    pub state: i32;
+}
+
+pub struct HashMapStringTokenKind {
+    buckets: *HashMapStringTokenKindEntry;
+    len: usize;
+    cap: usize;
+    tompstones_count: usize;
+}
+
+func hash_string(key: std.StringView): u32 {
+    let hash = 2166136261u32;
+    for let i = 0uz, i < key.len(), i += 1 {
+        hash ^= *(key.data() + i);
+        hash *= 16777619u32;
+    }
+    return hash;
+}
+
+impl HashMapStringTokenKind {
+    pub static func new(alloc: mem.Allocator): HashMapStringTokenKind {
+        let cap = 8uz;
+        let buckets = alloc.alloc(cap * @size_of(HashMapStringTokenKindEntry))
+            .(*HashMapStringTokenKindEntry);
+        return HashMapStringTokenKind { buckets: buckets, len: 0uz, cap: cap, tompstones_count: 0uz };
+    }
+
+    func resize(alloc: mem.Allocator, new_cap: usize) {
+        let old_buckets = this.buckets;
+        let old_cap = this.cap;
+
+        let buckets = alloc.alloc(new_cap * @size_of(HashMapStringTokenKindEntry))
+            .(*HashMapStringTokenKindEntry);
+        this.cap = new_cap;
+        this.tompstones_count = 0;
+
+        let mask = new_cap - 1uz;
+        for let i = 0uz, i < old_cap, i += 1 {
+            if (old_buckets + i).state != 1 { // MAP_STATE_OCCUPIED
+                continue;
+            }
+
+            let key = (old_buckets + i).key;
+            let hash = hash_string(key);
+            let index = hash.(usize) & mask;
+            for (buckets + index).state != 0 { // MAP_STATE_EMPTY
+                index = (index + 1uz) & mask;
+            }
+            (buckets + index).key = key;
+            (buckets + index).val = (old_buckets + i).val;
+            (buckets + index).state = 1; // MAP_STATE_OCCUPIED
+        }
+        this.buckets = buckets;
+        alloc.destroy(old_buckets.(*u8));
+    }
+
+    pub func insert(alloc: mem.Allocator, key: std.StringView, val: i32): bool {
+        if (this.len + this.tompstones_count) * 10uz >= this.cap * 7uz {
+            // resize
+            if this.tompstones_count > this.len {
+                this.resize(alloc, this.cap);
+            } else {
+                this.resize(alloc, this.cap * 2uz);
+            }
+        }
+
+        let hash = hash_string(key);
+        let mask = this.cap - 1uz;
+        let index = hash.(usize) & mask;
+        let first_tompstone_idx = (-1).(usize);
+
+        for {
+            let entry = this.buckets + index;
+
+            if entry.state == 0 { // MAP_STATE_EMPTY
+                if first_tompstone_idx != (-1).(usize) {
+                    index = first_tompstone_idx;
+                    entry = this.buckets + index;
+                    this.tompstones_count -= 1;
+                }
+                entry.key = key;
+                entry.val = val;
+                entry.state = 1; // MAP_STATE_OCCUPIED
+                this.len += 1;
+                return true;
+            }
+
+            if entry.state == 1 { // MAP_STATE_OCCUPIED
+                if entry.key.compare_to(key) == 0 {
+                    entry.val = val;
+                    return false;
+                }
+            } else if entry.state == 2 { // MAP_STATE_TOMBSTONE
+                if first_tompstone_idx == (-1).(usize) {
+                    first_tompstone_idx = index;
+                }
+            }
+
+            index = (index + 1uz) & mask;
+        }
+    }
+
+    pub func get(key: std.StringView): std.OptionI32 {
+        let hash = hash_string(key);
+        let mask = this.cap - 1uz;
+        let index = hash.(usize) & mask;
+
+        for {
+            let entry = this.buckets + index;
+            if entry.state == 0 { // MAP_STATE_EMPTY
+                return std.OptionI32.none();
+            }
+
+            if entry.state == 1 && entry.key.compare_to(key) == 0 { // MAP_STATE_OCCUPIED
+                return std.OptionI32.some(entry.val);
+            }
+
+            index = (index + 1uz) & mask;
+        }
+
+        return std.OptionI32.none();
+    }
+
+    pub func len(): usize {
+        return this.len;
+    }
+
+    pub func destroy(alloc: mem.Allocator) {
+        alloc.destroy(this.buckets.(*u8));
+        this.buckets = nil;
+        this.len = 0;
+        this.cap = 0;
+        this.tompstones_count = 0;
+    }
+}
+
+func init_keywords(): HashMapStringTokenKind {
+    let map = HashMapStringTokenKind.new(alloc);
+    map.insert(alloc, std.StringView.from("bool"), TOK_BOOL);
+    map.insert(alloc, std.StringView.from("char"), TOK_CHAR);
+    map.insert(alloc, std.StringView.from("i8"), TOK_I8);
+    map.insert(alloc, std.StringView.from("i16"), TOK_I16);
+    map.insert(alloc, std.StringView.from("i32"), TOK_I32);
+    map.insert(alloc, std.StringView.from("i64"), TOK_I64);
+    map.insert(alloc, std.StringView.from("isize"), TOK_ISIZE);
+    map.insert(alloc, std.StringView.from("u8"), TOK_U8);
+    map.insert(alloc, std.StringView.from("u16"), TOK_U16);
+    map.insert(alloc, std.StringView.from("u32"), TOK_U32);
+    map.insert(alloc, std.StringView.from("u64"), TOK_U64);
+    map.insert(alloc, std.StringView.from("usize"), TOK_USIZE);
+    map.insert(alloc, std.StringView.from("f32"), TOK_F32);
+    map.insert(alloc, std.StringView.from("f64"), TOK_F64);
+    map.insert(alloc, std.StringView.from("let"), TOK_LET);
+    map.insert(alloc, std.StringView.from("const"), TOK_CONST);
+    map.insert(alloc, std.StringView.from("func"), TOK_FUNC);
+    map.insert(alloc, std.StringView.from("return"), TOK_RET);
+    map.insert(alloc, std.StringView.from("if"), TOK_IF);
+    map.insert(alloc, std.StringView.from("else"), TOK_ELSE);
+    map.insert(alloc, std.StringView.from("for"), TOK_FOR);
+    map.insert(alloc, std.StringView.from("break"), TOK_BREAK);
+    map.insert(alloc, std.StringView.from("continue"), TOK_CONT);
+    map.insert(alloc, std.StringView.from("struct"), TOK_STRUCT);
+    map.insert(alloc, std.StringView.from("pub"), TOK_PUB);
+    map.insert(alloc, std.StringView.from("impl"), TOK_IMPL);
+    map.insert(alloc, std.StringView.from("trait"), TOK_TRAIT);
+    map.insert(alloc, std.StringView.from("nil"), TOK_NIL);
+    map.insert(alloc, std.StringView.from("mod"), TOK_MOD);
+    map.insert(alloc, std.StringView.from("import"), TOK_IMPORT);
+    map.insert(alloc, std.StringView.from("static"), TOK_STATIC);
+    map.insert(alloc, std.StringView.from("extern"), TOK_EXTERN);
+    map.insert(alloc, std.StringView.from("@size_of"), TOK_SIZEOF);
+    return map;
 }
