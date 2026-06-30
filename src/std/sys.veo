@@ -49,6 +49,8 @@ extern "C" {
      */
     pub func free(ptr: *u8);
 
+    pub func memcpy(dest_ptr: *u8, src_ptr: *u8, src_size: usize);
+
     /**
      * @brief opens file
      * @param path: path to file (from disk root or current directory)

@@ -53,8 +53,9 @@ impl String {
      */
     pub func append(alloc: mem.Allocator, other: String) {
         if this.cap < this.len + other.len() + 1uz {
+            let old_cap = this.cap;
             this.cap = math.max(this.cap * 2uz, this.len + other.len() + 1uz);
-            this.data = alloc.realloc(this.data, this.cap);
+            this.data = alloc.realloc(this.data, old_cap, this.cap);
         }
         for let i = 0uz, i < other.len(), i += 1 {
             *(this.data + this.len + i) = *(other.data() + i);
@@ -74,8 +75,9 @@ impl String {
      */
     pub func append(alloc: mem.Allocator, other: StringView) {
         if this.cap < this.len + other.len() + 1uz {
+            let old_cap = this.cap;
             this.cap = math.max(this.cap * 2uz, this.len + other.len() + 1uz);
-            this.data = alloc.realloc(this.data, this.cap);
+            this.data = alloc.realloc(this.data, old_cap, this.cap);
         }
         for let i = 0uz, i < other.len(), i += 1 {
             *(this.data + this.len + i) = *(other.data() + i);
@@ -96,8 +98,9 @@ impl String {
     pub func append(alloc: mem.Allocator, other: *u8) {
         let other_len = sys.strlen(other);
         if this.cap < this.len + other_len + 1uz {
+            let old_cap = this.cap;
             this.cap = math.max(this.cap * 2uz, this.len + other_len + 1uz);
-            this.data = alloc.realloc(this.data, this.cap);
+            this.data = alloc.realloc(this.data, old_cap, this.cap);
         }
         for let i = 0uz, i < other_len, i += 1 {
             *(this.data + this.len + i) = *(other + i);
@@ -117,8 +120,9 @@ impl String {
      */
     pub func append(alloc: mem.Allocator, other: u8) {
         if this.cap < this.len + 2uz {
+            let old_cap = this.cap;
             this.cap = math.max(this.cap * 2uz, this.len + 2uz);
-            this.data = alloc.realloc(this.data, this.cap);
+            this.data = alloc.realloc(this.data, old_cap, this.cap);
         }
         *(this.data + this.len) = other;
         this.len += 1;
@@ -477,9 +481,11 @@ impl ListString {
      */
     pub func add(alloc: mem.Allocator, val: String) {
         if this.cap < this.len + 1uz {
+            let old_cap = this.cap;
             this.cap = math.max(this.cap * 2uz, this.len + 1uz);
             this.data = alloc.realloc(
                             this.data.(*u8),
+                            old_cap  * @size_of(String),
                             this.cap * @size_of(String)
                         ).(*String);
         }
