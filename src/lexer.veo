@@ -259,13 +259,31 @@ impl Lexer {
     func tokenize_num_lit(): OptionToken {
         let start = this.cur;
         let has_dot = false;
+        let base = 10u32;
+        if this.peek() == '0'.(u8) {
+            let next = this.peek(1uz).(char);
+            if next == 'x' || next == 'X' {
+                base = 16;
+            } else if next == 'o' || next == 'O' {
+                base = 8;
+            } else if next == 'b' || next == 'B' {
+                base = 2;
+            }
+            if base != 10u32 {
+                this.advance();
+                this.advance();
+            }
+        }
         for !this.at_end()
-            && (std.is_ascii_digit(this.peek().(char))
+            && (is_digit(this.peek().(char), base)
                 || this.peek() == '.'.(u8)
                 || this.peek() == '-'.(u8)
                 || this.peek() == '_'.(u8)) {
             if this.peek() == '.'.(u8) {
-                if std.is_ascii_digit(this.peek(1uz).(char)) {
+                if base != 10u32 {
+                    break;
+                }
+                if is_digit(this.peek(1uz).(char), base) {
                     if has_dot {
                         break;
                     }
@@ -903,4 +921,13 @@ func init_keywords(): HashMapStringTokenKind {
     map.insert(alloc, std.StringView.from("extern"), TOK_EXTERN);
     map.insert(alloc, std.StringView.from("@size_of"), TOK_SIZEOF);
     return map;
+}
+
+func is_digit(c: char, base: u32): bool {
+    if base <= 10u32 {
+        return c >= '0' && c < ('0' + base.(char));
+    }
+    return c >= '0' && c <= '9'
+        || c >= 'a' && c < 'a' + (base - 10u32).(char)
+        || c >= 'A' && c < 'A' + (base - 10u32).(char);
 }
