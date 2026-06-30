@@ -1407,8 +1407,10 @@ Sema::analyzeTernaryExpr (TernaryExpr *te, Type *expectedType) {
 
 Sema::SemanticResult
 Sema::analyzeCastExpr (CastExpr *ce, Type *expectedType) {
-    auto  val  = analyzeExpr (ce->GetExpr (), nullptr);
     auto *type = ce->Type ();
+    auto  val  = analyzeExpr (
+        ce->GetExpr (),
+        ce->GetExpr ()->Kind () == NodeKind::NilExpr ? type : nullptr);
     if (!val.Val.has_value () || type == nullptr) {
         return val;
     }

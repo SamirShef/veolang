@@ -787,19 +787,19 @@ impl HashMapStringTokenKind {
 
         let mask = new_cap - 1uz;
         for let i = 0uz, i < old_cap, i += 1 {
-            if (old_buckets + i).state != 1 { // MAP_STATE_OCCUPIED
+            if (old_buckets + i).state != MAP_STATE_OCCUPIED {
                 continue;
             }
 
             let key = (old_buckets + i).key;
             let hash = hash_string(key);
             let index = hash.(usize) & mask;
-            for (buckets + index).state != 0 { // MAP_STATE_EMPTY
+            for (buckets + index).state != MAP_STATE_EMPTY {
                 index = (index + 1uz) & mask;
             }
             (buckets + index).key = key;
             (buckets + index).val = (old_buckets + i).val;
-            (buckets + index).state = 1; // MAP_STATE_OCCUPIED
+            (buckets + index).state = MAP_STATE_OCCUPIED;
         }
         this.buckets = buckets;
         alloc.destroy(old_buckets.(*u8));
@@ -823,7 +823,7 @@ impl HashMapStringTokenKind {
         for {
             let entry = this.buckets + index;
 
-            if entry.state == 0 { // MAP_STATE_EMPTY
+            if entry.state == MAP_STATE_EMPTY {
                 if first_tompstone_idx != (-1).(usize) {
                     index = first_tompstone_idx;
                     entry = this.buckets + index;
@@ -831,17 +831,17 @@ impl HashMapStringTokenKind {
                 }
                 entry.key = key;
                 entry.val = val;
-                entry.state = 1; // MAP_STATE_OCCUPIED
+                entry.state = MAP_STATE_OCCUPIED;
                 this.len += 1;
                 return true;
             }
 
-            if entry.state == 1 { // MAP_STATE_OCCUPIED
+            if entry.state == MAP_STATE_OCCUPIED {
                 if entry.key.compare_to(key) == 0 {
                     entry.val = val;
                     return false;
                 }
-            } else if entry.state == 2 { // MAP_STATE_TOMBSTONE
+            } else if entry.state == MAP_STATE_TOMBSTONE {
                 if first_tompstone_idx == (-1).(usize) {
                     first_tompstone_idx = index;
                 }
@@ -858,11 +858,11 @@ impl HashMapStringTokenKind {
 
         for {
             let entry = this.buckets + index;
-            if entry.state == 0 { // MAP_STATE_EMPTY
+            if entry.state == MAP_STATE_EMPTY {
                 return std.OptionI32.none();
             }
 
-            if entry.state == 1 && entry.key.compare_to(key) == 0 { // MAP_STATE_OCCUPIED
+            if entry.state == 1 && entry.key.compare_to(key) == MAP_STATE_OCCUPIED {
                 return std.OptionI32.some(entry.val);
             }
 

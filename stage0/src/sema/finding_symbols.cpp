@@ -14,6 +14,9 @@ Sema::getVariable (const std::string &name) {
             return &varIt->second;
         }
     }
+    if (auto it = _mod->Vars.find (name); it != _mod->Vars.end ()) {
+        return &it->second;
+    }
     return nullptr;
 }
 

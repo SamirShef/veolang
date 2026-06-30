@@ -42,4 +42,8 @@ impl SourceMgr {
     pub func get_buffer(id: usize): std.OptionString {
         return this.buffers.get(id);
     }
+
+    pub func destroy(alloc: mem.Allocator) {
+        this.buffers.destroy(alloc);
+    }
 }

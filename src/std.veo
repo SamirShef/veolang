@@ -528,6 +528,13 @@ impl ListString {
     pub func capacity(): usize {
         return this.cap;
     }
+
+    pub func destroy(alloc: mem.Allocator) {
+        for let i = 0uz, i < this.len, i += 1 {
+            (this.data + i).destroy(alloc);
+        }
+        alloc.destroy(this.data.(*u8));
+    }
 }
 
 /**
