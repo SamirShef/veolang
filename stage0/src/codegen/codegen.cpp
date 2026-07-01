@@ -168,7 +168,9 @@ CodeGen::generateBranch (Branch *br) {
 void
 CodeGen::declareStruct (hir::StructDef *sd) {
     const auto &name = Mangler::MangleStruct (sd, sd->GetMangleKind ());
-    llvm::StructType::create (_ctx, name);
+    if (!_structs.contains (sd->BaseSymbol ())) {
+        _structs[sd->BaseSymbol ()] = llvm::StructType::create (_ctx, name);
+    }
 }
 
 void
@@ -192,7 +194,7 @@ CodeGen::generateStruct (hir::StructDef *sd) {
                 fieldName);
         }
     }
-    auto *structType = llvm::StructType::getTypeByName (_ctx, name);
+    auto *structType = _structs.at (sd->BaseSymbol ());
     structType->setBody (fields);
 }
 
@@ -581,10 +583,11 @@ CodeGen::getType (basic::Type *type) {
     case basic::TypeKind::Struct: {
         auto       *sym  = t->AsStruct ()->BaseSymbol ();
         const auto &name = Mangler::MangleStructSymbol (sym, sym->MangleKind);
-        if (!sym->IsComplete) {
-            return llvm::StructType::create (_ctx, name);
-        }
-        return llvm::StructType::getTypeByName (_ctx, name);
+        // if (!sym->IsComplete) {
+        //     return llvm::StructType::create (_ctx, name);
+        // }
+        // return llvm::StructType::getTypeByName (_ctx, name);
+        return _structs.at (sym);
     }
     case basic::TypeKind::Pointer: return _builder.getPtrTy ();
     default: {
@@ -595,7 +598,20 @@ CodeGen::getType (basic::Type *type) {
 
 void
 CodeGen::generateInitFunction () {
-    const std::string  &name     = "__veo_init_mod_" + _semaMod->ToString ();
+    const std::string &name         = "__veo_init_mod_" + _semaMod->ToString ();
+    const std::string &flagName     = "__veo_init_mod_" + _semaMod->ToString () + "_flag";
+    auto              *flag         = _mod->getGlobalVariable (flagName);
+    auto              *flagType     = _builder.getInt1Ty ();
+    auto              *flagNullExpr = _builder.getInt1 (false);
+    if (flag == nullptr) {
+        flag = new llvm::GlobalVariable (
+            *_mod,
+            flagType,
+            false,
+            llvm::GlobalValue::ExternalLinkage,
+            flagNullExpr,
+            flagName);
+    }
     llvm::FunctionType *funcType = llvm::FunctionType::get (_builder.getVoidTy (), false);
     llvm::Function     *func     = llvm::Function::Create (
         funcType,
@@ -605,17 +621,14 @@ CodeGen::generateInitFunction () {
     llvm::BasicBlock *entry = llvm::BasicBlock::Create (_ctx, "entry", func);
     _builder.SetInsertPoint (entry);
 
-    for (auto &[name, importMod] : _semaMod->Imports) {
-        llvm::FunctionType *funcType
-            = llvm::FunctionType::get (_builder.getVoidTy (), false);
-        llvm::Function *func = llvm::Function::Create (
-            funcType,
-            llvm::GlobalValue::ExternalLinkage,
-            "__veo_init_mod_" + importMod->ToString (),
-            *_mod);
-        _builder.CreateCall (func);
-    }
+    auto *then    = llvm::BasicBlock::Create (_ctx, "then", func);
+    auto *merge   = llvm::BasicBlock::Create (_ctx, "merge", func);
+    auto *flagVal = _builder.CreateLoad (flagType, flag);
+    auto *cmp     = _builder.CreateICmpEQ (flagVal, flagNullExpr);
+    _builder.CreateCondBr (cmp, then, merge);
+    _builder.SetInsertPoint (then);
 
+    _builder.CreateStore (_builder.getInt1 (true), flag);
     for (const auto *global : _hirGlobals) {
         if (global->IsDeclaration ()) {
             continue;
@@ -631,11 +644,24 @@ CodeGen::generateInitFunction () {
         }
         auto *val = generateExpr (global->Init ());
         if (val == nullptr) {
-            val = llvm::ConstantExpr::getNullValue (gv->getType ());
+            val = llvm::ConstantExpr::getNullValue (gv->getValueType ());
         }
         _builder.CreateStore (val, gv);
     }
 
+    for (auto &[name, importMod] : _semaMod->Imports) {
+        llvm::FunctionType *funcType
+            = llvm::FunctionType::get (_builder.getVoidTy (), false);
+        llvm::Function *func = llvm::Function::Create (
+            funcType,
+            llvm::GlobalValue::ExternalLinkage,
+            "__veo_init_mod_" + importMod->ToString (),
+            *_mod);
+        _builder.CreateCall (func);
+    }
+    _builder.CreateBr (merge);
+
+    _builder.SetInsertPoint (merge);
     _builder.CreateRetVoid ();
 }
 

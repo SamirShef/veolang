@@ -57,6 +57,8 @@ class CodeGen {
     };
     std::optional<UserMain> _userMain = std::nullopt;
 
+    std::unordered_map<symbols::Struct *, llvm::StructType *> _structs;
+
 public:
     CodeGen (
         llvm::SourceMgr               &srcMgr,

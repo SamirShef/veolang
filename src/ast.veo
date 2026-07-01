@@ -1,8 +1,13 @@
+import std.sys;
+import std.math;
 import std.mem;
 import std;
+import std.io;
+import llvm.source_mgr;
 import llvm.smloc;
 import basic;
 import types;
+import lexer;
 
 pub const ACCESS_PRIV = 0;
 pub const ACCESS_PUB  = 1;
@@ -99,17 +104,25 @@ impl Expr {
     }
 }
 
-pub struct VarDecl {
-    pub base: Stmt;
-    pub name: std.StringView;
-    pub ty: *types.Type;
-    pub init: *Expr;
+pub struct Context {
+    alloc: *mem.ArenaAllocator;
 }
 
-impl VarDecl {
-    pub static func alloc(alloc: mem.Allocator, range: basic.Span, name: std.StringView,
-                          type: *types.Type, init: *Expr): *VarDecl {
-        let mem_ptr = alloc.alloc(@size_of(VarDecl));
+impl Context {
+    pub static func new(alloc: *mem.ArenaAllocator): Context {
+        return Context { alloc: alloc };
+    }
+
+    pub func alloc_node_array(count: usize): **Node {
+        if count == 0uz {
+            return nil;
+        }
+        let ptr: *Node;
+        return this.alloc.alloc(count * @size_of(ptr)).(**Node);
+    }
+
+    pub func alloc_var_decl(range: basic.Span, name: std.StringView, type: *types.Type, init: *Expr): *VarDecl {
+        let mem_ptr = this.alloc.alloc(@size_of(VarDecl));
         let node = mem_ptr.(*VarDecl);
 
         node.base = Stmt.new(NODE_VAR_DECL, range);
@@ -119,7 +132,16 @@ impl VarDecl {
 
         return node;
     }
+}
 
+pub struct VarDecl {
+    pub base: Stmt;
+    pub name: std.StringView;
+    pub ty: *types.Type;
+    pub init: *Expr;
+}
+
+impl VarDecl {
     pub static func isa(node: *Node): bool {
         if node == nil {
             return false;
@@ -132,5 +154,82 @@ impl VarDecl {
             std.panic("RTTI Error: Failed cast to *VarDecl");
         }
         return node.(*VarDecl);
+    }
+}
+
+pub struct ParseResult {
+    pub nodes: **Node;
+    pub count: usize;
+    pub has_errs: bool;
+}
+
+pub struct Parser {
+    lex: *lexer.Lexer;
+    ty_ctx: *types.Context;
+    ast_ctx: *Context;
+    last_tok: lexer.Token;
+    cur_tok: lexer.Token;
+    next_tok: lexer.Token;
+}
+
+impl Parser {
+    pub static func new(lex: *lexer.Lexer, ty_ctx: *types.Context, ast_ctx: *Context): Parser {
+        let p = Parser {
+            lex: lex,
+            ty_ctx: ty_ctx,
+            ast_ctx: ast_ctx
+        };
+        p.advance();
+        p.advance();
+        return p;
+    }
+
+    pub func parse(): ParseResult {
+        let ptr: *Node;
+        let cap      = 128uz;
+        let count    = 0uz;
+        let has_errs = false;
+        let nodes    = sys.malloc(cap * @size_of(ptr)).(**Node);
+
+        for !this.is_at_end() {
+            let node = this.parse_stmt();
+            if node == nil {
+                has_errs = true;
+                // TODO: invoke synchronize function
+                continue;
+            }
+            if count >= cap {
+                cap *= 2;
+                nodes = sys.realloc(nodes.(*u8), cap * @size_of(ptr)).(**Node);
+            }
+            *(nodes + count) = node.(*Node);
+            count += 1;
+        }
+        let final_nodes = this.ast_ctx.alloc_node_array(count);
+        if count > 0uz {
+            sys.memcpy(final_nodes.(*u8), nodes.(*u8), count * @size_of(ptr));
+        }
+        sys.free(nodes.(*u8));
+        return ParseResult {
+            nodes: final_nodes,
+            count: count,
+            has_errs: has_errs
+        };
+    }
+
+    func parse_stmt(): *Stmt {
+        this.advance();
+        return nil;
+    }
+
+    pub func advance(): lexer.Token {
+        this.last_tok = this.cur_tok;
+        this.cur_tok = this.next_tok;
+        this.next_tok = this.lex.next_token().unwrap();
+        return this.last_tok;
+    }
+
+    func is_at_end(): bool {
+        return this.cur_tok.kind == lexer.TOK_EOF;
     }
 }
