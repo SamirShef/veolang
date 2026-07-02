@@ -125,6 +125,30 @@ impl Context {
     }
 }
 
+impl std.ToString for Type {
+    pub func to_string(alloc: mem.Allocator): std.String {
+        if IntType.isa(this) {
+            let int = IntType.cast(this);
+            let str: std.String;
+            str.append(alloc, int.is_unsigned ? "u" : "i");
+            str.append(alloc, std.i32_to_string(alloc, int.width.(i32)));
+            return str;
+        } else if FloatType.isa(this) {
+            let float = FloatType.cast(this);
+            let str = std.String.from(alloc, "f");
+            str.append(alloc, std.i32_to_string(alloc, float.width.(i32)));
+            return str;
+        } else if SizeType.isa(this) {
+            let size = IntType.cast(this);
+            let str: std.String;
+            str.append(alloc, size.is_unsigned ? "u" : "i");
+            str.append(alloc, "size");
+            return str;
+        }
+        return std.String.from(alloc, "");
+    }
+}
+
 pub struct IntType {
     pub base: Type;
     pub width: u32;

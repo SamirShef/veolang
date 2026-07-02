@@ -18,6 +18,14 @@ pub func print(str: std.String) {
 }
 
 /**
+ * @brief prints std.StringView to stdout
+ * @param str: std.StringView string
+ */
+pub func print(str: std.StringView) {
+    sys.write(1, str.data(), str.len());
+}
+
+/**
  * @brief prints sign integer to stdout
  * @param n: sign integer number (i32)
  */
@@ -39,6 +47,15 @@ pub func println(str: *u8) {
  * @param str: std.String string
  */
 pub func println(str: std.String) {
+    print(str);
+    sys.putchar('\n'.(u8));
+}
+
+/**
+ * @brief prints std.StringView to stdout with new line character ('\n')
+ * @param str: std.StringView string
+ */
+pub func println(str: std.StringView) {
     print(str);
     sys.putchar('\n'.(u8));
 }

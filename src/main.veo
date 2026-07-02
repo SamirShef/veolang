@@ -15,7 +15,7 @@ let alloc: mem.MallocAllocator;
 let arena = mem.ArenaAllocator.init(alloc, 64uz * mem.KB);
 
 func main(): i32 {
-    let main_file = fs.File.open("src/main.veo", "r");
+    let main_file = fs.File.open("src/tests/var_decl.veo", "r");
     if !main_file.is_open() {
         std.panic("Cannot open file src/main.veo");
     }
@@ -27,6 +27,8 @@ func main(): i32 {
     let ast_ctx   = ast.Context.new(&arena);
     let parser    = ast.Parser.new(&lex, &ty_ctx, &ast_ctx);
     let parse_res = parser.parse();
+    let dumper: ast.Dumper;
+    dumper.dump(parse_res);
     /*
     let count = 0uz;
     for {

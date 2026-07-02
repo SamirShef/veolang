@@ -170,8 +170,22 @@ public:
             analyzeStmt (stmt);
         }
 
-        for (auto &[method, methods] : _methodCallFromAnotherMethod) {
-            analyzeMethodCallFromAnotherMethod (method, methods);
+        bool changed = true;
+        while (changed) {
+            changed = false;
+            for (auto &[method, methods] : _methodCallFromAnotherMethod) {
+                if (!method->IsConst) {
+                    continue;
+                }
+
+                for (const auto &m : methods) {
+                    if (!m->IsConst) {
+                        method->IsConst = false;
+                        changed         = true;
+                        break;
+                    }
+                }
+            }
         }
         for (auto &[node, method] : _methodCallOnConstBase) {
             analyzeMethodCallOnConstBase (node, method);

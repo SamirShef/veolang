@@ -204,11 +204,12 @@ impl Lexer {
             return this.tokenize_id();
         }
         if std.is_ascii_whitespace(c) {
-            return skip_whitespace(this);
+            this.advance();
+            return this.next_token();
         }
         if c == '/' && (this.peek(1uz) == '/'.(u8) || this.peek(1uz) == '*'.(u8)) {
             this.skip_comments();
-            return next_token(this);
+            return this.next_token();
         }
         if std.is_ascii_digit(c)
             || c == '.' && std.is_ascii_digit(this.peek(1uz).(char))
@@ -733,15 +734,6 @@ impl Lexer {
     }
 }
 
-func skip_whitespace(this: *Lexer): OptionToken {
-    this.advance();
-    return next_token(this);
-}
-
-func next_token(this: *Lexer): OptionToken {
-    return this.next_token();
-}
-
 const MAP_STATE_EMPTY     = 0;
 const MAP_STATE_OCCUPIED  = 1;
 const MAP_STATE_TOMBSTONE = 2;
@@ -862,7 +854,7 @@ impl HashMapStringTokenKind {
                 return std.OptionI32.none();
             }
 
-            if entry.state == 1 && entry.key.compare_to(key) == MAP_STATE_OCCUPIED {
+            if entry.state == MAP_STATE_OCCUPIED && entry.key.compare_to(key) == 0 {
                 return std.OptionI32.some(entry.val);
             }
 
