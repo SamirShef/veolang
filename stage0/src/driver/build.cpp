@@ -63,6 +63,8 @@ BuildDriver::Build () {
     bitcode::Serializer   serializer;
     bitcode::Deserializer deserializer (typePool);
 
+    const std::string &objExtension = triple.isOSWindows () ? ".obj" : ".o";
+
     for (const auto &importPath : _compilationQueue) {
         const auto &fileItem    = _graph.at (importPath);
         const auto &compileUnit = fileItem.Path;
@@ -71,7 +73,7 @@ BuildDriver::Build () {
                          / fs::absolute (compileUnit)
                                .parent_path ()
                                .lexically_relative (manif.ManifestPath.parent_path ())
-                         / (compileUnit.stem ().string () + ".o");
+                         / (compileUnit.stem ().string () + objExtension);
         objPath        = objPath.lexically_normal ();
         auto vmetaPath = fs::path (objPath).replace_extension (".vmeta");
         objFiles.push_back (objPath.string ());
@@ -143,6 +145,9 @@ BuildDriver::Build () {
         objFiles.push_back (cObjPath.string ());
     }
 
+    if (NoLinkOpt) {
+        return;
+    }
     auto exePath = artefactDir / GetOutputName (manif.ProjectName, triple);
     if (LinkObjectFiles (targetTripleStr, exePath.string (), objFiles)) {
         llvm::errs ().changeColor (llvm::raw_fd_ostream::GREEN, true)

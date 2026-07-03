@@ -107,6 +107,11 @@ inline llvm::cl::opt<DumpASTInto> DumpASTOpt (
     llvm::cl::init (DumpASTInto::None),
     llvm::cl::cat (Category));
 
+inline llvm::cl::opt<bool> NoLinkOpt (
+    "no-link",
+    llvm::cl::desc ("Generate object files and skip the linking phase"),
+    llvm::cl::cat (Category));
+
 // NOLINTEND(cppcoreguidelines-avoid-non-const-global-variables)
 
 inline bool
