@@ -125,7 +125,7 @@ BuildDriver::Build () {
                         / fs::absolute (absoluteCSrc)
                               .parent_path ()
                               .lexically_relative (manif.ManifestPath.parent_path ())
-                        / (cSrc.stem ().string () + ".o");
+                        / (cSrc.stem ().string () + objExtension);
         cObjPath      = cObjPath.lexically_normal ();
 
         fs::create_directories (cObjPath.parent_path ());
