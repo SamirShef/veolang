@@ -90,7 +90,8 @@ impl ArenaAllocator {
     }
 
     func align_up(n: usize): usize {
-        let align = 8uz;
+        let ptr: *u8;
+        let align = @size_of(ptr); // pointer size
         return (n + align - 1uz) / align * align;
     }
 

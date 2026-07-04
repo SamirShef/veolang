@@ -1,0 +1,288 @@
+Building package: veoc
+  Compilation module math
+  Compilation module sys
+  Compilation module mem
+best: sys.malloc
+usize
+best: sys.write
+i32
+best: sys.__veo_print_u64
+i32
+best: sys.write
+i32
+best: sys.exit
+i32
+best: sys.realloc
+*u8
+best: sys.write
+i32
+best: sys.__veo_print_u64
+i32
+best: sys.write
+i32
+best: sys.exit
+i32
+best: sys.free
+*u8
+best: math.max
+usize
+best: sys.memcpy
+*u8
+  Compilation module std
+best: sys.write
+i32
+best: sys.write
+i32
+best: sys.__veo_print_u64
+i32
+best: sys.write
+i32
+best: sys.__veo_print_u64
+i32
+best: sys.write
+i32
+best: sys.write
+i32
+best: sys.exit
+i32
+best: sys.strlen
+*u8
+best: std.panic
+*u8
+best: std.panic
+*u8
+best: std.panic
+*u8
+best: sys.write
+i32
+best: sys.strlen
+*u8
+best: sys.write
+i32
+best: sys.strlen
+*u8
+best: sys.write
+i32
+best: sys.exit
+i32
+best: std.is_ascii_letter
+char
+best: std.is_ascii_digit
+char
+  Compilation module smloc
+  Compilation module types
+best: std.panic
+*u8
+best: std.panic
+*u8
+best: std.panic
+*u8
+best: std.panic
+*u8
+best: std.panic
+*u8
+  Compilation module basic
+best: std.panic
+*u8
+best: basic.hash64
+*u8
+best: basic.hash64
+*u8
+  Compilation module source_mgr
+  Compilation module lexer
+best: lexer.init_keywords
+best: std.panic
+*u8
+best: sys.write
+i32
+best: sys.write
+i32
+best: sys.__veo_print_u64
+i32
+best: sys.write
+i32
+best: sys.write
+i32
+best: sys.exit
+i32
+best: std.is_ascii_letter
+char
+best: std.is_ascii_whitespace
+char
+best: std.is_ascii_digit
+char
+best: std.is_ascii_digit
+char
+best: std.is_ascii_digit
+char
+best: std.is_ascii_letter_or_digit
+char
+best: lexer.is_digit
+char
+best: lexer.is_digit
+char
+best: lexer.hash_string
+std.StringView
+best: lexer.hash_string
+std.StringView
+best: lexer.hash_string
+std.StringView
+  Compilation module fs
+best: sys.__veo_fs_open
+*u8
+best: sys.__veo_fs_close
+*u8
+best: sys.__veo_fs_read
+*u8
+best: sys.__veo_fs_write
+*u8
+best: sys.__veo_fs_tell
+*u8
+best: sys.__veo_fs_seek
+*u8
+best: sys.__veo_fs_tell
+*u8
+best: sys.__veo_fs_seek
+*u8
+  Compilation module io
+best: sys.strlen
+*u8
+best: sys.write
+i32
+best: sys.strlen
+*u8
+best: sys.write
+i32
+best: sys.write
+i32
+best: sys.__veo_print_i64
+i32
+best: sys.__veo_print_u64
+i32
+best: io.print
+*u8
+u8 i32: SafeImplicit
+best: sys.putchar
+i32
+best: io.print
+std.String
+u8 i32: SafeImplicit
+best: sys.putchar
+i32
+best: io.print
+std.StringView
+u8 i32: SafeImplicit
+best: sys.putchar
+i32
+i64 u64: Incompatible
+best: io.print
+i64
+u8 i32: SafeImplicit
+best: sys.putchar
+i32
+u64 i64: Incompatible
+best: io.print
+u64
+u8 i32: SafeImplicit
+best: sys.putchar
+i32
+  Compilation module ast
+best: std.panic
+*u8
+best: std.panic
+*u8
+best: std.panic
+*u8
+best: std.panic
+*u8
+best: std.panic
+*u8
+best: std.panic
+*u8
+best: std.panic
+*u8
+best: ast.tok_is_assignment
+i32
+best: sys.malloc
+usize
+best: sys.realloc
+*u8
+best: sys.memcpy
+*u8
+best: sys.free
+*u8
+best: ast.tok_precedence
+i32
+best: ast.tok_to_bin_op
+i32
+best: ast.tok_to_un_op
+i32
+best: ast.tok_to_un_op
+i32
+best: sys.strlen
+*u8
+best: math.max
+usize
+best: std.i32_to_string
+mem.Allocator
+best: sys.strlen
+*u8
+best: math.max
+usize
+best: std.i32_to_string
+mem.MallocAllocator
+best: math.max
+usize
+best: std.i32_to_string
+mem.MallocAllocator
+best: std.i32_to_string
+mem.MallocAllocator
+best: std.i32_to_string
+mem.MallocAllocator
+best: ast.bin_op_to_str
+i32
+best: ast.bin_op_to_str
+i32
+best: ast.un_op_to_str
+i32
+best: ast.un_op_to_str
+i32
+best: io.print
+*u8
+best: io.print
+*u8
+best: io.print
+std.StringView
+best: io.println
+*u8
+u64 i64: Incompatible
+best: io.print
+u64
+best: std.panic
+*u8
+best: basic.hash64
+std.StringView
+  Compilation module hir
+best: std.panic
+*u8
+best: std.panic
+*u8
+best: std.panic
+*u8
+best: std.panic
+*u8
+best: std.panic
+*u8
+best: std.panic
+*u8
+  Compilation module sema
+  Compilation module main
+best: std.panic
+*u8
+best: sys.__veo_fs_read
+*u8
+best: math.max
+usize
+best: basic.hash64
+*u8
+[0;1;32mSUCCESS: [0m/mnt/disk_ext4_0/veolang/build/targets/x86_64-pc-linux-gnu/obj/veoc

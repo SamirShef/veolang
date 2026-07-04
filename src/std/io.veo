@@ -27,10 +27,18 @@ pub func print(str: std.StringView) {
 
 /**
  * @brief prints sign integer to stdout
- * @param n: sign integer number (i32)
+ * @param n: sign integer number (i64)
  */
-pub func print(n: i32) {
-    sys.__veo_print_i64(1, n.(i64));
+pub func print(n: i64) {
+    sys.__veo_print_i64(1, n);
+}
+
+/**
+ * @brief prints sign integer to stdout
+ * @param n: sign integer number (u64)
+ */
+pub func print(n: u64) {
+    sys.__veo_print_u64(1, n);
 }
 
 /**
@@ -62,9 +70,18 @@ pub func println(str: std.StringView) {
 
 /**
  * @brief prints sign integer to stdout with new line character ('\n')
- * @param n: sign integer number (i32)
+ * @param n: sign integer number (i64)
  */
-pub func println(n: i32) {
+pub func println(n: i64) {
+    print(n);
+    sys.putchar('\n'.(u8));
+}
+
+/**
+ * @brief prints sign integer to stdout with new line character ('\n')
+ * @param n: sign integer number (u64)
+ */
+pub func println(n: u64) {
     print(n);
     sys.putchar('\n'.(u8));
 }

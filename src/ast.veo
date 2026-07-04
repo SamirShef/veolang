@@ -216,6 +216,7 @@ pub struct VarDecl {
     pub is_const: bool;
     pub ty: *types.Type;
     pub init: *Expr;
+    pub id: basic.OptionDefId;
 }
 
 impl VarDecl {
@@ -810,6 +811,14 @@ impl Dumper {
             this.print("let ");
         }
         this.print(var_decl.name);
+        if var_decl.id.has_val() {
+            let id = var_decl.id.unwrap();
+            this.print(" (DefId: ");
+            this.print(id.mod_id);
+            this.print(":");
+            this.print(id.sym_id);
+            this.print(")");
+        }
         if var_decl.ty != nil {
             this.print(": ");
             let alloc: mem.MallocAllocator;
@@ -895,6 +904,14 @@ impl Dumper {
         io.print(msg);
     }
 
+    func print(n: i64) {
+        io.print(n);
+    }
+
+    func print(n: u64) {
+        io.print(n);
+    }
+
     func print_with_indent(msg: *u8) {
         this.print_indent();
         this.print(msg);
@@ -903,5 +920,65 @@ impl Dumper {
     func print_with_indent(msg: std.StringView) {
         this.print_indent();
         this.print(msg);
+    }
+}
+
+pub struct DefIdCollector {
+    mod_id: u64;
+}
+
+impl DefIdCollector {
+    pub static func new(mod_id: u64): DefIdCollector {
+        return DefIdCollector { mod_id: mod_id };
+    }
+
+    pub func collect(res: ParseResult) {
+        for let i = 0uz, i < res.count, i += 1 {
+            let node = *(res.nodes + i);
+            if Stmt.isa(node) {
+                let stmt = Stmt.cast(node);
+                this.collect_stmt(stmt);
+            }
+        }
+    }
+
+    func collect_stmt(stmt: *Stmt) {
+        if stmt == nil {
+            return;
+        }
+
+        let kind = stmt.kind();
+        if kind == NODE_VAR_DECL {
+            let var_decl = VarDecl.cast(stmt.(*Node));
+            this.collect_var_decl(var_decl);
+        } else {
+            std.panic("Unknown AST node kind for collect DefId");
+        }
+    }
+
+    func collect_var_decl(var_decl: *VarDecl) {
+        let sym_id  = basic.hash64(var_decl.name);
+        let def_id  = basic.DefId.new(this.mod_id, sym_id);
+        var_decl.id = basic.OptionDefId.some(def_id);
+
+        if var_decl.init != nil {
+            this.collect_expr(var_decl.init);
+        }
+    }
+
+    func collect_expr(expr: *Expr) {
+        if expr == nil {
+            return;
+        }
+
+        let kind = expr.kind();
+        if kind == NODE_BIN_EXPR {
+            let bin = BinExpr.cast(expr.(*Node));
+            this.collect_expr(bin.left);
+            this.collect_expr(bin.right);
+        } else if kind == NODE_UN_EXPR {
+            let un = UnExpr.cast(expr.(*Node));
+            this.collect_expr(un.right);
+        }
     }
 }

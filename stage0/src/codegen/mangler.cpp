@@ -104,10 +104,10 @@ Mangler::MangleType (const basic::Type *type, hir::MangleKind mangleKind) {
     case basic::TypeKind::Integer: {
         const auto *it = llvm::cast<basic::IntegerType> (type);
         switch (it->BitWidth ()) {
-        case 8: return "b";
-        case 16: return "s";
-        case 32: return "i";
-        case 64: return "l";
+        case 8: return it->IsUnsigned () ? "Ub" : "b";
+        case 16: return it->IsUnsigned () ? "Us" : "s";
+        case 32: return it->IsUnsigned () ? "Ui" : "i";
+        case 64: return it->IsUnsigned () ? "Ul" : "l";
         default: return "";
         }
     }
