@@ -10,64 +10,60 @@ import std.io;
 import llvm.source_mgr;
 import lexer;
 import ast;
-
-pub struct ScopeEntry {
-    pub name: std.StringView;
-    pub id: basic.DefId;
-}
+import symbols;
 
 pub struct Scope {
     pub parent: *Scope;
-    pub entries: *ScopeEntry;
+    pub entries: **symbols.Symbol;
     pub count: usize;
     pub cap: usize;
 }
 
 impl Scope {
     pub static func new(alloc: mem.Allocator, parent: *Scope): *Scope {
-        let scope = alloc.alloc(@size_of(Scope)).(*Scope);
-        scope.parent = parent;
-        scope.cap = 16uz;
-        scope.entries = alloc.alloc(@size_of(ScopeEntry) * scope.cap).(*ScopeEntry);
-        scope.count = 0uz;
+        let ptr: *symbols.Symbol;
+        let scope     = alloc.alloc(@size_of(Scope)).(*Scope);
+        scope.parent  = parent;
+        scope.cap     = 16uz;
+        scope.entries = alloc.alloc(@size_of(ptr) * scope.cap).(**symbols.Symbol);
+        scope.count   = 0uz;
         return scope;
     }
 
-    pub func lookup_local(name: std.StringView): basic.OptionDefId {
+    pub func lookup_local(name: std.StringView): *symbols.Symbol {
         for let i = 0uz, i < this.count, i += 1 {
-            let entry = *(this.entries + i);
-            if entry.name.compare_to(name) == 0 {
-                return basic.OptionDefId.some(entry.id);
+            let sym = *(this.entries + i);
+            if sym.name().compare_to(name) == 0 {
+                return sym;
             }
         }
-        return basic.OptionDefId.none();
+        return nil;
     }
 
-    pub func lookup_recursive(name: std.StringView): basic.OptionDefId {
+    pub func lookup_recursive(name: std.StringView): *symbols.Symbol {
         let current = this;
         for current != nil {
-            let res = current.lookup_local(name);
-            if res.has_val() {
-                return res;
+            let sym = current.lookup_local(name);
+            if sym != nil {
+                return sym;
             }
             current = current.parent;
         }
-        return basic.OptionDefId.none();
+        return nil;
     }
 
-    pub func insert(alloc: mem.Allocator, name: std.StringView, id: basic.DefId) {
+    pub func insert(alloc: mem.Allocator, sym: *symbols.Symbol) {
+        let ptr: *symbols.Symbol;
         if this.count >= this.cap {
             let old_cap = this.cap;
             this.cap = math.max(this.cap * 2uz, this.cap + 1uz);
             this.entries = alloc.realloc(
                 this.entries.(*u8),
                 old_cap,
-                @size_of(ScopeEntry) * this.cap
-            ).(*ScopeEntry);
+                @size_of(ptr) * this.cap
+            ).(**symbols.Symbol);
         }
-        let entry = this.entries + this.count;
-        entry.name = name;
-        entry.id = id;
+        *(this.entries + this.count) = sym;
         this.count += 1;
     }
 
@@ -82,6 +78,7 @@ pub struct Sema {
     current_scope: *Scope;
     builder: *hir.Builder;
     ty_ctx: *types.Context;
+    sym_table: *symbols.SymbolTable;
 }
 
 struct ExprResult {
@@ -110,12 +107,14 @@ impl ExprResult {
 }
 
 impl Sema {
-    pub static func new(alloc: mem.MallocAllocator, builder: *hir.Builder, ty_ctx: *types.Context): Sema {
+    pub static func new(alloc: mem.MallocAllocator, builder: *hir.Builder,
+                        ty_ctx: *types.Context, sym_table: *symbols.SymbolTable): Sema {
         return Sema {
             alloc: alloc,
             current_scope: nil,
             builder: builder,
-            ty_ctx: ty_ctx
+            ty_ctx: ty_ctx,
+            sym_table: sym_table
         };
     }
 
@@ -157,7 +156,7 @@ impl Sema {
 
     func analyze_var_decl(var_decl: *ast.VarDecl) {
         let existing = this.current_scope.lookup_local(var_decl.name);
-        if existing.has_val() {
+        if existing != nil {
             std.panic("Redefinition of variable");
             return;
         }
@@ -171,9 +170,13 @@ impl Sema {
             ty = init.val.unwrap().ty;
         }
 
-        let def_id = var_decl.id.unwrap();
-        // TODO: insert var into SymbolTable
-        this.current_scope.insert(this.alloc, var_decl.name, def_id);
+        let def_id       = var_decl.id.unwrap();
+        let var_sym      = this.alloc.alloc(@size_of(symbols.VarSymbol)).(*symbols.VarSymbol);
+        var_sym.base     = symbols.Symbol.new(symbols.SYM_VAR, var_decl.name, def_id);
+        var_sym.is_const = false;
+        var_sym.val      = init.val;
+        this.sym_table.insert(this.alloc, var_sym.(*symbols.Symbol));
+        this.current_scope.insert(this.alloc, var_sym.(*symbols.Symbol));
         this.builder.create_variable(def_id, var_decl.name, ty, init.node);
     }
 
@@ -214,8 +217,6 @@ impl Sema {
             if first_char == '-'.(u8) {
                 is_neg = true;
                 idx += 1;
-            } else if first_char == '+'.(u8) {
-                idx += 1;
             }
 
             let accum = 0u64;
@@ -253,11 +254,21 @@ impl Sema {
 
     func analyze_var_expr(var_expr: *ast.VarExpr, expected_ty: *types.Type): ExprResult {
         let resolved = this.current_scope.lookup_recursive(var_expr.name);
-
-        if !resolved.has_val() {
+        if resolved == nil {
+            resolved = this.sym_table.lookup_by_name(var_expr.name);
+        }
+        if resolved == nil {
             std.panic("Use of undeclared variable");
             return ExprResult.invalid();
         }
-        return ExprResult.invalid();
+        if !symbols.VarSymbol.isa(resolved) {
+            std.panic("Symbol is not a variable");
+            return ExprResult.invalid();
+        }
+        let var_sym = symbols.VarSymbol.cast(resolved);
+        let val     = var_sym.is_const ? var_sym.val.unwrap()
+                                       : basic.Value.new(basic.VAL_UNKNOWN, var_sym.ty);
+        let node    = this.builder.create_load(var_sym.id(), var_sym.ty);
+        return ExprResult.new(val, node.(*hir.Node));
     }
 }

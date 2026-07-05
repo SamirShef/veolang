@@ -188,6 +188,10 @@ impl Context {
             this.global_vars_end      = var;
         }
     }
+
+    pub func global_vars_start(): *Variable {
+        return this.global_vars_start;
+    }
 }
 
 pub struct Builder {
