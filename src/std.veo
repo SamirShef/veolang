@@ -30,6 +30,17 @@ impl String {
         return String { data: data, len: len, cap: cap };
     }
 
+    pub static func from(alloc: mem.Allocator, str: StringView): String {
+        let len = str.len();
+        let cap = len + 1uz;
+        let data = alloc.alloc(@size_of(u8) * cap);
+        for let i = 0uz, i < len, i += 1 {
+            *(data + i) = *(str.data() + i);
+        }
+        *(data + len) = 0u8;
+        return String { data: data, len: len, cap: cap };
+    }
+
     /**
      * @brief initialize String from already allocated memory
      * @param data: allocated memory (null-terminated string)

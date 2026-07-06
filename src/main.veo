@@ -13,7 +13,12 @@ import ast;
 import hir;
 import symbols;
 import sema;
+import llvm.bindings;
 import codegen;
+
+/*
+ * clang++ std/math.o std/sys.o std/mem.o std.o llvm/smloc.o types.o basic.o llvm/source_mgr.o lexer.o std/fs.o std/fs_runtime.o runtime.o std/io.o ast.o hir.o symbols.o sema.o llvm/bindings.o codegen.o main.o -o veoc-stage1 $(llvm-config --libs --system-libs --ldflags) -lrt -ldl -lpthread -lm;
+ */
 
 let alloc: mem.MallocAllocator;
 let arena = mem.ArenaAllocator.init(alloc, 64uz * mem.KB);
@@ -46,8 +51,9 @@ func main(): i32 {
     let semantic    = sema.Sema.new(alloc, &hir_builder, &ty_ctx, &sym_table);
     semantic.analyze(alloc, parse_res);
 
-    let gen = codegen.CodeGen.new(&sym_table, &hir_ctx);
+    let gen = codegen.CodeGen.new("test_mod", &sym_table, &hir_ctx);
     gen.generate();
+    gen.dump_mod();
 
     mgr.destroy(alloc);
     arena.reset();

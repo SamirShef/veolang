@@ -3,7 +3,7 @@ import std;
 
 pub const TYPE_INT   = 0;
 pub const TYPE_FLOAT = 1;
-pub const TYPE_SIZE   = 2;
+pub const TYPE_SIZE  = 2;
 
 pub struct Type {
     kind: i32;

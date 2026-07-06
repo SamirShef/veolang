@@ -177,7 +177,7 @@ impl Sema {
         var_sym.val      = init.val;
         this.sym_table.insert(this.alloc, var_sym.(*symbols.Symbol));
         this.current_scope.insert(this.alloc, var_sym.(*symbols.Symbol));
-        this.builder.create_variable(def_id, var_decl.name, ty, init.node);
+        this.builder.create_variable(this.alloc, def_id, var_decl.name, ty, init.node);
     }
 
     func analyze_expr(expr: *ast.Expr, expected_ty: *types.Type): ExprResult {

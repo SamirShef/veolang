@@ -29,7 +29,7 @@ impl Node {
 pub struct Variable {
     pub base: Node;
     pub id: basic.DefId;
-    pub name: std.StringView;
+    pub name: std.String;
     pub ty: *types.Type;
     pub init: *Node;
     pub next: *Variable;
@@ -203,11 +203,11 @@ impl Builder {
         return Builder { ctx: ctx };
     }
 
-    pub func create_variable(id: basic.DefId, name: std.StringView,
+    pub func create_variable(alloc: mem.Allocator, id: basic.DefId, name: std.StringView,
                              ty: *types.Type, init: *Node): *Variable {
         let var  = this.ctx.alloc_node(NODE_VARIABLE).(*Variable);
         var.id   = id;
-        var.name = name;
+        var.name = std.String.from(alloc, name);
         var.ty   = ty;
         var.init = init;
         this.ctx.add_global_var(var);
