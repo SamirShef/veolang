@@ -460,7 +460,7 @@ private:
     implicitlyCast (
         SemanticResult val, Type **expectedType, llvm::SMLoc start, llvm::SMLoc end);
 
-    static bool
+    bool
     canFit (Value &val, const Type *targetType);
 
     symbols::Function *

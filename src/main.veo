@@ -19,6 +19,9 @@ import codegen;
 let alloc: mem.MallocAllocator;
 let arena = mem.ArenaAllocator.init(alloc, 64uz * mem.KB);
 
+let emit_ir  = true;
+let emit_asm = false;
+
 func main(): i32 {
     let main_file = fs.File.open("src/tests/var_decl.veo", "r");
     if !main_file.is_open() {
@@ -74,11 +77,30 @@ func main(): i32 {
 
     let gen    = codegen.CodeGen.new("test_mod", &sym_table, &hir_ctx, triple_str, data_layout);
     let module = gen.generate();
-    gen.dump_mod();
+
+    let print_mod_err_msg: *u8;
+    if emit_ir && bindings.LLVMPrintModuleToFile(module, "src/tests/var_decl.ll", &print_mod_err_msg) {
+        io.print("\033[31mError on prints LLVM IR to file: \033[0m");
+        io.println(print_mod_err_msg);
+        bindings.LLVMDisposeMessage(print_mod_err_msg);
+        mgr.destroy(alloc);
+        arena.reset();
+        return 1;
+    }
 
     if !emit_obj_file(module, target_machine, "src/tests/var_decl.o") {
         bindings.LLVMDisposeTargetData(data_layout);
         bindings.LLVMDisposeTargetMachine(target_machine);
+        mgr.destroy(alloc);
+        arena.reset();
+        return 1;
+    }
+
+    if emit_asm && !emit_asm_file(module, target_machine, "src/tests/var_decl.s") {
+        bindings.LLVMDisposeTargetData(data_layout);
+        bindings.LLVMDisposeTargetMachine(target_machine);
+        mgr.destroy(alloc);
+        arena.reset();
         return 1;
     }
 
@@ -114,4 +136,11 @@ func emit_obj_file(
     target_machine: bindings.LLVMTargetMachineRef,
     file_name: *u8): bool {
     return emit_file(module, target_machine, file_name, bindings.LLVMCodeGenFileType.object_file());
+}
+
+func emit_asm_file(
+    module: bindings.LLVMModuleRef,
+    target_machine: bindings.LLVMTargetMachineRef,
+    file_name: *u8): bool {
+    return emit_file(module, target_machine, file_name, bindings.LLVMCodeGenFileType.assembly());
 }

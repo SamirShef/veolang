@@ -4,6 +4,7 @@ import std;
 pub const TYPE_INT   = 0;
 pub const TYPE_FLOAT = 1;
 pub const TYPE_SIZE  = 2;
+pub const TYPE_BOOL  = 3;
 
 pub struct Type {
     kind: i32;
@@ -33,7 +34,7 @@ pub struct Context {
     pub usize_t: *Type;
     pub f32_t: *Type;
     pub f64_t: *Type;
-    // pub bool_t: *Type; // later
+    pub bool_t: *Type;
     // pub char_t: *Type; // later
 }
 
@@ -52,6 +53,7 @@ impl Context {
         ctx.usize_t = ctx.alloc_size_ty(true);
         ctx.f32_t   = ctx.alloc_float_ty(32u32);
         ctx.f64_t   = ctx.alloc_float_ty(64u32);
+        ctx.bool_t  = ctx.alloc_bool_ty();
         return ctx;
     }
 
@@ -99,6 +101,10 @@ impl Context {
         return nil;
     }
 
+    pub func get_bool_ty(): *Type {
+        return this.bool_t;
+    }
+
     pub func alloc_int_ty(width: u32, is_unsigned: bool): *Type {
         let raw        = this.alloc.alloc(@size_of(IntType));
         let ty         = raw.(*IntType);
@@ -121,6 +127,13 @@ impl Context {
         let ty   = raw.(*FloatType);
         ty.base  = Type.new(TYPE_FLOAT);
         ty.width = width;
+        return ty.(*Type);
+    }
+
+    pub func alloc_bool_ty(): *Type {
+        let raw  = this.alloc.alloc(@size_of(BoolType));
+        let ty   = raw.(*BoolType);
+        ty.base  = Type.new(TYPE_BOOL);
         return ty.(*Type);
     }
 }
@@ -210,5 +223,25 @@ impl SizeType {
             std.panic("RTTI Error: Failed cast to *SizeType");
         }
         return ty.(*SizeType);
+    }
+}
+
+pub struct BoolType {
+    pub base: Type;
+}
+
+impl BoolType {
+    pub static func isa(ty: *Type): bool {
+        if ty == nil {
+            return false;
+        }
+        return ty.kind() == TYPE_BOOL;
+    }
+
+    pub static func cast(ty: *Type): *BoolType {
+        if !BoolType.isa(ty) {
+            std.panic("RTTI Error: Failed cast to *BoolType");
+        }
+        return ty.(*BoolType);
     }
 }

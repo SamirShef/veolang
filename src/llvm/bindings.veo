@@ -196,6 +196,108 @@ pub struct LLVMErrorRef {
     ptr: *u8;
 }
 
+/*
+ * opaque struct
+ */
+pub struct LLVMBasicBlockRef {
+    ptr: *u8;
+}
+
+pub const LLVMIntEQ  = 32;
+pub const LLVMIntNE  = 33;
+pub const LLVMIntUGT = 34;
+pub const LLVMIntUGE = 35;
+pub const LLVMIntULT = 36;
+pub const LLVMIntULE = 37;
+pub const LLVMIntSGT = 38;
+pub const LLVMIntSGE = 39;
+pub const LLVMIntSLT = 40;
+pub const LLVMIntSLE = 41;
+
+pub struct LLVMIntPredicate {
+    pred: i32;
+}
+
+impl LLVMIntPredicate {
+    pub static func eq(): LLVMIntPredicate {
+        return LLVMIntPredicate { pred: LLVMIntEQ };
+    }
+
+    pub static func ne(): LLVMIntPredicate {
+        return LLVMIntPredicate { pred: LLVMIntNE };
+    }
+
+    pub static func ugt(): LLVMIntPredicate {
+        return LLVMIntPredicate { pred: LLVMIntUGT };
+    }
+
+    pub static func uge(): LLVMIntPredicate {
+        return LLVMIntPredicate { pred: LLVMIntUGE };
+    }
+
+    pub static func ult(): LLVMIntPredicate {
+        return LLVMIntPredicate { pred: LLVMIntULT };
+    }
+
+    pub static func ule(): LLVMIntPredicate {
+        return LLVMIntPredicate { pred: LLVMIntULE };
+    }
+
+    pub static func sgt(): LLVMIntPredicate {
+        return LLVMIntPredicate { pred: LLVMIntSGT };
+    }
+
+    pub static func sge(): LLVMIntPredicate {
+        return LLVMIntPredicate { pred: LLVMIntSGE };
+    }
+
+    pub static func slt(): LLVMIntPredicate {
+        return LLVMIntPredicate { pred: LLVMIntSLT };
+    }
+
+    pub static func sle(): LLVMIntPredicate {
+        return LLVMIntPredicate { pred: LLVMIntSLE };
+    }
+}
+
+// LLVMRealPredicate
+pub const LLVMRealOEQ = 1;
+pub const LLVMRealOGT = 2;
+pub const LLVMRealOGE = 3;
+pub const LLVMRealOLT = 4;
+pub const LLVMRealOLE = 5;
+pub const LLVMRealONE = 6;
+
+pub struct LLVMRealPredicate {
+    pred: i32;
+}
+
+impl LLVMRealPredicate {
+    pub static func oeq(): LLVMRealPredicate {
+        return LLVMRealPredicate { pred: LLVMRealOEQ };
+    }
+
+    pub static func ogt(): LLVMRealPredicate {
+        return LLVMRealPredicate { pred: LLVMRealOGT };
+    }
+
+    pub static func oge(): LLVMRealPredicate {
+        return LLVMRealPredicate { pred: LLVMRealOGE };
+    }
+
+    pub static func olt(): LLVMRealPredicate {
+        return LLVMRealPredicate { pred: LLVMRealOLT };
+    }
+
+    pub static func ole(): LLVMRealPredicate {
+        return LLVMRealPredicate { pred: LLVMRealOLE };
+    }
+
+    pub static func one(): LLVMRealPredicate {
+        return LLVMRealPredicate { pred: LLVMRealONE };
+    }
+}
+
 extern "C" {
     pub func LLVMContextCreate(): LLVMContextRef;
 
@@ -252,6 +354,87 @@ extern "C" {
     pub func LLVMSetTarget(M: LLVMModuleRef, Triple: *u8);
 
     pub func LLVMSetModuleDataLayout(M: LLVMModuleRef, DL: LLVMTargetDataRef);
+
+    pub func LLVMFunctionType(ReturnType: LLVMTypeRef, ParamTypes: *LLVMTypeRef,
+                              ParamCount: u32, IsVarArg: bool): LLVMTypeRef;
+
+    pub func LLVMAddFunction(M: LLVMModuleRef, Name: *u8, FunctionTy: LLVMTypeRef): LLVMValueRef;
+
+    pub func LLVMCountParams(Fn: LLVMValueRef): u32;
+
+    pub func LLVMGetParams(Fn: LLVMValueRef, Params: *LLVMValueRef);
+
+    pub func LLVMGetParam(Fn: LLVMValueRef, Index: u32): LLVMValueRef;
+
+    pub func LLVMGetParamParent(Inst: LLVMValueRef): LLVMValueRef;
+
+    pub func LLVMGetFirstParam(Fn: LLVMValueRef): LLVMValueRef;
+
+    pub func LLVMGetLastParam(Fn: LLVMValueRef): LLVMValueRef;
+
+    pub func LLVMGetNextParam(Arg: LLVMValueRef): LLVMValueRef;
+
+    pub func LLVMGetPreviousParam(Arg: LLVMValueRef): LLVMValueRef;
+
+    pub func LLVMAppendBasicBlockInContext(C: LLVMContextRef, Fn: LLVMValueRef,
+                                           Name: *u8): LLVMBasicBlockRef;
+
+    pub func LLVMPositionBuilderAtEnd(Builder: LLVMBuilderRef, Block: LLVMBasicBlockRef);
+
+    pub func LLVMBuildRetVoid(Builder: LLVMBuilderRef): LLVMValueRef;
+
+    pub func LLVMBuildRet(Builder: LLVMBuilderRef, V: LLVMValueRef): LLVMValueRef;
+
+    pub func LLVMConstNull(Ty: LLVMTypeRef): LLVMValueRef;
+
+    pub func LLVMBuildAdd(Builder: LLVMBuilderRef, LHS: LLVMValueRef, RHS: LLVMValueRef,
+                          Name: *u8): LLVMValueRef;
+    pub func LLVMBuildFAdd(Builder: LLVMBuilderRef, LHS: LLVMValueRef, RHS: LLVMValueRef,
+                          Name: *u8): LLVMValueRef;
+
+    pub func LLVMBuildSub(B: LLVMBuilderRef, LHS: LLVMValueRef, RHS: LLVMValueRef,
+                          Name: *u8): LLVMValueRef;
+    pub func LLVMBuildFSub(B: LLVMBuilderRef, LHS: LLVMValueRef, RHS: LLVMValueRef,
+                           Name: *u8): LLVMValueRef;
+
+    pub func LLVMBuildMul(B: LLVMBuilderRef, LHS: LLVMValueRef, RHS: LLVMValueRef,
+                          Name: *u8): LLVMValueRef;
+    pub func LLVMBuildFMul(B: LLVMBuilderRef, LHS: LLVMValueRef, RHS: LLVMValueRef,
+                           Name: *u8): LLVMValueRef;
+
+    pub func LLVMBuildUDiv(B: LLVMBuilderRef, LHS: LLVMValueRef, RHS: LLVMValueRef,
+                           Name: *u8): LLVMValueRef;
+    pub func LLVMBuildSDiv(B: LLVMBuilderRef, LHS: LLVMValueRef, RHS: LLVMValueRef,
+                           Name: *u8): LLVMValueRef;
+    pub func LLVMBuildFDiv(B: LLVMBuilderRef, LHS: LLVMValueRef, RHS: LLVMValueRef,
+                           Name: *u8): LLVMValueRef;
+
+    pub func LLVMBuildURem(B: LLVMBuilderRef, LHS: LLVMValueRef, RHS: LLVMValueRef,
+                           Name: *u8): LLVMValueRef;
+    pub func LLVMBuildSRem(B: LLVMBuilderRef, LHS: LLVMValueRef, RHS: LLVMValueRef,
+                           Name: *u8): LLVMValueRef;
+    pub func LLVMBuildFRem(B: LLVMBuilderRef, LHS: LLVMValueRef, RHS: LLVMValueRef,
+                           Name: *u8): LLVMValueRef;
+
+    pub func LLVMBuildAnd(B: LLVMBuilderRef, LHS: LLVMValueRef, RHS: LLVMValueRef,
+                          Name: *u8): LLVMValueRef;
+    pub func LLVMBuildOr(B: LLVMBuilderRef, LHS: LLVMValueRef, RHS: LLVMValueRef,
+                         Name: *u8): LLVMValueRef;
+    pub func LLVMBuildXor(B: LLVMBuilderRef, LHS: LLVMValueRef, RHS: LLVMValueRef,
+                          Name: *u8): LLVMValueRef;
+
+    pub func LLVMBuildICmp(B: LLVMBuilderRef, Op: LLVMIntPredicate, LHS: LLVMValueRef,
+                           RHS: LLVMValueRef, Name: *u8): LLVMValueRef;
+    pub func LLVMBuildFCmp(B: LLVMBuilderRef, Op: LLVMRealPredicate, LHS: LLVMValueRef,
+                           RHS: LLVMValueRef, Name: *u8): LLVMValueRef;
+
+    pub func LLVMBuildNeg(B: LLVMBuilderRef, V: LLVMValueRef, Name: *u8): LLVMValueRef;
+
+    pub func LLVMBuildFNeg(B: LLVMBuilderRef, V: LLVMValueRef, Name: *u8): LLVMValueRef;
+
+    pub func LLVMBuildNot(B: LLVMBuilderRef, V: LLVMValueRef, Name: *u8): LLVMValueRef;
+
+    pub func LLVMTypeOf(Val: LLVMValueRef): LLVMTypeRef;
 }
 
 pub func init_llvm() {

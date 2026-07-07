@@ -16,7 +16,7 @@ Sema::canFit (Value &val, const Type *targetType) {
                 if (targetType->IsIntOrSize ()) {
                     unsigned bits       = targetType->IsInteger ()
                                               ? targetType->AsInteger ()->BitWidth ()
-                                              : 32;
+                                              : _ptrBitWidth;
                     bool     isUnsigned = targetType->IsInteger ()
                                               ? targetType->AsInteger ()->IsUnsigned ()
                                               : targetType->AsSize ()->IsUnsigned ();

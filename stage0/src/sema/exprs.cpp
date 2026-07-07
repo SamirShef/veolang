@@ -19,12 +19,12 @@ using namespace symbols;
          ? prefix##64_##maxOrMin                                                         \
          : (_ptrBitWidth == 32 ? prefix##32_##maxOrMin : prefix##16_##maxOrMin))
 
-static std::optional<long long>
+static std::optional<int64_t>
 SafeStoll (const std::string &str, int base = 10) {
     char *endptr = nullptr;
     errno        = 0;
 
-    auto result = std::strtoll (str.c_str (), &endptr, base);
+    auto result = std::strtoull (str.c_str (), &endptr, base);
 
     if (endptr == str.c_str ()) {
         return std::nullopt;

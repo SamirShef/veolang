@@ -190,11 +190,11 @@ impl Sema {
             let var_expr = ast.VarExpr.cast(expr.(*ast.Node));
             return this.analyze_var_expr(var_expr, expected_ty);
         } else if kind == ast.NODE_BIN_EXPR {
-            std.panic("Unimplemented NODE_BIN_EXPR");
-            return ExprResult.invalid();
+            let bin_expr = ast.BinExpr.cast(expr.(*ast.Node));
+            return this.analyze_bin_expr(bin_expr, expected_ty);
         } else if kind == ast.NODE_UN_EXPR {
-            std.panic("Unimplemented NODE_UN_EXPR");
-            return ExprResult.invalid();
+            let un_expr = ast.UnExpr.cast(expr.(*ast.Node));
+            return this.analyze_un_expr(un_expr, expected_ty);
         } else if kind == ast.NODE_LIT_EXPR {
             let lit_expr = ast.LitExpr.cast(expr.(*ast.Node));
             return this.analyze_lit_expr(lit_expr, expected_ty);
@@ -206,50 +206,52 @@ impl Sema {
 
     func analyze_lit_expr(lit: *ast.LitExpr, expected_ty: *types.Type): ExprResult {
         let kind = lit.tok_kind;
-        if kind == lexer.TOK_I32_LIT {
-            let text   = lit.val;
-            let len    = text.len();
-            let data   = text.data();
+        let text = lit.val;
+        let val_as_u64: u64;
+        let ty: *types.Type;
+        if kind >= lexer.TOK_I8_LIT && kind <= lexer.TOK_I64_LIT {
             let is_neg = false;
-            let idx    = 0uz;
+            let accum  = str_to_u64(text, &is_neg);
 
-            let first_char = *data;
-            if first_char == '-'.(u8) {
-                is_neg = true;
-                idx += 1;
+            val_as_u64 = signed_int_to_u64(accum, is_neg);
+            ty         = this.tok_to_ty(kind);
+            if !this.can_fit(val_as_u64, ty) {
+                std.panic("Value out of range for some signed integer type");
             }
-
-            let accum = 0u64;
-
-            for idx < len {
-                let ch = *(data + idx);
-                if ch >= '0'.(u8) && ch <= '9'.(u8) {
-                    let digit = (ch - '0'.(u8)).(u64);
-                    accum     = accum * 10u64 + digit;
-                }
-                idx += 1uz;
-            }
-
-            let final_i32 = 0i32;
+            // TODO: add implicit cast to expected_ty
+        } else if kind >= lexer.TOK_U8_LIT && kind <= lexer.TOK_U64_LIT {
+            let is_neg = false;
+            let accum  = str_to_u64(text, &is_neg);
             if is_neg {
-                final_i32 = -(accum.(i32));
-            } else {
-                final_i32 = accum.(i32);
-            }
-            let val_as_u64 = final_i32.(u64);
-            let ty = this.ty_ctx.get_int_ty(32u32, false);
-            if expected_ty != nil {
-                ty = expected_ty;
+                std.panic("Unsigned integer cannot be negative");
             }
 
-            let val     = basic.Value.new(basic.VAL_CONST, val_as_u64, ty);
-            let hir_lit = this.builder.create_literal(val);
+            val_as_u64 = accum;
+            ty         = this.tok_to_ty(kind);
+            if !this.can_fit(val_as_u64, ty) {
+                std.panic("Value out of range for some unsigned integer type");
+            }
+            // TODO: add implicit cast to expected_ty
+        } else if kind == lexer.TOK_INT_LIT {
+            let is_neg = false;
+            let accum  = str_to_u64(text, &is_neg);
 
-            return ExprResult.new(val, hir_lit.(*hir.Node));
+            val_as_u64 = signed_int_to_u64(accum, is_neg);
+            ty         = expected_ty;
+            if ty == nil {
+                ty = this.ty_ctx.get_int_ty(32u32, false);
+            }
+            if !this.can_fit(val_as_u64, ty) {
+                std.panic("Value out of range for some integer type");
+            }
         } else {
             std.panic("Unimplemented literal type kind");
             return ExprResult.invalid();
         }
+
+        let val     = basic.Value.new(basic.VAL_CONST, val_as_u64, ty);
+        let hir_lit = this.builder.create_literal(val);
+        return ExprResult.new(val, hir_lit.(*hir.Node));
     }
 
     func analyze_var_expr(var_expr: *ast.VarExpr, expected_ty: *types.Type): ExprResult {
@@ -266,9 +268,186 @@ impl Sema {
             return ExprResult.invalid();
         }
         let var_sym = symbols.VarSymbol.cast(resolved);
-        let val     = var_sym.is_const ? var_sym.val.unwrap()
-                                       : basic.Value.new(basic.VAL_UNKNOWN, var_sym.ty);
+        let val     = basic.Value.new(basic.VAL_UNKNOWN, var_sym.ty);
         let node    = this.builder.create_load(var_sym.id(), var_sym.ty);
         return ExprResult.new(val, node.(*hir.Node));
+    }
+
+    func analyze_bin_expr(bin_expr: *ast.BinExpr, expected_ty: *types.Type): ExprResult {
+        let left = this.analyze_expr(bin_expr.left, nil.(*types.Type));
+        if !left.val.has_val() {
+            return ExprResult.invalid();
+        }
+        let common_ty = left.val.unwrap().ty;
+        let right     = this.analyze_expr(bin_expr.right, common_ty);
+        if !right.val.has_val() {
+            return ExprResult.invalid();
+        }
+        // TODO: add inference common type and cast left and right operands to common type
+
+        let res_ty = this.res_ty_by_bin_op(bin_expr.op, common_ty);
+        let val    = basic.Value.new(basic.VAL_UNKNOWN, res_ty);
+        let node   = this.builder.create_binary(bin_expr.op, left.node, right.node, common_ty);
+        return ExprResult.new(val, node.(*hir.Node));
+    }
+
+    func analyze_un_expr(un_expr: *ast.UnExpr, expected_ty: *types.Type): ExprResult {
+        let right = this.analyze_expr(un_expr.right, nil.(*types.Type));
+        if !right.val.has_val() {
+            return ExprResult.invalid();
+        }
+        // TODO: add cast left operand to expected_ty type
+
+        let common_ty = right.val.unwrap().ty;
+        let res_ty    = this.res_ty_by_un_op(un_expr.op, common_ty);
+        let val       = basic.Value.new(basic.VAL_UNKNOWN, res_ty);
+        let node      = this.builder.create_unary(un_expr.op, right.node, common_ty);
+        return ExprResult.new(val, node.(*hir.Node));
+    }
+
+    func res_ty_by_bin_op(op: i32, common_ty: *types.Type): *types.Type {
+        if op >= ast.BIN_OP_EQ && op <= ast.BIN_OP_LOG_OR {
+            return this.ty_ctx.get_bool_ty();
+        }
+        return common_ty;
+    }
+
+    func res_ty_by_un_op(op: i32, common_ty: *types.Type): *types.Type {
+        if op == ast.UN_OP_NOT {
+            return this.ty_ctx.get_bool_ty();
+        }
+        return common_ty;
+    }
+
+    func tok_to_ty(tok_kind: i32): *types.Type {
+        if tok_kind == lexer.TOK_I8_LIT {
+            return this.ty_ctx.get_int_ty(8u32, false);
+        } else if tok_kind == lexer.TOK_I16_LIT {
+            return this.ty_ctx.get_int_ty(16u32, false);
+        } else if tok_kind == lexer.TOK_I32_LIT {
+            return this.ty_ctx.get_int_ty(32u32, false);
+        } else if tok_kind == lexer.TOK_I64_LIT {
+            return this.ty_ctx.get_int_ty(64u32, false);
+        } else if tok_kind == lexer.TOK_U8_LIT {
+            return this.ty_ctx.get_int_ty(8u32, true);
+        } else if tok_kind == lexer.TOK_U16_LIT {
+            return this.ty_ctx.get_int_ty(16u32, true);
+        } else if tok_kind == lexer.TOK_U32_LIT {
+            return this.ty_ctx.get_int_ty(32u32, true);
+        } else if tok_kind == lexer.TOK_U64_LIT {
+            return this.ty_ctx.get_int_ty(64u32, true);
+        }
+        std.panic("Cannot convert token kind to type");
+        return nil;
+    }
+
+    func can_fit(val: u64, ty: *types.Type): bool {
+        let kind = ty.kind();
+        if kind != types.TYPE_INT {
+            std.panic("Type must be an integer");
+        }
+
+        let int_ty = types.IntType.cast(ty);
+        let width = int_ty.width;
+        let is_unsigned = int_ty.is_unsigned;
+
+        if is_unsigned {
+            if width == 8u32 {
+                if val > 0xFFu64 {
+                    return false;
+                }
+            } else if width == 16u32 {
+                if val > 0xFFFFu64 {
+                    return false;
+                }
+            } else if width == 32u32 {
+                if val > 0xFFFFFFFFu64 {
+                    return false;
+                }
+            } else if width == 64u32 {
+                // is not necessary
+            } else {
+                return false;
+            }
+        } else {
+            if width == 8u32 {
+                let sign_mask = 0x80u64;
+                let upper_mask = 0xFFFFFFFFFFFFFF80u64;
+
+                if (val & sign_mask) == 0u64 {
+                    if (val & upper_mask) != 0u64 {
+                        return false;
+                    }
+                } else {
+                    if (val & upper_mask) != upper_mask {
+                        return false;
+                    }
+                }
+            } else if width == 16u32 {
+                let sign_mask = 0x8000u64;
+                let upper_mask = 0xFFFFFFFFFFFF8000u64;
+
+                if (val & sign_mask) == 0u64 {
+                    if (val & upper_mask) != 0u64 {
+                        return false;
+                    }
+                } else {
+                    if (val & upper_mask) != upper_mask {
+                        return false;
+                    }
+                }
+            } else if width == 32u32 {
+                let sign_mask = 0x80000000u64;
+                let upper_mask = 0xFFFFFFFF80000000u64;
+
+                if (val & sign_mask) == 0u64 {
+                    if (val & upper_mask) != 0u64 {
+                        return false;
+                    }
+                } else {
+                    if (val & upper_mask) != upper_mask {
+                        return false;
+                    }
+                }
+            } else if width == 64u32 {
+                // is not necessary
+            } else {
+                std.panic("Unsupported integer width");
+            }
+        }
+
+        return true;
+    }
+}
+
+func str_to_u64(str: std.StringView, is_neg: *bool): u64 {
+    let len    = str.len();
+    let data   = str.data();
+    let idx    = 0uz;
+
+    let first_char = *data;
+    if first_char == '-'.(u8) {
+        *is_neg = true;
+        idx += 1;
+    }
+
+    let accum = 0u64;
+
+    for idx < len {
+        let ch = *(data + idx);
+        if ch >= '0'.(u8) && ch <= '9'.(u8) {
+            let digit = (ch - '0'.(u8)).(u64);
+            accum     = accum * 10u64 + digit;
+        }
+        idx += 1uz;
+    }
+    return accum;
+}
+
+func signed_int_to_u64(accum: u64, is_neg: bool): u64 {
+    if is_neg {
+        return (-(accum.(i64))).(u64);
+    } else {
+        return accum;
     }
 }
