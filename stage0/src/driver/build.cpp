@@ -9,6 +9,7 @@
 #include <driver/module_loader.h>
 #include <filesystem>
 #include <fstream>
+#include <llvm/Support/FileSystem.h>
 #include <llvm/Support/raw_ostream.h>
 #include <llvm/TargetParser/Host.h>
 #include <sstream>
@@ -143,6 +144,15 @@ BuildDriver::Build () {
         }
 
         objFiles.push_back (cObjPath.string ());
+    }
+
+    std::error_code      ec;
+    llvm::raw_fd_ostream modulesTxt (
+        (artefactDir / "modules.txt").string (),
+        ec,
+        llvm::sys::fs::OF_None);
+    for (const auto &obj : objFiles) {
+        modulesTxt << obj << '\n';
     }
 
     if (NoLinkOpt) {

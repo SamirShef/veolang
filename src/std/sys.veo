@@ -51,6 +51,8 @@ extern "C" {
 
     pub func memcpy(dest_ptr: *u8, src_ptr: *u8, src_size: usize);
 
+    pub func system(cmd: *u8): i32;
+
     /**
      * @brief opens file
      * @param path: path to file (from disk root or current directory)

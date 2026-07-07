@@ -16,10 +16,6 @@ import sema;
 import llvm.bindings;
 import codegen;
 
-/*
- * clang++ std/math.o std/sys.o std/mem.o std.o llvm/smloc.o types.o basic.o llvm/source_mgr.o lexer.o std/fs.o std/fs_runtime.o runtime.o std/io.o ast.o hir.o symbols.o sema.o llvm/bindings.o codegen.o main.o -o veoc-stage1 $(llvm-config --libs --system-libs --ldflags) -lrt -ldl -lpthread -lm;
- */
-
 let alloc: mem.MallocAllocator;
 let arena = mem.ArenaAllocator.init(alloc, 64uz * mem.KB);
 
@@ -51,11 +47,71 @@ func main(): i32 {
     let semantic    = sema.Sema.new(alloc, &hir_builder, &ty_ctx, &sym_table);
     semantic.analyze(alloc, parse_res);
 
-    let gen = codegen.CodeGen.new("test_mod", &sym_table, &hir_ctx);
-    gen.generate();
+    bindings.init_llvm();
+
+    let target: bindings.LLVMTargetRef;
+    let target_err: *u8;
+    let triple_str = "x86_64-pc-linux-gnu";
+
+    if bindings.LLVMGetTargetFromTriple(triple_str, &target, &target_err) {
+        io.print("\033[31mError looking up target: \033[0m");
+        io.println(target_err);
+        bindings.LLVMDisposeMessage(target_err);
+        mgr.destroy(alloc);
+        arena.reset();
+        return 1;
+    }
+
+    let cpu            = "generic";
+    let features       = "";
+    let opt_level      = bindings.LLVMCodeGenOptLevel.none();
+    let reloc          = bindings.LLVMRelocMode.pic();
+    let code_model     = bindings.LLVMCodeModel.default();
+    let target_machine = bindings.LLVMCreateTargetMachine(
+        target, triple_str, cpu, features, opt_level, reloc, code_model
+    );
+    let data_layout    = bindings.LLVMCreateTargetDataLayout(target_machine);
+
+    let gen    = codegen.CodeGen.new("test_mod", &sym_table, &hir_ctx, triple_str, data_layout);
+    let module = gen.generate();
     gen.dump_mod();
 
+    if !emit_obj_file(module, target_machine, "src/tests/var_decl.o") {
+        bindings.LLVMDisposeTargetData(data_layout);
+        bindings.LLVMDisposeTargetMachine(target_machine);
+        return 1;
+    }
+
+    sys.system("clang src/tests/var_decl.o -o src/tests/var_decl");
+
+    bindings.LLVMDisposeTargetData(data_layout);
+    bindings.LLVMDisposeTargetMachine(target_machine);
     mgr.destroy(alloc);
     arena.reset();
     return 0;
+}
+
+func emit_file(
+    module: bindings.LLVMModuleRef,
+    target_machine: bindings.LLVMTargetMachineRef,
+    file_name: *u8,
+    file_type: bindings.LLVMCodeGenFileType): bool {
+    let error_msg: *u8;
+    if bindings.LLVMTargetMachineEmitToFile(target_machine, module, file_name, file_type, &error_msg) {
+        io.print("\033[31mCould not emit file ");
+        io.print(file_name);
+        io.print(": ");
+        io.print(error_msg);
+        io.println("\033[0m");
+        bindings.LLVMDisposeMessage(error_msg);
+        return false;
+    }
+    return true;
+}
+
+func emit_obj_file(
+    module: bindings.LLVMModuleRef,
+    target_machine: bindings.LLVMTargetMachineRef,
+    file_name: *u8): bool {
+    return emit_file(module, target_machine, file_name, bindings.LLVMCodeGenFileType.object_file());
 }
