@@ -5,6 +5,108 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.24.13] - 2026-07-21
+
+Now stage1 can compiles simple Veo code with global variables and some arithmetic operators
+
+### Added
+
+- `examples/extern.veo`
+
+## [0.24.12] - 2026-07-07
+
+### Added
+
+- Dumps all of object file paths to `build/targets/<target>/obj/src/modules.txt` file
+- Python script for bootstrapping (`build.py`)
+
+### Fixed
+
+- Incorrect converting string to integer
+
+## [0.24.11] - 2026-07-04
+
+### Fixed
+
+- Mangling for unsigned integers
+
+## [0.24.10] - 2026-07-03
+
+### Added
+
+- Flag `--no-link` which terminating (with code `0`) compilation after emitting ASM code to object files
+
+### Fixed
+
+- Object file in Windows has extension `.obj` instead of `.o`
+
+## [0.24.9] - 2026-07-02
+
+### Added
+
+- Stage1 parser (base parsing of variables and expressions)
+- Stage1 parser dumper (dump AST into stdout)
+
+## [0.24.8] - 2026-07-02
+
+### Fixed
+
+- Stack overflow (infinite recursion) on analyzing of the mutability method with a recursive call
+
+## [0.24.7] - 2026-07-01
+
+### Fixed
+
+- Code generation of initialization module function (`__veo_init_mod_*`)
+
+## [0.24.6] - 2026-06-30
+
+### Added
+
+- Lexing hex/oct/bin numbers
+
+## [0.24.5] - 2026-06-30
+
+### Added
+
+- Official mascot (Lynx Casper)
+
+## [0.24.4] - 2026-06-30
+
+### Added
+
+- Base std
+- Base std.fs
+- Base std.io
+- Base std.math
+- Base std.mem
+- Base std.sys
+- Lexer for stage1
+
+### Fixed
+
+- Some bugs in stage0
+
+## [0.24.3] - 2026-06-24
+
+### Added
+
+- Escape-sequence in `tokenizeCharLit` and `tokenizeStrLit`
+
+### Fixed
+
+- Incorrect finding symbols in `_mod` scope
+
+### Removed
+
+- Ignoring extern-declaration import in current module
+
+## [0.24.2] - 2026-06-23
+
+### Fixed
+
+- Incorrect mangling methods from imported modules
+
 ## [0.24.1] - 2026-06-23
 
 ### Fixed

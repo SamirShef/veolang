@@ -1,4 +1,7 @@
-# The Veo Programming Language
+<h1 align="center">The Veo Programming Language</h1>
+<p align="center">
+    <img src="lynx_logo.png" alg="Veo Mascot: Casper" width="25%" />
+</p>
 
 **Veo** - compiled, high-performance systems programming language designed for building reliable, secure, and resource-constrained software.
 It combines zero-cost abstractions and bare-metal performance with modern safety guarantees, aiming to prevent common memory management and concurrency defects

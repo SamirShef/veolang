@@ -1,0 +1,6 @@
+[package]
+name = "veoc"
+entry = "src/main.veo"
+
+[c]
+sources = ["src/std/fs_runtime.c", "src/runtime.c", "src/llvm/bindings_helper.c"]
