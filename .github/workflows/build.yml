@@ -93,14 +93,14 @@ jobs:
         run: |
           mkdir release
           if [ -f artifacts/veoc-ubuntu-latest/veoc ]; then
-            tar -czvf dist/veoc-linux-x86_64.tar.gz -C artifacts/veoc-ubuntu-latest veoc
+            tar -czvf release/veoc-linux-x86_64.tar.gz -C artifacts/veoc-ubuntu-latest veoc
           fi
 
           if [ -f artifacts/veoc-windows-latest/veoc.exe ]; then
-            cd artifacts/veoc-windows-latest && zip ../../dist/veoc-windows-x86_64.zip veoc.exe && \
+            cd artifacts/veoc-windows-latest && zip ../../release/veoc-windows-x86_64.zip veoc.exe && \
             cd ../..
           elif [ -f artifacts/veoc-windows-latest/Release/veoc.exe ]; then
-            cd artifacts/veoc-windows-latest/Release && zip ../../../dist/veoc-windows-x86_64.zip veoc.exe && \
+            cd artifacts/veoc-windows-latest/Release && zip ../../../release/veoc-windows-x86_64.zip veoc.exe && \
             cd ../../..
           fi
 
