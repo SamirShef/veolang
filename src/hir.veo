@@ -142,15 +142,15 @@ impl Load {
 }
 
 pub struct Context {
-    alloc: *mem.ArenaAllocator;
+    alloc: mem.ArenaAllocator;
     global_vars_start: *Variable;
     global_vars_end: *Variable;
 }
 
 impl Context {
-    pub static func new(alloc: *mem.ArenaAllocator): Context {
+    pub static func new(): Context {
         return Context {
-            alloc: alloc,
+            alloc: mem.ArenaAllocator.init(64uz * mem.KB),
             global_vars_start: nil,
             global_vars_end: nil
         };
@@ -203,11 +203,11 @@ impl Builder {
         return Builder { ctx: ctx };
     }
 
-    pub func create_variable(alloc: mem.Allocator, id: basic.DefId, name: std.StringView,
+    pub func create_variable(id: basic.DefId, name: std.StringView,
                              ty: *types.Type, init: *Node): *Variable {
         let var  = this.ctx.alloc_node(NODE_VARIABLE).(*Variable);
         var.id   = id;
-        var.name = std.String.from(alloc, name);
+        var.name = std.String.from(name);
         var.ty   = ty;
         var.init = init;
         this.ctx.add_global_var(var);

@@ -1,6 +1,7 @@
 import std.mem;
 import std.math;
 import std;
+import std.sys;
 import llvm.smloc;
 import types;
 import basic;
@@ -75,10 +76,10 @@ pub struct SymbolTable {
 }
 
 impl SymbolTable {
-    pub static func new(alloc: mem.Allocator): SymbolTable {
+    pub static func new(): SymbolTable {
         let ptr: *Symbol;
         let cap     = 16uz;
-        let entries = alloc.alloc(@size_of(ptr) * cap).(**Symbol);
+        let entries = sys.malloc(@size_of(ptr) * cap).(**Symbol);
         let count   = 0uz;
         return SymbolTable {
             entries: entries,
@@ -87,7 +88,7 @@ impl SymbolTable {
         };
     }
 
-    pub func insert(alloc: mem.Allocator, sym: *Symbol) {
+    pub func insert(sym: *Symbol) {
         if sym == nil { return; }
 
         let existing_id = this.lookup_by_id(sym.id());
@@ -98,7 +99,7 @@ impl SymbolTable {
         if this.count >= this.cap {
             let old_cap = this.cap;
             this.cap = math.max(this.cap * 2uz, this.cap + 1uz);
-            this.entries = alloc.realloc(this.entries.(*u8), old_cap, @size_of(sym) * this.cap).(**Symbol);
+            this.entries = sys.realloc(this.entries.(*u8), @size_of(sym) * this.cap).(**Symbol);
         }
 
         *(this.entries + this.count) = sym;

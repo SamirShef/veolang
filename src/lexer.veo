@@ -6,8 +6,6 @@ import std;
 import std.sys;
 import llvm.source_mgr;
 
-let alloc: mem.MallocAllocator;
-
 pub const TOK_ID         =                  0;
 pub const TOK_BOOL       = TOK_ID         + 1;
 pub const TOK_CHAR       = TOK_BOOL       + 1;
@@ -118,14 +116,14 @@ impl Token {
 }
 
 impl std.ToString for Token {
-    pub func to_string(alloc: mem.Allocator): std.String {
+    pub func to_string(): std.String {
         let s: std.String;
-        let kind_str = std.i32_to_string(alloc, this.kind);
-        s.append(alloc, kind_str);
-        s.append(alloc, '('.(u8));
-        s.append(alloc, this.val);
-        s.append(alloc, ')'.(u8));
-        kind_str.destroy(alloc);
+        let kind_str = std.i32_to_string(this.kind);
+        s.append(kind_str);
+        s.append('('.(u8));
+        s.append(this.val);
+        s.append(')'.(u8));
+        kind_str.destroy();
         return s;
     }
 }
@@ -761,18 +759,18 @@ func hash_string(key: std.StringView): u32 {
 }
 
 impl HashMapStringTokenKind {
-    pub static func new(alloc: mem.Allocator): HashMapStringTokenKind {
+    pub static func new(): HashMapStringTokenKind {
         let cap = 8uz;
-        let buckets = alloc.alloc(cap * @size_of(HashMapStringTokenKindEntry))
+        let buckets = sys.malloc(cap * @size_of(HashMapStringTokenKindEntry))
             .(*HashMapStringTokenKindEntry);
         return HashMapStringTokenKind { buckets: buckets, len: 0uz, cap: cap, tompstones_count: 0uz };
     }
 
-    func resize(alloc: mem.Allocator, new_cap: usize) {
+    func resize(new_cap: usize) {
         let old_buckets = this.buckets;
         let old_cap = this.cap;
 
-        let buckets = alloc.alloc(new_cap * @size_of(HashMapStringTokenKindEntry))
+        let buckets = sys.malloc(new_cap * @size_of(HashMapStringTokenKindEntry))
             .(*HashMapStringTokenKindEntry);
         this.cap = new_cap;
         this.tompstones_count = 0;
@@ -794,16 +792,16 @@ impl HashMapStringTokenKind {
             (buckets + index).state = MAP_STATE_OCCUPIED;
         }
         this.buckets = buckets;
-        alloc.destroy(old_buckets.(*u8));
+        sys.free(old_buckets.(*u8));
     }
 
-    pub func insert(alloc: mem.Allocator, key: std.StringView, val: i32): bool {
+    pub func insert(key: std.StringView, val: i32): bool {
         if (this.len + this.tompstones_count) * 10uz >= this.cap * 7uz {
             // resize
             if this.tompstones_count > this.len {
-                this.resize(alloc, this.cap);
+                this.resize(this.cap);
             } else {
-                this.resize(alloc, this.cap * 2uz);
+                this.resize(this.cap * 2uz);
             }
         }
 
@@ -868,8 +866,8 @@ impl HashMapStringTokenKind {
         return this.len;
     }
 
-    pub func destroy(alloc: mem.Allocator) {
-        alloc.destroy(this.buckets.(*u8));
+    pub func destroy() {
+        sys.free(this.buckets.(*u8));
         this.buckets = nil;
         this.len = 0;
         this.cap = 0;
@@ -878,40 +876,40 @@ impl HashMapStringTokenKind {
 }
 
 func init_keywords(): HashMapStringTokenKind {
-    let map = HashMapStringTokenKind.new(alloc);
-    map.insert(alloc, std.StringView.from("bool"), TOK_BOOL);
-    map.insert(alloc, std.StringView.from("char"), TOK_CHAR);
-    map.insert(alloc, std.StringView.from("i8"), TOK_I8);
-    map.insert(alloc, std.StringView.from("i16"), TOK_I16);
-    map.insert(alloc, std.StringView.from("i32"), TOK_I32);
-    map.insert(alloc, std.StringView.from("i64"), TOK_I64);
-    map.insert(alloc, std.StringView.from("isize"), TOK_ISIZE);
-    map.insert(alloc, std.StringView.from("u8"), TOK_U8);
-    map.insert(alloc, std.StringView.from("u16"), TOK_U16);
-    map.insert(alloc, std.StringView.from("u32"), TOK_U32);
-    map.insert(alloc, std.StringView.from("u64"), TOK_U64);
-    map.insert(alloc, std.StringView.from("usize"), TOK_USIZE);
-    map.insert(alloc, std.StringView.from("f32"), TOK_F32);
-    map.insert(alloc, std.StringView.from("f64"), TOK_F64);
-    map.insert(alloc, std.StringView.from("let"), TOK_LET);
-    map.insert(alloc, std.StringView.from("const"), TOK_CONST);
-    map.insert(alloc, std.StringView.from("func"), TOK_FUNC);
-    map.insert(alloc, std.StringView.from("return"), TOK_RET);
-    map.insert(alloc, std.StringView.from("if"), TOK_IF);
-    map.insert(alloc, std.StringView.from("else"), TOK_ELSE);
-    map.insert(alloc, std.StringView.from("for"), TOK_FOR);
-    map.insert(alloc, std.StringView.from("break"), TOK_BREAK);
-    map.insert(alloc, std.StringView.from("continue"), TOK_CONT);
-    map.insert(alloc, std.StringView.from("struct"), TOK_STRUCT);
-    map.insert(alloc, std.StringView.from("pub"), TOK_PUB);
-    map.insert(alloc, std.StringView.from("impl"), TOK_IMPL);
-    map.insert(alloc, std.StringView.from("trait"), TOK_TRAIT);
-    map.insert(alloc, std.StringView.from("nil"), TOK_NIL);
-    map.insert(alloc, std.StringView.from("mod"), TOK_MOD);
-    map.insert(alloc, std.StringView.from("import"), TOK_IMPORT);
-    map.insert(alloc, std.StringView.from("static"), TOK_STATIC);
-    map.insert(alloc, std.StringView.from("extern"), TOK_EXTERN);
-    map.insert(alloc, std.StringView.from("@size_of"), TOK_SIZEOF);
+    let map = HashMapStringTokenKind.new();
+    map.insert(std.StringView.from("bool"), TOK_BOOL);
+    map.insert(std.StringView.from("char"), TOK_CHAR);
+    map.insert(std.StringView.from("i8"), TOK_I8);
+    map.insert(std.StringView.from("i16"), TOK_I16);
+    map.insert(std.StringView.from("i32"), TOK_I32);
+    map.insert(std.StringView.from("i64"), TOK_I64);
+    map.insert(std.StringView.from("isize"), TOK_ISIZE);
+    map.insert(std.StringView.from("u8"), TOK_U8);
+    map.insert(std.StringView.from("u16"), TOK_U16);
+    map.insert(std.StringView.from("u32"), TOK_U32);
+    map.insert(std.StringView.from("u64"), TOK_U64);
+    map.insert(std.StringView.from("usize"), TOK_USIZE);
+    map.insert(std.StringView.from("f32"), TOK_F32);
+    map.insert(std.StringView.from("f64"), TOK_F64);
+    map.insert(std.StringView.from("let"), TOK_LET);
+    map.insert(std.StringView.from("const"), TOK_CONST);
+    map.insert(std.StringView.from("func"), TOK_FUNC);
+    map.insert(std.StringView.from("return"), TOK_RET);
+    map.insert(std.StringView.from("if"), TOK_IF);
+    map.insert(std.StringView.from("else"), TOK_ELSE);
+    map.insert(std.StringView.from("for"), TOK_FOR);
+    map.insert(std.StringView.from("break"), TOK_BREAK);
+    map.insert(std.StringView.from("continue"), TOK_CONT);
+    map.insert(std.StringView.from("struct"), TOK_STRUCT);
+    map.insert(std.StringView.from("pub"), TOK_PUB);
+    map.insert(std.StringView.from("impl"), TOK_IMPL);
+    map.insert(std.StringView.from("trait"), TOK_TRAIT);
+    map.insert(std.StringView.from("nil"), TOK_NIL);
+    map.insert(std.StringView.from("mod"), TOK_MOD);
+    map.insert(std.StringView.from("import"), TOK_IMPORT);
+    map.insert(std.StringView.from("static"), TOK_STATIC);
+    map.insert(std.StringView.from("extern"), TOK_EXTERN);
+    map.insert(std.StringView.from("@size_of"), TOK_SIZEOF);
     return map;
 }
 

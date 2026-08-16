@@ -16,9 +16,9 @@ impl SourceMgr {
      * @param alloc: memory allocator for initializing the internal buffer storage
      * @return an initialized SourceMgr container
      */
-    pub static func new(alloc: mem.Allocator): SourceMgr {
+    pub static func new(): SourceMgr {
         return SourceMgr {
-            buffers: std.ListString.new(alloc)
+            buffers: std.ListString.new()
         };
     }
 
@@ -28,9 +28,9 @@ impl SourceMgr {
      * @param buffer: the source string content to be managed
      * @return the unique ID assigned to the newly added buffer
      */
-    pub func add_buffer(alloc: mem.Allocator, buffer: std.String): usize {
+    pub func add_buffer(buffer: std.String): usize {
         let id = this.buffers.len();
-        this.buffers.add(alloc, buffer);
+        this.buffers.add(buffer);
         return id;
     }
 
@@ -43,7 +43,7 @@ impl SourceMgr {
         return this.buffers.get(id);
     }
 
-    pub func destroy(alloc: mem.Allocator) {
-        this.buffers.destroy(alloc);
+    pub func destroy() {
+        this.buffers.destroy();
     }
 }

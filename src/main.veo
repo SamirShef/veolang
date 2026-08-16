@@ -16,9 +16,6 @@ import sema;
 import llvm.bindings;
 import codegen;
 
-let alloc: mem.MallocAllocator;
-let arena = mem.ArenaAllocator.init(alloc, 64uz * mem.KB);
-
 let emit_ir  = true;
 let emit_asm = false;
 
@@ -27,14 +24,14 @@ func main(): i32 {
     if !main_file.is_open() {
         std.panic("Cannot open file src/main.veo");
     }
-    let content   = main_file.read_all(alloc);
-    let mgr       = source_mgr.SourceMgr.new(alloc);
-    let buffer_id = mgr.add_buffer(alloc, content); // [OWNERSHIP: ACQUIRE]
+    let content   = main_file.read_all();
+    let mgr       = source_mgr.SourceMgr.new();
+    let buffer_id = mgr.add_buffer(content); // [OWNERSHIP: ACQUIRE]
     let mod_id    = basic.hash64("main", 4uz);
 
     let lex       = lexer.Lexer.new(mgr, buffer_id);
-    let ty_ctx    = types.Context.new(&arena);
-    let ast_ctx   = ast.Context.new(&arena);
+    let ty_ctx    = types.Context.new();
+    let ast_ctx   = ast.Context.new();
     let parser    = ast.Parser.new(&lex, &ty_ctx, &ast_ctx);
     let parse_res = parser.parse();
 
@@ -44,11 +41,11 @@ func main(): i32 {
     let dumper: ast.Dumper;
     dumper.dump(parse_res);
 
-    let sym_table   = symbols.SymbolTable.new(alloc);
-    let hir_ctx     = hir.Context.new(&arena);
+    let sym_table   = symbols.SymbolTable.new();
+    let hir_ctx     = hir.Context.new();
     let hir_builder = hir.Builder.new(&hir_ctx);
-    let semantic    = sema.Sema.new(alloc, &hir_builder, &ty_ctx, &sym_table);
-    semantic.analyze(alloc, parse_res);
+    let semantic    = sema.Sema.new(&hir_builder, &ty_ctx, &sym_table);
+    semantic.analyze(parse_res);
 
     bindings.init_llvm();
 
@@ -60,8 +57,7 @@ func main(): i32 {
         io.print("\033[31mError looking up target: \033[0m");
         io.println(target_err);
         bindings.LLVMDisposeMessage(target_err);
-        mgr.destroy(alloc);
-        arena.reset();
+        mgr.destroy();
         return 1;
     }
 
@@ -83,24 +79,21 @@ func main(): i32 {
         io.print("\033[31mError on prints LLVM IR to file: \033[0m");
         io.println(print_mod_err_msg);
         bindings.LLVMDisposeMessage(print_mod_err_msg);
-        mgr.destroy(alloc);
-        arena.reset();
+        mgr.destroy();
         return 1;
     }
 
     if !emit_obj_file(module, target_machine, "src/tests/var_decl.o") {
         bindings.LLVMDisposeTargetData(data_layout);
         bindings.LLVMDisposeTargetMachine(target_machine);
-        mgr.destroy(alloc);
-        arena.reset();
+        mgr.destroy();
         return 1;
     }
 
     if emit_asm && !emit_asm_file(module, target_machine, "src/tests/var_decl.s") {
         bindings.LLVMDisposeTargetData(data_layout);
         bindings.LLVMDisposeTargetMachine(target_machine);
-        mgr.destroy(alloc);
-        arena.reset();
+        mgr.destroy();
         return 1;
     }
 
@@ -108,8 +101,7 @@ func main(): i32 {
 
     bindings.LLVMDisposeTargetData(data_layout);
     bindings.LLVMDisposeTargetMachine(target_machine);
-    mgr.destroy(alloc);
-    arena.reset();
+    mgr.destroy();
     return 0;
 }
 

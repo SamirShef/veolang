@@ -19,10 +19,10 @@ impl String {
      * @return String container
      * @note String data contains null-terminator in the end
      */
-    pub static func from(alloc: mem.Allocator, str: *u8): String {
+    pub static func from(str: *u8): String {
         let len = sys.strlen(str);
         let cap = len + 1uz;
-        let data = alloc.alloc(@size_of(u8) * cap);
+        let data = sys.malloc(@size_of(u8) * cap);
         for let i = 0uz, i < len, i += 1 {
             *(data + i) = *(str + i);
         }
@@ -30,10 +30,10 @@ impl String {
         return String { data: data, len: len, cap: cap };
     }
 
-    pub static func from(alloc: mem.Allocator, str: StringView): String {
+    pub static func from(str: StringView): String {
         let len = str.len();
         let cap = len + 1uz;
-        let data = alloc.alloc(@size_of(u8) * cap);
+        let data = sys.malloc(@size_of(u8) * cap);
         for let i = 0uz, i < len, i += 1 {
             *(data + i) = *(str.data() + i);
         }
@@ -62,11 +62,11 @@ impl String {
      * @note base string mutates after concatenation
      * @note writes null-terminator to the end of base string
      */
-    pub func append(alloc: mem.Allocator, other: String) {
+    pub func append(other: String) {
         if this.cap < this.len + other.len() + 1uz {
             let old_cap = this.cap;
             this.cap = math.max(this.cap * 2uz, this.len + other.len() + 1uz);
-            this.data = alloc.realloc(this.data, old_cap, this.cap);
+            this.data = sys.realloc(this.data, this.cap);
         }
         for let i = 0uz, i < other.len(), i += 1 {
             *(this.data + this.len + i) = *(other.data() + i);
@@ -84,11 +84,11 @@ impl String {
      * @note base string mutates after concatenation
      * @note writes null-terminator to the end of base string
      */
-    pub func append(alloc: mem.Allocator, other: StringView) {
+    pub func append(other: StringView) {
         if this.cap < this.len + other.len() + 1uz {
             let old_cap = this.cap;
             this.cap = math.max(this.cap * 2uz, this.len + other.len() + 1uz);
-            this.data = alloc.realloc(this.data, old_cap, this.cap);
+            this.data = sys.realloc(this.data, this.cap);
         }
         for let i = 0uz, i < other.len(), i += 1 {
             *(this.data + this.len + i) = *(other.data() + i);
@@ -106,12 +106,12 @@ impl String {
      * @note base string mutates after concatenation
      * @note writes null-terminator to the end of base string
      */
-    pub func append(alloc: mem.Allocator, other: *u8) {
+    pub func append(other: *u8) {
         let other_len = sys.strlen(other);
         if this.cap < this.len + other_len + 1uz {
             let old_cap = this.cap;
             this.cap = math.max(this.cap * 2uz, this.len + other_len + 1uz);
-            this.data = alloc.realloc(this.data, old_cap, this.cap);
+            this.data = sys.realloc(this.data, this.cap);
         }
         for let i = 0uz, i < other_len, i += 1 {
             *(this.data + this.len + i) = *(other + i);
@@ -129,11 +129,11 @@ impl String {
      * @note base string mutates after concatenation
      * @note writes null-terminator to the end of base string
      */
-    pub func append(alloc: mem.Allocator, other: u8) {
+    pub func append(other: u8) {
         if this.cap < this.len + 2uz {
             let old_cap = this.cap;
             this.cap = math.max(this.cap * 2uz, this.len + 2uz);
-            this.data = alloc.realloc(this.data, old_cap, this.cap);
+            this.data = sys.realloc(this.data, this.cap);
         }
         *(this.data + this.len) = other;
         this.len += 1;
@@ -144,8 +144,8 @@ impl String {
      * @brief frees string data
      * @param alloc: memory allocator
      */
-    pub func destroy(alloc: mem.Allocator) {
-        alloc.destroy(this.data);
+    pub func destroy() {
+        sys.free(this.data);
         this.data = nil;
         this.len = 0;
         this.cap = 0;
@@ -473,9 +473,9 @@ impl ListString {
      * @return new empty list
      * @note capacity sets to 4
      */
-    pub static func new(alloc: mem.Allocator): ListString {
+    pub static func new(): ListString {
         let cap = 4uz;
-        let data = alloc.alloc(cap * @size_of(String)).(*String);
+        let data = sys.malloc(cap * @size_of(String)).(*String);
         return ListString {
             data: data,
             len: 0,
@@ -490,13 +490,12 @@ impl ListString {
      * @note ownership of val transfers to list
      * @note if capacity less then needs, it increases by 2 times
      */
-    pub func add(alloc: mem.Allocator, val: String) {
+    pub func add(val: String) {
         if this.cap < this.len + 1uz {
             let old_cap = this.cap;
             this.cap = math.max(this.cap * 2uz, this.len + 1uz);
-            this.data = alloc.realloc(
+            this.data = sys.realloc(
                             this.data.(*u8),
-                            old_cap  * @size_of(String),
                             this.cap * @size_of(String)
                         ).(*String);
         }
@@ -540,11 +539,11 @@ impl ListString {
         return this.cap;
     }
 
-    pub func destroy(alloc: mem.Allocator) {
+    pub func destroy() {
         for let i = 0uz, i < this.len, i += 1 {
-            (this.data + i).destroy(alloc);
+            (this.data + i).destroy();
         }
-        alloc.destroy(this.data.(*u8));
+        sys.free(this.data.(*u8));
     }
 }
 
@@ -557,7 +556,7 @@ pub trait ToString {
      * @param alloc: memory allocator for the resulting String
      * @return the allocated String representation of the object
      */
-    pub func to_string(alloc: mem.Allocator): String;
+    pub func to_string(): String;
 }
 
 /**
@@ -566,14 +565,14 @@ pub trait ToString {
  * @param val: the unsigned integer value to convert
  * @return the allocated String representation of the number
  */
-pub func usize_to_string(alloc: mem.Allocator, val: usize): String {
+pub func usize_to_string(val: usize): String {
     if val == 0uz {
-        return String.from(alloc, "0");
+        return String.from("0");
     }
 
     let s: String;
     for val != 0uz {
-        s.append(alloc, '0'.(u8) + (val % 10uz).(u8));
+        s.append('0'.(u8) + (val % 10uz).(u8));
         val /= 10uz;
     }
     for let i = 0uz, i < s.len() / 2uz, i += 1 {
@@ -591,16 +590,16 @@ pub func usize_to_string(alloc: mem.Allocator, val: usize): String {
  * @param val: the signed integer value to convert
  * @return the allocated String representation of the number
  */
-pub func i32_to_string(alloc: mem.Allocator, val: i32): String {
+pub func i32_to_string(val: i32): String {
     if val == 0 {
-        return String.from(alloc, "0");
+        return String.from("0");
     }
 
     let s: String;
     let is_neg = false;
 
     if val < 0 {
-        s.append(alloc, '-'.(u8));
+        s.append('-'.(u8));
         is_neg = true;
     }
 
@@ -609,7 +608,7 @@ pub func i32_to_string(alloc: mem.Allocator, val: i32): String {
         if rem < 0 {
             rem = -rem;
         }
-        s.append(alloc, '0'.(u8) + rem.(u8));
+        s.append('0'.(u8) + rem.(u8));
         val /= 10;
     }
 

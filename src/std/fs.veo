@@ -91,24 +91,24 @@ impl File {
      * @return allocated to std.String file content
      * @note returns empty string if file is closed
      */
-    pub func read_all(alloc: mem.Allocator): std.String {
+    pub func read_all(): std.String {
         if !this.is_open() {
-            return std.String.from(alloc, "");
+            return std.String.from("");
         }
 
         let file_size = this.size();
         if file_size <= 0iz {
-            return std.String.from(alloc, "");
+            return std.String.from("");
         }
 
         let size = file_size.(usize);
 
-        let raw_data = alloc.alloc(@size_of(u8) * (size + 1uz));
+        let raw_data = sys.malloc(@size_of(u8) * (size + 1uz));
         let read_bytes = sys.__veo_fs_read(this.handle, raw_data, size);
 
         if read_bytes < 0iz {
-            alloc.destroy(raw_data);
-            return std.String.from(alloc, "");
+            sys.free(raw_data);
+            return std.String.from("");
         }
 
         let actual_len = read_bytes.(usize);

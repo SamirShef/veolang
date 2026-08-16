@@ -20,12 +20,12 @@ pub struct Scope {
 }
 
 impl Scope {
-    pub static func new(alloc: mem.Allocator, parent: *Scope): *Scope {
+    pub static func new(parent: *Scope): *Scope {
         let ptr: *symbols.Symbol;
-        let scope     = alloc.alloc(@size_of(Scope)).(*Scope);
+        let scope     = sys.malloc(@size_of(Scope)).(*Scope);
         scope.parent  = parent;
         scope.cap     = 16uz;
-        scope.entries = alloc.alloc(@size_of(ptr) * scope.cap).(**symbols.Symbol);
+        scope.entries = sys.malloc(@size_of(ptr) * scope.cap).(**symbols.Symbol);
         scope.count   = 0uz;
         return scope;
     }
@@ -52,14 +52,13 @@ impl Scope {
         return nil;
     }
 
-    pub func insert(alloc: mem.Allocator, sym: *symbols.Symbol) {
+    pub func insert(sym: *symbols.Symbol) {
         let ptr: *symbols.Symbol;
         if this.count >= this.cap {
             let old_cap = this.cap;
             this.cap = math.max(this.cap * 2uz, this.cap + 1uz);
-            this.entries = alloc.realloc(
+            this.entries = sys.realloc(
                 this.entries.(*u8),
-                old_cap,
                 @size_of(ptr) * this.cap
             ).(**symbols.Symbol);
         }
@@ -67,14 +66,13 @@ impl Scope {
         this.count += 1;
     }
 
-    pub func destroy(alloc: mem.Allocator) {
-        alloc.destroy(this.entries.(*u8));
-        alloc.destroy(this.(*u8));
+    pub func destroy() {
+        sys.free(this.entries.(*u8));
+        sys.free(this.(*u8));
     }
 }
 
 pub struct Sema {
-    alloc: mem.MallocAllocator;
     current_scope: *Scope;
     builder: *hir.Builder;
     ty_ctx: *types.Context;
@@ -107,10 +105,9 @@ impl ExprResult {
 }
 
 impl Sema {
-    pub static func new(alloc: mem.MallocAllocator, builder: *hir.Builder,
+    pub static func new(builder: *hir.Builder,
                         ty_ctx: *types.Context, sym_table: *symbols.SymbolTable): Sema {
         return Sema {
-            alloc: alloc,
             current_scope: nil,
             builder: builder,
             ty_ctx: ty_ctx,
@@ -119,18 +116,18 @@ impl Sema {
     }
 
     func enter_scope() {
-        this.current_scope = Scope.new(this.alloc, this.current_scope);
+        this.current_scope = Scope.new(this.current_scope);
     }
 
     func exit_scope() {
         if this.current_scope != nil {
             let old = this.current_scope;
             this.current_scope = this.current_scope.parent;
-            old.destroy(this.alloc);
+            old.destroy();
         }
     }
 
-    pub func analyze(alloc: mem.Allocator, res: ast.ParseResult) {
+    pub func analyze(res: ast.ParseResult) {
         this.enter_scope();
         for let i = 0uz, i < res.count, i += 1 {
             let node = *(res.nodes + i);
@@ -171,13 +168,13 @@ impl Sema {
         }
 
         let def_id       = var_decl.id.unwrap();
-        let var_sym      = this.alloc.alloc(@size_of(symbols.VarSymbol)).(*symbols.VarSymbol);
+        let var_sym      = sys.malloc(@size_of(symbols.VarSymbol)).(*symbols.VarSymbol);
         var_sym.base     = symbols.Symbol.new(symbols.SYM_VAR, var_decl.name, def_id);
         var_sym.is_const = false;
         var_sym.val      = init.val;
-        this.sym_table.insert(this.alloc, var_sym.(*symbols.Symbol));
-        this.current_scope.insert(this.alloc, var_sym.(*symbols.Symbol));
-        this.builder.create_variable(this.alloc, def_id, var_decl.name, ty, init.node);
+        this.sym_table.insert(var_sym.(*symbols.Symbol));
+        this.current_scope.insert(var_sym.(*symbols.Symbol));
+        this.builder.create_variable(def_id, var_decl.name, ty, init.node);
     }
 
     func analyze_expr(expr: *ast.Expr, expected_ty: *types.Type): ExprResult {

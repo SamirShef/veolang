@@ -21,7 +21,7 @@ impl Type {
 }
 
 pub struct Context {
-    alloc: *mem.ArenaAllocator;
+    alloc: mem.ArenaAllocator;
     pub i8_t: *Type;
     pub i16_t: *Type;
     pub i32_t: *Type;
@@ -39,8 +39,10 @@ pub struct Context {
 }
 
 impl Context {
-    pub static func new(alloc: *mem.ArenaAllocator): Context {
-        let ctx = Context { alloc: alloc };
+    pub static func new(): Context {
+        let ctx = Context {
+            alloc: mem.ArenaAllocator.init(64uz * mem.KB)
+        };
         ctx.i8_t    = ctx.alloc_int_ty(8u32, false);
         ctx.i16_t   = ctx.alloc_int_ty(16u32, false);
         ctx.i32_t   = ctx.alloc_int_ty(32u32, false);
@@ -139,26 +141,26 @@ impl Context {
 }
 
 impl std.ToString for Type {
-    pub func to_string(alloc: mem.Allocator): std.String {
+    pub func to_string(): std.String {
         if IntType.isa(this) {
             let int = IntType.cast(this);
             let str: std.String;
-            str.append(alloc, int.is_unsigned ? "u" : "i");
-            str.append(alloc, std.i32_to_string(alloc, int.width.(i32)));
+            str.append(int.is_unsigned ? "u" : "i");
+            str.append(std.i32_to_string(int.width.(i32)));
             return str;
         } else if FloatType.isa(this) {
             let float = FloatType.cast(this);
-            let str = std.String.from(alloc, "f");
-            str.append(alloc, std.i32_to_string(alloc, float.width.(i32)));
+            let str = std.String.from("f");
+            str.append(std.i32_to_string(float.width.(i32)));
             return str;
         } else if SizeType.isa(this) {
             let size = IntType.cast(this);
             let str: std.String;
-            str.append(alloc, size.is_unsigned ? "u" : "i");
-            str.append(alloc, "size");
+            str.append(size.is_unsigned ? "u" : "i");
+            str.append("size");
             return str;
         }
-        return std.String.from(alloc, "");
+        return std.String.from("");
     }
 }
 

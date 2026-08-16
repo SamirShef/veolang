@@ -135,12 +135,14 @@ impl Expr {
 }
 
 pub struct Context {
-    alloc: *mem.ArenaAllocator;
+    alloc: mem.ArenaAllocator;
 }
 
 impl Context {
-    pub static func new(alloc: *mem.ArenaAllocator): Context {
-        return Context { alloc: alloc };
+    pub static func new(): Context {
+        return Context {
+            alloc: mem.ArenaAllocator.init(64uz * mem.KB)
+        };
     }
 
     pub func alloc_node_array(count: usize): **Node {
@@ -822,9 +824,9 @@ impl Dumper {
         if var_decl.ty != nil {
             this.print(": ");
             let alloc: mem.MallocAllocator;
-            let ty_str = var_decl.ty.to_string(alloc);
+            let ty_str = var_decl.ty.to_string();
             this.print(ty_str.data());
-            ty_str.destroy(alloc);
+            ty_str.destroy();
         }
         this.print("\n");
         if var_decl.init != nil {

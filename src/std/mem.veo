@@ -75,15 +75,13 @@ struct Chunk {
 }
 
 pub struct ArenaAllocator {
-    backing: MallocAllocator;
     cur: *Chunk;
     default_chunk_size: usize;
 }
 
 impl ArenaAllocator {
-    pub static func init(alloc: MallocAllocator, default_chunk_size: usize): ArenaAllocator {
+    pub static func init(default_chunk_size: usize): ArenaAllocator {
         return ArenaAllocator {
-            backing: alloc,
             cur: nil,
             default_chunk_size: default_chunk_size
         };
@@ -99,7 +97,7 @@ impl ArenaAllocator {
         let header_size    = @size_of(Chunk);
         let required_space = size + header_size;
         let size_to_alloc  = math.max(required_space, this.default_chunk_size);
-        let mem            = this.backing.alloc(size_to_alloc);
+        let mem            = sys.malloc(size_to_alloc);
         let chunk          = mem.(*Chunk);
         chunk.cap          = size_to_alloc;
         chunk.offset       = header_size;
@@ -112,7 +110,7 @@ impl ArenaAllocator {
         let cur = this.cur;
         for cur != nil {
             let next = cur.next;
-            this.backing.destroy(cur.(*u8));
+            sys.free(cur.(*u8));
             cur = next;
         }
         this.cur = nil;
