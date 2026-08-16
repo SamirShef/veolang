@@ -10,7 +10,6 @@ import std.io;
 import llvm.source_mgr;
 import lexer;
 import ast;
-import symbols;
 
 // HashMaps
 
@@ -34,7 +33,7 @@ struct HashMapU32DefIdEntry {
 }
 
 pub struct HashMapU32DefId {
-    buckets: *HashMapU32DefIdEntry;
+    pub buckets: *HashMapU32DefIdEntry;
     len: usize;
     cap: usize;
     tompstones_count: usize;
@@ -146,6 +145,10 @@ impl HashMapU32DefId {
 
     pub func len(): usize {
         return this.len;
+    }
+
+    pub func cap(): usize {
+        return this.cap;
     }
 
     pub func destroy() {
@@ -505,6 +508,20 @@ impl Context {
         let res = basic.DefId.new(0u32, this.next_def_id);
         this.next_def_id += 1;
         return res;
+    }
+
+    pub func dump_resolutions() {
+        io.println("--- RESOLUTIONS DUMP ---");
+        for let i = 0uz, i < this.resolutions.cap(), i += 1 {
+            let entry = this.resolutions.buckets + i;
+            if entry.state == MAP_STATE_OCCUPIED {
+                io.print("NodeId(");
+                sys.__veo_print_u64(1, entry.key.(u64));
+                io.print(") -> DefId(");
+                sys.__veo_print_u64(1, entry.val.sym_id.(u64));
+                io.println(")");
+            }
+        }
     }
 }
 

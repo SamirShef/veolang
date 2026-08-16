@@ -5,12 +5,13 @@ import std;
 import llvm.smloc;
 import types;
 import basic;
-import symbols;
 import hir;
 import llvm.bindings;
 import llvm.source_mgr;
 import lexer;
 import ast;
+
+/*
 
 pub struct CodeGen {
     sym_table: *symbols.SymbolTable;
@@ -231,3 +232,5 @@ impl CodeGen {
         bindings.LLVMBuildRet(this.builder, ret_val);
     }
 }
+
+*/
