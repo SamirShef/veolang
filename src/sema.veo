@@ -167,14 +167,14 @@ impl Sema {
             ty = init.val.unwrap().ty;
         }
 
-        let def_id       = var_decl.id.unwrap();
-        let var_sym      = sys.malloc(@size_of(symbols.VarSymbol)).(*symbols.VarSymbol);
-        var_sym.base     = symbols.Symbol.new(symbols.SYM_VAR, var_decl.name, def_id);
-        var_sym.is_const = false;
-        var_sym.val      = init.val;
-        this.sym_table.insert(var_sym.(*symbols.Symbol));
-        this.current_scope.insert(var_sym.(*symbols.Symbol));
-        this.builder.create_variable(def_id, var_decl.name, ty, init.node);
+        // let def_id       = var_decl.id.unwrap();
+        // let var_sym      = sys.malloc(@size_of(symbols.VarSymbol)).(*symbols.VarSymbol);
+        // var_sym.base     = symbols.Symbol.new(symbols.SYM_VAR, var_decl.name, def_id);
+        // var_sym.is_const = false;
+        // var_sym.val      = init.val;
+        // this.sym_table.insert(var_sym.(*symbols.Symbol));
+        // this.current_scope.insert(var_sym.(*symbols.Symbol));
+        // this.builder.create_variable(def_id, var_decl.name, ty, init.node);
     }
 
     func analyze_expr(expr: *ast.Expr, expected_ty: *types.Type): ExprResult {

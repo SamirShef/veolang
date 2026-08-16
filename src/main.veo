@@ -35,9 +35,6 @@ func main(): i32 {
     let parser    = ast.Parser.new(&lex, &ty_ctx, &ast_ctx);
     let parse_res = parser.parse();
 
-    let collector = ast.DefIdCollector.new(mod_id);
-    collector.collect(parse_res);
-
     let dumper: ast.Dumper;
     dumper.dump(parse_res);
 

@@ -25,19 +25,25 @@ pub const NODE_EXPR_END   = 200;
 
 pub struct Node {
     kind: i32;
+    id: u32;
     range: basic.Span;
 }
 
 impl Node {
-    pub static func new(kind: i32, range: basic.Span): Node {
+    pub static func new(kind: i32, id: u32, range: basic.Span): Node {
         return Node {
             kind: kind,
+            id: id,
             range: range
         };
     }
 
     pub func kind(): i32 {
         return this.kind;
+    }
+
+    pub func id(): u32 {
+        return this.id;
     }
 
     pub func range(): basic.Span {
@@ -59,10 +65,17 @@ pub struct Stmt {
 }
 
 impl Stmt {
-    pub static func new(kind: i32, range: basic.Span): Stmt {
+    pub static func new(kind: i32, id: u32, range: basic.Span): Stmt {
         return Stmt {
-            base: Node.new(kind, range),
+            base: Node.new(kind, id, range),
             access: ACCESS_PRIV
+        };
+    }
+
+    pub static func new(access: i32, kind: i32, id: u32, range: basic.Span): Stmt {
+        return Stmt {
+            base: Node.new(kind, id, range),
+            access: access
         };
     }
 
@@ -70,11 +83,8 @@ impl Stmt {
         return this.base.kind();
     }
 
-    pub static func new(access: i32, kind: i32, range: basic.Span): Stmt {
-        return Stmt {
-            base: Node.new(kind, range),
-            access: access
-        };
+    pub func id(): u32 {
+        return this.base.id();
     }
 
     pub static func isa(node: *Node): bool {
@@ -97,14 +107,18 @@ pub struct Expr {
 }
 
 impl Expr {
-    pub static func new(kind: i32, range: basic.Span): Expr {
+    pub static func new(kind: i32, id: u32, range: basic.Span): Expr {
         return Expr {
-            base: Node.new(kind, range)
+            base: Node.new(kind, id, range)
         };
     }
 
     pub func kind(): i32 {
         return this.base.kind();
+    }
+
+    pub func id(): u32 {
+        return this.base.id();
     }
 
     pub func range(): basic.Span {
@@ -136,6 +150,7 @@ impl Expr {
 
 pub struct Context {
     alloc: mem.ArenaAllocator;
+    cur_id: u32;
 }
 
 impl Context {
@@ -158,7 +173,8 @@ impl Context {
         let mem_ptr = this.alloc.alloc(@size_of(VarDecl));
         let node    = mem_ptr.(*VarDecl);
 
-        node.base     = Stmt.new(NODE_VAR_DECL, range);
+        node.base     = Stmt.new(NODE_VAR_DECL, this.cur_id, range);
+        this.cur_id   += 1;
         node.name     = name;
         node.is_const = is_const;
         node.ty       = type;
@@ -171,7 +187,8 @@ impl Context {
         let mem_ptr = this.alloc.alloc(@size_of(LitExpr));
         let node    = mem_ptr.(*LitExpr);
 
-        node.base     = Expr.new(NODE_LIT_EXPR, range);
+        node.base     = Expr.new(NODE_LIT_EXPR, this.cur_id, range);
+        this.cur_id  += 1;
         node.val      = val;
         node.tok_kind = tok_kind;
 
@@ -182,10 +199,11 @@ impl Context {
         let mem_ptr = this.alloc.alloc(@size_of(BinExpr));
         let node    = mem_ptr.(*BinExpr);
 
-        node.base  = Expr.new(NODE_BIN_EXPR, range);
-        node.op    = op;
-        node.left  = left;
-        node.right = right;
+        node.base   = Expr.new(NODE_BIN_EXPR, this.cur_id, range);
+        this.cur_id += 1;
+        node.op     = op;
+        node.left   = left;
+        node.right  = right;
 
         return node;
     }
@@ -194,9 +212,10 @@ impl Context {
         let mem_ptr = this.alloc.alloc(@size_of(UnExpr));
         let node    = mem_ptr.(*UnExpr);
 
-        node.base  = Expr.new(NODE_UN_EXPR, range);
-        node.op    = op;
-        node.right = right;
+        node.base   = Expr.new(NODE_UN_EXPR, this.cur_id, range);
+        this.cur_id += 1;
+        node.op     = op;
+        node.right  = right;
 
         return node;
     }
@@ -205,8 +224,9 @@ impl Context {
         let mem_ptr = this.alloc.alloc(@size_of(VarExpr));
         let node    = mem_ptr.(*VarExpr);
 
-        node.base     = Expr.new(NODE_VAR_EXPR, range);
-        node.name     = name;
+        node.base   = Expr.new(NODE_VAR_EXPR, this.cur_id, range);
+        this.cur_id += 1;
+        node.name   = name;
 
         return node;
     }
@@ -218,7 +238,6 @@ pub struct VarDecl {
     pub is_const: bool;
     pub ty: *types.Type;
     pub init: *Expr;
-    pub id: basic.OptionDefId;
 }
 
 impl VarDecl {
@@ -813,14 +832,7 @@ impl Dumper {
             this.print("let ");
         }
         this.print(var_decl.name);
-        if var_decl.id.has_val() {
-            let id = var_decl.id.unwrap();
-            this.print(" (DefId: ");
-            this.print(id.mod_id);
-            this.print(":");
-            this.print(id.sym_id);
-            this.print(")");
-        }
+
         if var_decl.ty != nil {
             this.print(": ");
             let alloc: mem.MallocAllocator;
@@ -922,65 +934,5 @@ impl Dumper {
     func print_with_indent(msg: std.StringView) {
         this.print_indent();
         this.print(msg);
-    }
-}
-
-pub struct DefIdCollector {
-    mod_id: u64;
-}
-
-impl DefIdCollector {
-    pub static func new(mod_id: u64): DefIdCollector {
-        return DefIdCollector { mod_id: mod_id };
-    }
-
-    pub func collect(res: ParseResult) {
-        for let i = 0uz, i < res.count, i += 1 {
-            let node = *(res.nodes + i);
-            if Stmt.isa(node) {
-                let stmt = Stmt.cast(node);
-                this.collect_stmt(stmt);
-            }
-        }
-    }
-
-    func collect_stmt(stmt: *Stmt) {
-        if stmt == nil {
-            return;
-        }
-
-        let kind = stmt.kind();
-        if kind == NODE_VAR_DECL {
-            let var_decl = VarDecl.cast(stmt.(*Node));
-            this.collect_var_decl(var_decl);
-        } else {
-            std.panic("Unknown AST node kind for collect DefId");
-        }
-    }
-
-    func collect_var_decl(var_decl: *VarDecl) {
-        let sym_id  = basic.hash64(var_decl.name);
-        let def_id  = basic.DefId.new(this.mod_id, sym_id);
-        var_decl.id = basic.OptionDefId.some(def_id);
-
-        if var_decl.init != nil {
-            this.collect_expr(var_decl.init);
-        }
-    }
-
-    func collect_expr(expr: *Expr) {
-        if expr == nil {
-            return;
-        }
-
-        let kind = expr.kind();
-        if kind == NODE_BIN_EXPR {
-            let bin = BinExpr.cast(expr.(*Node));
-            this.collect_expr(bin.left);
-            this.collect_expr(bin.right);
-        } else if kind == NODE_UN_EXPR {
-            let un = UnExpr.cast(expr.(*Node));
-            this.collect_expr(un.right);
-        }
     }
 }
