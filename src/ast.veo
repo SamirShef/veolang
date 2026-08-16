@@ -151,13 +151,40 @@ impl Expr {
 pub struct Context {
     alloc: mem.ArenaAllocator;
     cur_id: u32;
+    nodes: **Node;
+    nodes_count: usize;
+    nodes_cap: usize;
 }
 
 impl Context {
     pub static func new(): Context {
         return Context {
-            alloc: mem.ArenaAllocator.init(64uz * mem.KB)
+            alloc: mem.ArenaAllocator.init(64uz * mem.KB),
+            cur_id: 0,
+            nodes: nil,
+            nodes_count: 0,
+            nodes_cap: 0
         };
+    }
+
+    func register_node(node: *Node) {
+        if this.nodes_cap < this.nodes_count + 1uz {
+            let old_cap = this.nodes_cap;
+            this.nodes_cap = math.max(this.nodes_cap * 2uz, this.nodes_count + 1uz);
+            this.nodes = sys.realloc(
+                            this.nodes.(*u8),
+                            this.nodes_cap * @size_of(Node)
+                        ).(*Node);
+        }
+        *(this.nodes + node.id()) = node;
+        this.nodes_count += 1;
+    }
+
+    pub func get(id: u32): *Node {
+        if id.(usize) < this.nodes_count {
+            return *(this.nodes + id.(usize));
+        }
+        return nil;
     }
 
     pub func alloc_node_array(count: usize): **Node {
@@ -179,6 +206,7 @@ impl Context {
         node.is_const = is_const;
         node.ty       = type;
         node.init     = init;
+        this.register_node(node.(*Node));
 
         return node;
     }
@@ -191,6 +219,7 @@ impl Context {
         this.cur_id  += 1;
         node.val      = val;
         node.tok_kind = tok_kind;
+        this.register_node(node.(*Node));
 
         return node;
     }
@@ -204,6 +233,7 @@ impl Context {
         node.op     = op;
         node.left   = left;
         node.right  = right;
+        this.register_node(node.(*Node));
 
         return node;
     }
@@ -216,6 +246,7 @@ impl Context {
         this.cur_id += 1;
         node.op     = op;
         node.right  = right;
+        this.register_node(node.(*Node));
 
         return node;
     }
@@ -227,8 +258,16 @@ impl Context {
         node.base   = Expr.new(NODE_VAR_EXPR, this.cur_id, range);
         this.cur_id += 1;
         node.name   = name;
+        this.register_node(node.(*Node));
 
         return node;
+    }
+
+    pub func destroy() {
+        this.alloc.reset();
+        sys.free(this.nodes.(*u8));
+        this.nodes_cap   = 0;
+        this.nodes_count = 0;
     }
 }
 
