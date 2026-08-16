@@ -1,1 +1,2 @@
 *.veo linguist-language=Rust
+*.veo linguist-detectable=false
