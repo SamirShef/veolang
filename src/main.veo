@@ -41,7 +41,8 @@ func main(): i32 {
     let sym_table   = symbols.SymbolTable.new();
     let hir_ctx     = hir.Context.new();
     let hir_builder = hir.Builder.new(&hir_ctx);
-    let semantic    = sema.Sema.new(&hir_builder, &ty_ctx, &sym_table);
+    let sema_ctx    = sema.Context.new();
+    let semantic    = sema.Sema.new(&hir_builder, &ty_ctx, &sym_table, &sema_ctx);
     semantic.analyze(parse_res);
 
     bindings.init_llvm();

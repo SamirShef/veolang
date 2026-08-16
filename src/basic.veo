@@ -63,6 +63,10 @@ impl DefId {
             sym_id: sym_id
         };
     }
+
+    pub func equals(other: DefId): bool {
+        return this.mod_id == other.mod_id && this.sym_id == other.sym_id;
+    }
 }
 
 pub struct OptionValue {

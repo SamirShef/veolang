@@ -12,6 +12,413 @@ import lexer;
 import ast;
 import symbols;
 
+// HashMaps
+
+const MAP_STATE_EMPTY     = 0;
+const MAP_STATE_OCCUPIED  = 1;
+const MAP_STATE_TOMBSTONE = 2;
+
+func hash_string(key: std.StringView): u32 {
+    let hash = 2166136261u32;
+    for let i = 0uz, i < key.len(), i += 1 {
+        hash ^= *(key.data() + i);
+        hash *= 16777619u32;
+    }
+    return hash;
+}
+
+struct HashMapU32DefIdEntry {
+    pub key: u32;
+    pub val: basic.DefId;
+    pub state: i32;
+}
+
+pub struct HashMapU32DefId {
+    buckets: *HashMapU32DefIdEntry;
+    len: usize;
+    cap: usize;
+    tompstones_count: usize;
+}
+
+impl HashMapU32DefId {
+    pub static func new(): HashMapU32DefId {
+        let cap = 8uz;
+        let buckets = sys.malloc(cap * @size_of(HashMapU32DefIdEntry))
+            .(*HashMapU32DefIdEntry);
+        return HashMapU32DefId { buckets: buckets, len: 0uz, cap: cap, tompstones_count: 0uz };
+    }
+
+    func resize(new_cap: usize) {
+        let old_buckets = this.buckets;
+        let old_cap = this.cap;
+
+        let buckets = sys.malloc(new_cap * @size_of(HashMapU32DefIdEntry))
+            .(*HashMapU32DefIdEntry);
+        this.cap = new_cap;
+        this.tompstones_count = 0;
+
+        let mask = new_cap - 1uz;
+        for let i = 0uz, i < old_cap, i += 1 {
+            if (old_buckets + i).state != MAP_STATE_OCCUPIED {
+                continue;
+            }
+
+            let key = (old_buckets + i).key;
+            let hash = hash_string(std.StringView.from((&key).(*u8), @size_of(key)));
+            let index = hash.(usize) & mask;
+            for (buckets + index).state != MAP_STATE_EMPTY {
+                index = (index + 1uz) & mask;
+            }
+            (buckets + index).key = key;
+            (buckets + index).val = (old_buckets + i).val;
+            (buckets + index).state = MAP_STATE_OCCUPIED;
+        }
+        this.buckets = buckets;
+        sys.free(old_buckets.(*u8));
+    }
+
+    pub func insert(key: u32, val: basic.DefId): bool {
+        if (this.len + this.tompstones_count) * 10uz >= this.cap * 7uz {
+            // resize
+            if this.tompstones_count > this.len {
+                this.resize(this.cap);
+            } else {
+                this.resize(this.cap * 2uz);
+            }
+        }
+
+        let hash = hash_string(std.StringView.from((&key).(*u8), @size_of(key)));
+        let mask = this.cap - 1uz;
+        let index = hash.(usize) & mask;
+        let first_tompstone_idx = (-1).(usize);
+
+        for {
+            let entry = this.buckets + index;
+
+            if entry.state == MAP_STATE_EMPTY {
+                if first_tompstone_idx != (-1).(usize) {
+                    index = first_tompstone_idx;
+                    entry = this.buckets + index;
+                    this.tompstones_count -= 1;
+                }
+                entry.key = key;
+                entry.val = val;
+                entry.state = MAP_STATE_OCCUPIED;
+                this.len += 1;
+                return true;
+            }
+
+            if entry.state == MAP_STATE_OCCUPIED {
+                if entry.key == key {
+                    entry.val = val;
+                    return false;
+                }
+            } else if entry.state == MAP_STATE_TOMBSTONE {
+                if first_tompstone_idx == (-1).(usize) {
+                    first_tompstone_idx = index;
+                }
+            }
+
+            index = (index + 1uz) & mask;
+        }
+    }
+
+    pub func get(key: u32): basic.OptionDefId {
+        let hash = hash_string(std.StringView.from((&key).(*u8), @size_of(key)));
+        let mask = this.cap - 1uz;
+        let index = hash.(usize) & mask;
+
+        for {
+            let entry = this.buckets + index;
+            if entry.state == MAP_STATE_EMPTY {
+                return basic.OptionDefId.none();
+            }
+
+            if entry.state == MAP_STATE_OCCUPIED && entry.key == key {
+                return basic.OptionDefId.some(entry.val);
+            }
+
+            index = (index + 1uz) & mask;
+        }
+
+        return basic.OptionDefId.none();
+    }
+
+    pub func len(): usize {
+        return this.len;
+    }
+
+    pub func destroy() {
+        sys.free(this.buckets.(*u8));
+        this.buckets = nil;
+        this.len = 0;
+        this.cap = 0;
+        this.tompstones_count = 0;
+    }
+}
+
+struct HashMapU32TypeEntry {
+    pub key: u32;
+    pub val: *types.Type;
+    pub state: i32;
+}
+
+pub struct HashMapU32Type {
+    buckets: *HashMapU32TypeEntry;
+    len: usize;
+    cap: usize;
+    tompstones_count: usize;
+}
+
+impl HashMapU32Type {
+    pub static func new(): HashMapU32Type {
+        let cap = 8uz;
+        let buckets = sys.malloc(cap * @size_of(HashMapU32TypeEntry))
+            .(*HashMapU32TypeEntry);
+        return HashMapU32Type { buckets: buckets, len: 0uz, cap: cap, tompstones_count: 0uz };
+    }
+
+    func resize(new_cap: usize) {
+        let old_buckets = this.buckets;
+        let old_cap = this.cap;
+
+        let buckets = sys.malloc(new_cap * @size_of(HashMapU32TypeEntry))
+            .(*HashMapU32TypeEntry);
+        this.cap = new_cap;
+        this.tompstones_count = 0;
+
+        let mask = new_cap - 1uz;
+        for let i = 0uz, i < old_cap, i += 1 {
+            if (old_buckets + i).state != MAP_STATE_OCCUPIED {
+                continue;
+            }
+
+            let key = (old_buckets + i).key;
+            let hash = hash_string(std.StringView.from((&key).(*u8), @size_of(key)));
+            let index = hash.(usize) & mask;
+            for (buckets + index).state != MAP_STATE_EMPTY {
+                index = (index + 1uz) & mask;
+            }
+            (buckets + index).key = key;
+            (buckets + index).val = (old_buckets + i).val;
+            (buckets + index).state = MAP_STATE_OCCUPIED;
+        }
+        this.buckets = buckets;
+        sys.free(old_buckets.(*u8));
+    }
+
+    pub func insert(key: u32, val: *types.Type): bool {
+        if (this.len + this.tompstones_count) * 10uz >= this.cap * 7uz {
+            // resize
+            if this.tompstones_count > this.len {
+                this.resize(this.cap);
+            } else {
+                this.resize(this.cap * 2uz);
+            }
+        }
+
+        let hash = hash_string(std.StringView.from((&key).(*u8), @size_of(key)));
+        let mask = this.cap - 1uz;
+        let index = hash.(usize) & mask;
+        let first_tompstone_idx = (-1).(usize);
+
+        for {
+            let entry = this.buckets + index;
+
+            if entry.state == MAP_STATE_EMPTY {
+                if first_tompstone_idx != (-1).(usize) {
+                    index = first_tompstone_idx;
+                    entry = this.buckets + index;
+                    this.tompstones_count -= 1;
+                }
+                entry.key = key;
+                entry.val = val;
+                entry.state = MAP_STATE_OCCUPIED;
+                this.len += 1;
+                return true;
+            }
+
+            if entry.state == MAP_STATE_OCCUPIED {
+                if entry.key == key {
+                    entry.val = val;
+                    return false;
+                }
+            } else if entry.state == MAP_STATE_TOMBSTONE {
+                if first_tompstone_idx == (-1).(usize) {
+                    first_tompstone_idx = index;
+                }
+            }
+
+            index = (index + 1uz) & mask;
+        }
+    }
+
+    pub func get(key: u32): *types.Type {
+        let hash = hash_string(std.StringView.from((&key).(*u8), @size_of(key)));
+        let mask = this.cap - 1uz;
+        let index = hash.(usize) & mask;
+
+        for {
+            let entry = this.buckets + index;
+            if entry.state == MAP_STATE_EMPTY {
+                return nil;
+            }
+
+            if entry.state == MAP_STATE_OCCUPIED && entry.key == key {
+                return entry.val;
+            }
+
+            index = (index + 1uz) & mask;
+        }
+
+        return nil;
+    }
+
+    pub func len(): usize {
+        return this.len;
+    }
+
+    pub func destroy() {
+        sys.free(this.buckets.(*u8));
+        this.buckets = nil;
+        this.len = 0;
+        this.cap = 0;
+        this.tompstones_count = 0;
+    }
+}
+
+struct HashMapDefIdTypeEntry {
+    pub key: basic.DefId;
+    pub val: *types.Type;
+    pub state: i32;
+}
+
+pub struct HashMapDefIdType {
+    buckets: *HashMapDefIdTypeEntry;
+    len: usize;
+    cap: usize;
+    tompstones_count: usize;
+}
+
+impl HashMapDefIdType {
+    pub static func new(): HashMapDefIdType {
+        let cap = 8uz;
+        let buckets = sys.malloc(cap * @size_of(HashMapDefIdTypeEntry))
+            .(*HashMapDefIdTypeEntry);
+        return HashMapDefIdType { buckets: buckets, len: 0uz, cap: cap, tompstones_count: 0uz };
+    }
+
+    func resize(new_cap: usize) {
+        let old_buckets = this.buckets;
+        let old_cap = this.cap;
+
+        let buckets = sys.malloc(new_cap * @size_of(HashMapDefIdTypeEntry))
+            .(*HashMapDefIdTypeEntry);
+        this.cap = new_cap;
+        this.tompstones_count = 0;
+
+        let mask = new_cap - 1uz;
+        for let i = 0uz, i < old_cap, i += 1 {
+            if (old_buckets + i).state != MAP_STATE_OCCUPIED {
+                continue;
+            }
+
+            let key = (old_buckets + i).key;
+            let hash = hash_string(std.StringView.from((&key).(*u8), @size_of(key)));
+            let index = hash.(usize) & mask;
+            for (buckets + index).state != MAP_STATE_EMPTY {
+                index = (index + 1uz) & mask;
+            }
+            (buckets + index).key = key;
+            (buckets + index).val = (old_buckets + i).val;
+            (buckets + index).state = MAP_STATE_OCCUPIED;
+        }
+        this.buckets = buckets;
+        sys.free(old_buckets.(*u8));
+    }
+
+    pub func insert(key: basic.DefId, val: *types.Type): bool {
+        if (this.len + this.tompstones_count) * 10uz >= this.cap * 7uz {
+            // resize
+            if this.tompstones_count > this.len {
+                this.resize(this.cap);
+            } else {
+                this.resize(this.cap * 2uz);
+            }
+        }
+
+        let hash = hash_string(std.StringView.from((&key).(*u8), @size_of(key)));
+        let mask = this.cap - 1uz;
+        let index = hash.(usize) & mask;
+        let first_tompstone_idx = (-1).(usize);
+
+        for {
+            let entry = this.buckets + index;
+
+            if entry.state == MAP_STATE_EMPTY {
+                if first_tompstone_idx != (-1).(usize) {
+                    index = first_tompstone_idx;
+                    entry = this.buckets + index;
+                    this.tompstones_count -= 1;
+                }
+                entry.key = key;
+                entry.val = val;
+                entry.state = MAP_STATE_OCCUPIED;
+                this.len += 1;
+                return true;
+            }
+
+            if entry.state == MAP_STATE_OCCUPIED {
+                if entry.key.equals(key) {
+                    entry.val = val;
+                    return false;
+                }
+            } else if entry.state == MAP_STATE_TOMBSTONE {
+                if first_tompstone_idx == (-1).(usize) {
+                    first_tompstone_idx = index;
+                }
+            }
+
+            index = (index + 1uz) & mask;
+        }
+    }
+
+    pub func get(key: basic.DefId): *types.Type {
+        let hash = hash_string(std.StringView.from((&key).(*u8), @size_of(key)));
+        let mask = this.cap - 1uz;
+        let index = hash.(usize) & mask;
+
+        for {
+            let entry = this.buckets + index;
+            if entry.state == MAP_STATE_EMPTY {
+                return nil;
+            }
+
+            if entry.state == MAP_STATE_OCCUPIED && entry.key.equals(key) {
+                return entry.val;
+            }
+
+            index = (index + 1uz) & mask;
+        }
+
+        return nil;
+    }
+
+    pub func len(): usize {
+        return this.len;
+    }
+
+    pub func destroy() {
+        sys.free(this.buckets.(*u8));
+        this.buckets = nil;
+        this.len = 0;
+        this.cap = 0;
+        this.tompstones_count = 0;
+    }
+}
+
+// HashMaps
+
 pub struct Scope {
     pub parent: *Scope;
     pub entries: **symbols.Symbol;
@@ -72,11 +479,27 @@ impl Scope {
     }
 }
 
+pub struct Context {
+    resolutions: HashMapU32DefId;
+    def_types: HashMapDefIdType;
+    node_types: HashMapU32Type;
+    next_def_id: u32;
+}
+
+impl Context {
+    pub static func new(): Context {
+        return Context {
+            next_def_id: 0
+        };
+    }
+}
+
 pub struct Sema {
     current_scope: *Scope;
     builder: *hir.Builder;
     ty_ctx: *types.Context;
     sym_table: *symbols.SymbolTable;
+    ctx: *Context;
 }
 
 struct ExprResult {
@@ -105,13 +528,14 @@ impl ExprResult {
 }
 
 impl Sema {
-    pub static func new(builder: *hir.Builder,
-                        ty_ctx: *types.Context, sym_table: *symbols.SymbolTable): Sema {
+    pub static func new(builder: *hir.Builder, ty_ctx: *types.Context,
+                        sym_table: *symbols.SymbolTable, ctx: *Context): Sema {
         return Sema {
             current_scope: nil,
             builder: builder,
             ty_ctx: ty_ctx,
-            sym_table: sym_table
+            sym_table: sym_table,
+            ctx: ctx
         };
     }
 
