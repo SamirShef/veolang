@@ -64,8 +64,16 @@ impl DefId {
         };
     }
 
+    pub static func invalid(): DefId {
+        return DefId.new((-1).(u64), (-1).(u64));
+    }
+
     pub func equals(other: DefId): bool {
         return this.mod_id == other.mod_id && this.sym_id == other.sym_id;
+    }
+
+    pub func is_invalid(): bool {
+        return this.equals(DefId.invalid());
     }
 }
 

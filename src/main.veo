@@ -42,8 +42,8 @@ func main(): i32 {
     let hir_ctx     = hir.Context.new();
     let hir_builder = hir.Builder.new(&hir_ctx);
     let sema_ctx    = sema.Context.new();
-    let semantic    = sema.Sema.new(&hir_builder, &ty_ctx, &sym_table, &sema_ctx);
-    semantic.analyze(parse_res);
+    let resolver    = sema.NameResolver.new(&sema_ctx);
+    resolver.resolve(parse_res);
 
     bindings.init_llvm();
 
