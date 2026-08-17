@@ -1,28 +1,30 @@
 import std.sys;
 import std.math;
+import std.io;
 import std;
 import basic;
+import color;
 
 const FT_NOTE    = 0;
 const FT_HELP    = 1;
 
-const SEV_ERROR   = 0;
-const SEV_WARNING = 1;
-const SEV_NOTE    = 2;
-const SEV_HELP    = 3;
+pub const SEV_ERROR   = 0;
+pub const SEV_WARNING = 1;
+pub const SEV_NOTE    = 2;
+pub const SEV_HELP    = 3;
 
-const E_UNEXPECTED_TOKEN                       =  0;
-const E_EXPECTED_EXPR                          =  1;
-const E_UNCLOSED_STR_LIT                       =  2;
-const E_UNCLOSED_CHAR_LIT                      =  3;
-const E_INCORRECT_CHAR_LIT_LEN                 =  4;
-const E_INT_SUFFIX_FOR_FLOAT                   =  5;
-const E_INVALID_NUM_SUFFIX                     =  6;
-const E_DIV_BY_ZERO                            =  7;
-const E_REDEFINITION                           =  8;
-const E_UNDEFINED                              =  9;
-const W_UNUSEDVAR                              = 10;
-const W_LOSSPRECISION                          = 11;
+pub const E_UNEXPECTED_TOKEN                       =  0;
+pub const E_EXPECTED_EXPR                          =  1;
+pub const E_UNCLOSED_STR_LIT                       =  2;
+pub const E_UNCLOSED_CHAR_LIT                      =  3;
+pub const E_INCORRECT_CHAR_LIT_LEN                 =  4;
+pub const E_INT_SUFFIX_FOR_FLOAT                   =  5;
+pub const E_INVALID_NUM_SUFFIX                     =  6;
+pub const E_DIV_BY_ZERO                            =  7;
+pub const E_REDEFINITION                           =  8;
+pub const E_UNDEFINED                              =  9;
+pub const W_UNUSEDVAR                              = 10;
+pub const W_LOSSPRECISION                          = 11;
 
 pub struct SpanLabel {
     pub span: basic.Span;
@@ -124,6 +126,9 @@ impl ListSpanLabel {
     }
 
     pub func destroy() {
+        for let i = 0uz, i < this.len, i += 1 {
+            (this.data + i).msg.destroy();
+        }
         sys.free(this.data.(*u8));
     }
 }
@@ -222,7 +227,6 @@ pub struct DiagBuilder {
     pub sev: i32;
     pub code: i32;
     pub msg: std.String;
-
     pub labels: ListSpanLabel;
     pub footers: ListFooter;
 }
@@ -232,7 +236,9 @@ impl DiagBuilder {
         return DiagBuilder {
             sev: sev,
             code: code,
-            msg: msg
+            msg: msg,
+            labels: ListSpanLabel.new(),
+            footers: ListFooter.new()
         };
     }
 
@@ -260,6 +266,11 @@ impl DiagBuilder {
 
     pub func help(msg: std.String): *DiagBuilder {
         this.footers.add(Footer { kind: FT_HELP, msg: msg });
+        return this;
+    }
+
+    pub func sort_spans(): *DiagBuilder {
+        sort_diag_spans(this);
         return this;
     }
 
@@ -373,19 +384,271 @@ impl DiagEngine {
         };
     }
 
-    pub func report(code: i32, msg: std.String, sev: i32): DiagBuilder {
-        return DiagBuilder.new(sev, code, msg);
+    pub func report(code: i32, msg: std.String, sev: i32): *DiagBuilder {
+        if sev == SEV_ERROR {
+            this.has_errs = true;
+        }
+        let builder = DiagBuilder.new(sev, code, msg);
+        this.diags.add(builder);
+        return this.diags.data() + this.diags.len() - 1uz;
     }
 
-    pub func report(code: i32, msg: *u8, sev: i32): DiagBuilder {
+    pub func report(code: i32, msg: *u8, sev: i32): *DiagBuilder {
         return this.report(code, std.String.from(msg), sev);
     }
 
     pub func render() {
-        // TODO: implement
+        for let i = 0uz, i < this.diags.len(), i += 1 {
+            this.render_diag(this.diags.data() + i);
+        }
+    }
+
+    func render_diag(diag: *DiagBuilder) {
+        diag.sort_spans();
+        this.print_diagnostic_header(diag);
+        this.print_diagnostic_body(diag);
     }
 
     pub func destroy() {
         this.diags.destroy();
     }
+
+    func sort_spans() {
+        for let i = 0uz, i < this.diags.len(), i += 1 {
+            this.diags
+                .get(i)
+                .unwrap()
+                .sort_spans();
+        }
+    }
+
+    func print_diagnostic_header(diag: *DiagBuilder) {
+        let color_code = severity_to_color(diag.sev);
+        let sev_str = severity_to_string(diag.sev);
+        let code_str = format_code_4_digits(diag.code);
+        let prefix = severity_to_prefix(diag.sev);
+
+        sys.write(2, color.BOLD, sys.strlen(color.BOLD));
+        sys.write(2, color_code, sys.strlen(color_code));
+        sys.write(2, sev_str, sys.strlen(sev_str));
+        sys.write(2, color.WHITE, sys.strlen(color.WHITE));
+        sys.write(2, "[", 1uz);
+
+        sys.write(2, color.BOLD, sys.strlen(color.BOLD));
+        sys.write(2, color_code, sys.strlen(color_code));
+        sys.write(2, &prefix, 1uz);
+        sys.write(2, code_str.data(), code_str.len());
+        sys.write(2, color.WHITE, sys.strlen(color.WHITE));
+        sys.write(2, "]: ", 3uz);
+
+        sys.write(2, diag.msg.data(), diag.msg.len());
+        sys.write(2, "\n", 1uz);
+
+        code_str.destroy();
+    }
+
+    pub func print_diagnostic_body(diag: *DiagBuilder) {
+        let labels_len = diag.labels.len();
+        if labels_len == 0uz {
+            return;
+        }
+
+        let max_line = 1u32;
+        for let i = 0uz, i < labels_len, i += 1 {
+            let label = diag.labels.get(i).unwrap();
+            let line_info = this.mgr.find_loc(label.span.start);
+            if line_info.line > max_line {
+                max_line = line_info.line;
+            }
+        }
+        let max_line_width = digit_count(max_line.(i32));
+
+        let last_file_id = (-1).(u32);
+
+        for let i = 0uz, i < labels_len, i += 1 {
+            let label = diag.labels.get(i).unwrap();
+            let file_id = label.span.start.file_id;
+            let line_info = this.mgr.find_loc(label.span.start);
+
+            if i == 0uz || last_file_id != file_id {
+                if i != 0uz {
+                    sys.write(2, "\n", 1uz);
+                }
+                let file_name = this.mgr.get_buffer(file_id).unwrap().name;
+                print_spaces(max_line_width);
+                sys.write(2, " --> ", 5uz);
+                sys.write(2, file_name.data(), file_name.len());
+                sys.write(2, ":", 1uz);
+                sys.__veo_print_u64(2, line_info.line.(u64));
+                sys.write(2, ":", 1uz);
+                sys.__veo_print_u64(2, line_info.col.(u64));
+                sys.write(2, "\n", 1uz);
+                last_file_id = file_id;
+            }
+
+            if i == 0uz {
+                print_spaces(max_line_width);
+                sys.write(2, "  |\n", 4uz);
+            }
+
+            let line_num_str = std.usize_to_string(line_info.line.(usize));
+            print_spaces(max_line_width - line_num_str.len().(i32) + 1);
+            sys.write(2, "\e[33m", 5uz); // YELLOW
+            sys.write(2, line_num_str.data(), line_num_str.len());
+            sys.write(2, color.RESET, sys.strlen(color.RESET));
+            sys.write(2, " | ", 3uz);
+
+            let line_content = this.mgr.get_line_content(file_id, line_info.line);
+            sys.write(2, line_content.data(), line_content.len());
+            sys.write(2, "\n", 1uz);
+
+            print_spaces(max_line_width);
+            sys.write(2, "  | ", 4uz);
+            print_spaces(line_info.col.(i32) - 1);
+
+            let underline_char = label.is_primary ? '^'.(u8) : '-'.(u8);
+            let span_len = label.span.end.offset - label.span.start.offset;
+            if span_len < 1u32 {
+                span_len = 1u32;
+            }
+
+            sys.write(2, color.RED, sys.strlen(color.RED));
+            for let k = 0u32, k < span_len, k += 1 {
+                sys.write(2, &underline_char, 1uz);
+            }
+            sys.write(2, color.RESET, sys.strlen(color.RESET));
+
+            if label.msg.len() > 0uz {
+                sys.write(2, " ", 1uz);
+                sys.write(2, label.msg.data(), label.msg.len());
+            }
+            sys.write(2, "\n", 1uz);
+
+            if i == labels_len - 1uz {
+                print_spaces(max_line_width);
+                sys.write(2, "  |\n", 4uz);
+            }
+
+            line_num_str.destroy();
+        }
+
+        let footers_len = diag.footers.len();
+        for let i = 0uz, i < footers_len, i += 1 {
+            let footer = diag.footers.get(i).unwrap();
+            sys.write(2, "\e[36m", 5uz); // CYAN
+            print_spaces(max_line_width);
+            if footer.kind == FT_NOTE {
+                sys.write(2, "  = note: ", 10uz);
+            } else {
+                sys.write(2, "  = help: ", 10uz);
+            }
+            sys.write(2, color.RESET, sys.strlen(color.RESET));
+            sys.write(2, footer.msg.data(), footer.msg.len());
+            sys.write(2, "\n", 1uz);
+        }
+    }
+}
+
+func is_span_label_less(a: SpanLabel, b: SpanLabel): bool {
+    if a.span.start.file_id != b.span.start.file_id {
+        return a.span.start.file_id < b.span.start.file_id;
+    }
+    if a.span.start.offset != b.span.start.offset {
+        return a.span.start.offset < b.span.start.offset;
+    }
+    return a.span.end.offset < b.span.end.offset;
+}
+
+pub func sort_diag_spans(builder: *DiagBuilder) {
+    let data = builder.labels.data();
+    let len = builder.labels.len();
+    if len < 2uz {
+        return;
+    }
+
+    for let i = 0uz, i < len - 1uz, i += 1 {
+        for let j = 0uz, j < len - 1uz - i, j += 1 {
+            let curr = *(data + j);
+            let next = *(data + j + 1uz);
+            if is_span_label_less(next, curr) {
+                *(data + j) = next;
+                *(data + j + 1uz) = curr;
+            }
+        }
+    }
+}
+
+pub func digit_count(line: i32): i32 {
+    if line == 0 {
+        return 1;
+    }
+    let count = 0;
+    let temp = line;
+    if temp < 0 {
+        temp = -temp;
+    }
+    for temp > 0 {
+        count += 1;
+        temp /= 10;
+    }
+    return count;
+}
+
+func severity_to_string(sev: i32): *u8 {
+    if sev == SEV_ERROR {
+        return "error";
+    } else if sev == SEV_WARNING {
+        return "warning";
+    } else if sev == SEV_NOTE {
+        return "note";
+    } else if sev == SEV_HELP {
+        return "help";
+    }
+    return "error";
+}
+
+func severity_to_prefix(sev: i32): u8 {
+    if sev == SEV_ERROR {
+        return 'E'.(u8);
+    } else if sev == SEV_WARNING {
+        return 'W'.(u8);
+    } else if sev == SEV_NOTE {
+        return 'N'.(u8);
+    } else if sev == SEV_HELP {
+        return 'H'.(u8);
+    }
+    return 'E'.(u8);
+}
+
+func severity_to_color(sev: i32): *u8 {
+    if sev == SEV_ERROR {
+        return color.RED;
+    } else if sev == SEV_WARNING {
+        return color.YELLOW;
+    } else if sev == SEV_NOTE {
+        return color.WHITE;
+    } else if sev == SEV_HELP {
+        return color.CYAN;
+    }
+    return color.RESET;
+}
+
+func print_spaces(count: i32) {
+    for let i = 0, i < count, i += 1 {
+        sys.write(2, " ", 1uz);
+    }
+}
+
+func format_code_4_digits(code: i32): std.String {
+    let s = std.i32_to_string(code);
+    let result = std.String.from("");
+    let missing_zeros = 4uz - s.len();
+    if s.len() < 4uz {
+        for let i = 0uz, i < missing_zeros, i += 1 {
+            result.append('0'.(u8));
+        }
+    }
+    result.append(s);
+    s.destroy();
+    return result;
 }

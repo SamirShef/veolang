@@ -309,9 +309,15 @@ impl Lexer {
             this.advance();
         }
         if this.at_end() {
-            // TODO: report error (unclosed string literal)
+            this.engine
+                .report(diag.E_UNCLOSED_STR_LIT, "unclosed string literal", diag.SEV_ERROR)
+                .span(basic.Span.new(
+                    basic.Pos.new(this.file_id, start),
+                    basic.Pos.new(this.file_id, this.cur)
+                ));
+        } else {
+            this.advance(); // skip "
         }
-        this.advance(); // skip "
         return OptionToken.some(
             Token.new(
                 TOK_STR_LIT,
