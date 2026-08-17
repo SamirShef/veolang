@@ -3,6 +3,7 @@ import basic;
 import std.mem;
 import std;
 import std.sys;
+import diag;
 
 pub const TOK_ID         =                  0;
 pub const TOK_BOOL       = TOK_ID         + 1;
@@ -148,13 +149,14 @@ impl OptionToken {
 }
 
 pub struct Lexer {
+    engine: *diag.DiagEngine;
     file_id: u32;
     src: std.String;
     cur: u32;
 }
 
 impl Lexer {
-    pub static func new(mgr: basic.SourceMgr, id: u32): Lexer {
+    pub static func new(engine: *diag.DiagEngine, mgr: basic.SourceMgr, id: u32): Lexer {
         let raw_buf = mgr.get_buffer(id);
         if !raw_buf.has_val() {
             sys.write(2, "veo panic: ", 11uz);
@@ -166,6 +168,7 @@ impl Lexer {
         }
         let content = raw_buf.unwrap().content;
         return Lexer {
+            engine: engine,
             file_id: id,
             src: content,
             cur: 0

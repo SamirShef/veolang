@@ -12,6 +12,7 @@ import hir;
 import sema;
 import llvm.bindings;
 import codegen;
+import diag;
 
 let emit_ir  = true;
 let emit_asm = false;
@@ -24,10 +25,11 @@ func main(): i32 {
     }
     let content   = main_file.read_all();
     let mgr       = basic.SourceMgr.new();
+    let engine    = diag.DiagEngine.new(&mgr);
     let buffer_id = mgr.add_buffer(main_file_name, content); // [OWNERSHIP: ACQUIRE]
     let mod_id    = basic.hash64("main", 4uz);
 
-    let lex       = lexer.Lexer.new(mgr, buffer_id);
+    let lex       = lexer.Lexer.new(&engine, mgr, buffer_id);
     let ty_ctx    = types.Context.new();
     let ast_ctx   = ast.Context.new();
     let parser    = ast.Parser.new(&lex, &ty_ctx, &ast_ctx);
@@ -42,6 +44,8 @@ func main(): i32 {
     let resolver    = sema.NameResolver.new(&sema_ctx);
     resolver.resolve(parse_res);
     sema_ctx.dump_resolutions();
+
+    engine.render();
 
     /*
     bindings.init_llvm();
@@ -99,6 +103,7 @@ func main(): i32 {
     bindings.LLVMDisposeTargetData(data_layout);
     bindings.LLVMDisposeTargetMachine(target_machine);
     */
+    engine.destroy();
     mgr.destroy();
     return 0;
 }
