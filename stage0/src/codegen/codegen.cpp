@@ -246,7 +246,7 @@ CodeGen::generateLiteralExpr (LiteralExpr *le) {
     case basic::TypeKind::Char: return _builder.getInt32 (std::get<0> (val.Data));
     case basic::TypeKind::Pointer: {
         const auto &str = std::get<2> (val.Data);
-        return _builder.CreateGlobalString (str);
+        return createGlobalString (str);
     }
     default: {
     }
@@ -737,7 +737,7 @@ CodeGen::generateCheckNil (llvm::Value *ptr, llvm::SMLoc start) {
     }
     auto  lineCol = bufferId != 0 ? _srcMgr.getLineAndColumn (start)
                                   : std::pair<unsigned, unsigned>{ -1, -1 };
-    auto *msg     = _builder.CreateGlobalString (
+    auto *msg     = createGlobalString (
         "Null pointer dereferencing at: " + bufferName + ":"
         + std::to_string (lineCol.first) + ":" + std::to_string (lineCol.second) + '\n');
     auto *printfFunc = _mod->getFunction ("printf");
@@ -747,6 +747,24 @@ CodeGen::generateCheckNil (llvm::Value *ptr, llvm::SMLoc start) {
     _builder.CreateUnreachable ();
 
     _builder.SetInsertPoint (mergeBB);
+}
+
+llvm::Constant *
+CodeGen::createGlobalString (const std::string &val, const std::string &name) {
+    llvm::Constant *str = llvm::ConstantDataArray::getString (_ctx, val);
+
+    auto *gv = new llvm::GlobalVariable (
+        *_mod,
+        str->getType (),
+        true,
+        llvm::GlobalValue::PrivateLinkage,
+        str,
+        name);
+
+    gv->setUnnamedAddr (llvm::GlobalValue::UnnamedAddr::Global);
+    gv->setAlignment (llvm::Align (1));
+
+    return gv;
 }
 
 }
