@@ -254,9 +254,17 @@ impl DiagBuilder {
         return this.span(span, msg, true);
     }
 
+    pub func span(span: basic.Span, msg: *u8): *DiagBuilder {
+        return this.span(span, std.String.from(msg), true);
+    }
+
     pub func span(span: basic.Span, msg: std.String, is_primary: bool): *DiagBuilder {
         this.labels.add(SpanLabel { span: span, msg: msg, is_primary: is_primary });
         return this;
+    }
+
+    pub func span(span: basic.Span, msg: *u8, is_primary: bool): *DiagBuilder {
+        return this.span(span, std.String.from(msg), is_primary);
     }
 
     pub func note(msg: std.String): *DiagBuilder {
@@ -264,9 +272,17 @@ impl DiagBuilder {
         return this;
     }
 
+    pub func note(msg: *u8): *DiagBuilder {
+        return this.note(std.String.from(msg));
+    }
+
     pub func help(msg: std.String): *DiagBuilder {
         this.footers.add(Footer { kind: FT_HELP, msg: msg });
         return this;
+    }
+
+    pub func help(msg: *u8): *DiagBuilder {
+        return this.help(std.String.from(msg));
     }
 
     pub func sort_spans(): *DiagBuilder {
@@ -464,11 +480,14 @@ impl DiagEngine {
         let max_line_width = digit_count(max_line.(i32));
 
         let last_file_id = (-1).(u32);
+        let prev_end_line = 0u32;
 
         for let i = 0uz, i < labels_len, i += 1 {
             let label = diag.labels.get(i).unwrap();
             let file_id = label.span.start.file_id;
             let line_info = this.mgr.find_loc(label.span.start);
+            let start_loc = this.mgr.find_loc(label.span.start);
+            let end_loc = this.mgr.find_loc(label.span.end);
 
             if i == 0uz || last_file_id != file_id {
                 if i != 0uz {
@@ -484,6 +503,9 @@ impl DiagEngine {
                 sys.__veo_print_u64(2, line_info.col.(u64));
                 sys.write(2, "\n", 1uz);
                 last_file_id = file_id;
+            } else if start_loc.line > prev_end_line && start_loc.line - prev_end_line > 2u32 {
+                print_spaces(max_line_width);
+                sys.write(2, "  ...\n", 6uz);
             }
 
             if i == 0uz {
@@ -491,51 +513,146 @@ impl DiagEngine {
                 sys.write(2, "  |\n", 4uz);
             }
 
-            let line_num_str = std.usize_to_string(line_info.line.(usize));
-            print_spaces(max_line_width - line_num_str.len().(i32) + 1);
-            sys.write(2, "\e[33m", 5uz); // YELLOW
-            sys.write(2, line_num_str.data(), line_num_str.len());
-            sys.write(2, color.RESET, sys.strlen(color.RESET));
-            sys.write(2, " | ", 3uz);
+            if start_loc.line == end_loc.line {
+                let line_num_str = std.usize_to_string(line_info.line.(usize));
+                print_spaces(max_line_width - line_num_str.len().(i32) + 1);
+                sys.write(2, color.YELLOW, sys.strlen(color.YELLOW));
+                sys.write(2, line_num_str.data(), line_num_str.len());
+                sys.write(2, color.WHITE, sys.strlen(color.WHITE));
+                sys.write(2, " | ", 3uz);
 
-            let line_content = this.mgr.get_line_content(file_id, line_info.line);
-            sys.write(2, line_content.data(), line_content.len());
-            sys.write(2, "\n", 1uz);
+                let line_content = this.mgr.get_line_content(file_id, line_info.line);
+                sys.write(2, line_content.data(), line_content.len());
+                sys.write(2, "\n", 1uz);
 
-            print_spaces(max_line_width);
-            sys.write(2, "  | ", 4uz);
-            print_spaces(line_info.col.(i32) - 1);
-
-            let underline_char = label.is_primary ? '^'.(u8) : '-'.(u8);
-            let span_len = label.span.end.offset - label.span.start.offset;
-            if span_len < 1u32 {
-                span_len = 1u32;
-            }
-
-            sys.write(2, color.RED, sys.strlen(color.RED));
-            for let k = 0u32, k < span_len, k += 1 {
-                sys.write(2, &underline_char, 1uz);
-            }
-            sys.write(2, color.RESET, sys.strlen(color.RESET));
-
-            if label.msg.len() > 0uz {
-                sys.write(2, " ", 1uz);
-                sys.write(2, label.msg.data(), label.msg.len());
-            }
-            sys.write(2, "\n", 1uz);
-
-            if i == labels_len - 1uz {
                 print_spaces(max_line_width);
-                sys.write(2, "  |\n", 4uz);
+                sys.write(2, "  | ", 4uz);
+                print_spaces(line_info.col.(i32) - 1);
+
+                let underline_char = label.is_primary ? '^'.(u8) : '-'.(u8);
+                let span_len = label.span.end.offset - label.span.start.offset;
+                if span_len < 1u32 {
+                    span_len = 1u32;
+                }
+
+                sys.write(2, color.RED, sys.strlen(color.RED));
+                for let k = 0u32, k < span_len, k += 1 {
+                    sys.write(2, &underline_char, 1uz);
+                }
+                sys.write(2, color.WHITE, sys.strlen(color.WHITE));
+
+                if label.msg.len() > 0uz {
+                    sys.write(2, " ", 1uz);
+                    sys.write(2, label.msg.data(), label.msg.len());
+                }
+                sys.write(2, "\n", 1uz);
+
+                if i == labels_len - 1uz {
+                    print_spaces(max_line_width);
+                    sys.write(2, "  |\n", 4uz);
+                }
+
+                line_num_str.destroy();
+            } else {
+                sys.write(2, color.RESET, sys.strlen(color.RESET));
+                let line_diff = end_loc.line - start_loc.line;
+                if line_diff > 2u32 {
+                    let line_num_str1 = std.usize_to_string(start_loc.line.(usize));
+                    print_spaces(max_line_width - line_num_str1.len().(i32) + 1);
+                    sys.write(2, color.BOLD, sys.strlen(color.BOLD));
+                    sys.write(2, color.YELLOW, sys.strlen(color.YELLOW));
+                    sys.write(2, line_num_str1.data(), line_num_str1.len());
+                    sys.write(2, color.WHITE, sys.strlen(color.WHITE));
+                    sys.write(2, " | ", 3uz);
+
+                    sys.write(2, color.RED, sys.strlen(color.RED));
+                    sys.write(2, "/ ", 2uz);
+                    sys.write(2, color.WHITE, sys.strlen(color.WHITE));
+
+                    let content1 = this.mgr.get_line_content(file_id, start_loc.line);
+                    sys.write(2, content1.data(), content1.len());
+                    sys.write(2, "\n", 1uz);
+                    line_num_str1.destroy();
+
+                    print_spaces(max_line_width);
+                    sys.write(2, "  | ", 4uz);
+                    sys.write(2, color.RED, sys.strlen(color.RED));
+                    sys.write(2, "| ...\n", 6uz);
+                    sys.write(2, color.WHITE, sys.strlen(color.WHITE));
+
+                    let line_num_str2 = std.usize_to_string(end_loc.line.(usize));
+                    print_spaces(max_line_width - line_num_str2.len().(i32) + 1);
+                    sys.write(2, color.BOLD, sys.strlen(color.BOLD));
+                    sys.write(2, color.YELLOW, sys.strlen(color.YELLOW));
+                    sys.write(2, line_num_str2.data(), line_num_str2.len());
+                    sys.write(2, color.WHITE, sys.strlen(color.WHITE));
+                    sys.write(2, " | ", 3uz);
+
+                    sys.write(2, color.RED, sys.strlen(color.RED));
+                    sys.write(2, "| ", 2uz);
+                    sys.write(2, color.WHITE, sys.strlen(color.WHITE));
+
+                    let content2 = this.mgr.get_line_content(file_id, end_loc.line);
+                    sys.write(2, content2.data(), content2.len());
+                    sys.write(2, "\n", 1uz);
+                    line_num_str2.destroy();
+                } else {
+                    for let line_num = start_loc.line, line_num <= end_loc.line, line_num += 1 {
+                        let line_num_str = std.usize_to_string(line_num.(usize));
+                        print_spaces(max_line_width - line_num_str.len().(i32) + 1);
+                        sys.write(2, color.BOLD, sys.strlen(color.BOLD));
+                        sys.write(2, color.YELLOW, sys.strlen(color.YELLOW));
+                        sys.write(2, line_num_str.data(), line_num_str.len());
+                        sys.write(2, color.WHITE, sys.strlen(color.WHITE));
+                        sys.write(2, " | ", 3uz);
+
+                        sys.write(2, color.RED, sys.strlen(color.RED));
+                        if line_num == start_loc.line {
+                            sys.write(2, "/ ", 2uz);
+                        } else {
+                            sys.write(2, "| ", 2uz);
+                        }
+                        sys.write(2, color.WHITE, sys.strlen(color.WHITE));
+
+                        let line_content = this.mgr.get_line_content(file_id, line_num);
+                        sys.write(2, line_content.data(), line_content.len());
+                        sys.write(2, "\n", 1uz);
+
+                        line_num_str.destroy();
+                    }
+                }
+
+                print_spaces(max_line_width);
+                sys.write(2, "  | ", 4uz);
+                sys.write(2, color.RED, sys.strlen(color.RED));
+                sys.write(2, "|_", 2uz);
+
+                let underline_char = label.is_primary ? '^'.(u8) : '-'.(u8);
+                let end_col = end_loc.col;
+                if end_col < 1u32 {
+                    end_col = 1u32;
+                }
+
+                for let k = 0u32, k < end_col, k += 1 {
+                    sys.write(2, &underline_char, 1uz);
+                }
+                sys.write(2, color.WHITE, sys.strlen(color.WHITE));
+
+                if label.msg.len() > 0uz {
+                    sys.write(2, " ", 1uz);
+                    sys.write(2, label.msg.data(), label.msg.len());
+                }
+                sys.write(2, "\n", 1uz);
             }
 
-            line_num_str.destroy();
+            prev_end_line = end_loc.line;
         }
 
+        sys.write(2, color.RESET, sys.strlen(color.RESET));
         let footers_len = diag.footers.len();
         for let i = 0uz, i < footers_len, i += 1 {
             let footer = diag.footers.get(i).unwrap();
-            sys.write(2, "\e[36m", 5uz); // CYAN
+            sys.write(2, color.CYAN, sys.strlen(color.CYAN));
             print_spaces(max_line_width);
             if footer.kind == FT_NOTE {
                 sys.write(2, "  = note: ", 10uz);
@@ -543,7 +660,12 @@ impl DiagEngine {
                 sys.write(2, "  = help: ", 10uz);
             }
             sys.write(2, color.RESET, sys.strlen(color.RESET));
-            sys.write(2, footer.msg.data(), footer.msg.len());
+            for let i = 0uz, i < footer.msg.len(), i += 1 {
+                sys.write(2, (footer.msg.data() + i), 1uz);
+                if footer.msg.get(i).unwrap() == '\n'.(u8) {
+                    print_spaces(max_line_width + 10);
+                }
+            }
             sys.write(2, "\n", 1uz);
         }
     }

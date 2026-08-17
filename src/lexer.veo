@@ -305,16 +305,16 @@ impl Lexer {
     func tokenize_str_lit(): OptionToken {
         let start = this.cur;
         this.advance(); // skip "
-        for !this.at_end() && this.peek() != '"'.(u8) {
+        for !this.at_end() && this.peek() != '"'.(u8)
+            && this.peek() != '\n'.(u8) && this.peek() != '\r'.(u8) {
             this.advance();
         }
-        if this.at_end() {
+        if this.peek() != '"'.(u8) {
             this.engine
                 .report(diag.E_UNCLOSED_STR_LIT, "unclosed string literal", diag.SEV_ERROR)
                 .span(basic.Span.new(
                     basic.Pos.new(this.file_id, start),
-                    basic.Pos.new(this.file_id, this.cur)
-                ));
+                    basic.Pos.new(this.file_id, this.cur)));
         } else {
             this.advance(); // skip "
         }
@@ -333,13 +333,19 @@ impl Lexer {
     func tokenize_char_lit(): OptionToken {
         let start = this.cur;
         this.advance(); // skip '
-        for !this.at_end() && this.peek() != '\''.(u8) {
+        for !this.at_end() && this.peek() != '\''.(u8)
+            && this.peek() != '\n'.(u8) && this.peek() != '\r'.(u8) {
             this.advance();
         }
-        if this.at_end() {
-            // TODO: report error (unclosed character literal)
+        if this.peek() != '\''.(u8) {
+            this.engine
+                .report(diag.E_UNCLOSED_CHAR_LIT, "unclosed character literal", diag.SEV_ERROR)
+                .span(basic.Span.new(
+                    basic.Pos.new(this.file_id, start),
+                    basic.Pos.new(this.file_id, this.cur)));
+        } else {
+            this.advance(); // skip '
         }
-        this.advance(); // skip '
         return OptionToken.some(
             Token.new(
                 TOK_CHAR_LIT,
