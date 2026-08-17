@@ -1,5 +1,4 @@
 import std.math;
-import llvm.smloc;
 import basic;
 import std.mem;
 import std;
@@ -41,20 +40,8 @@ pub const TOK_EXTERN     = TOK_STATIC     + 1;
 pub const TOK_SIZEOF     = TOK_EXTERN     + 1;
 pub const TOK_BOOL_LIT   = TOK_SIZEOF     + 1;
 pub const TOK_CHAR_LIT   = TOK_BOOL_LIT   + 1;
-pub const TOK_I8_LIT     = TOK_CHAR_LIT   + 1;
-pub const TOK_I16_LIT    = TOK_I8_LIT     + 1;
-pub const TOK_I32_LIT    = TOK_I16_LIT    + 1;
-pub const TOK_I64_LIT    = TOK_I32_LIT    + 1;
-pub const TOK_ISIZE_LIT  = TOK_I64_LIT    + 1;
-pub const TOK_U8_LIT     = TOK_ISIZE_LIT  + 1;
-pub const TOK_U16_LIT    = TOK_U8_LIT     + 1;
-pub const TOK_U32_LIT    = TOK_U16_LIT    + 1;
-pub const TOK_U64_LIT    = TOK_U32_LIT    + 1;
-pub const TOK_USIZE_LIT  = TOK_U64_LIT    + 1;
-pub const TOK_F32_LIT    = TOK_USIZE_LIT  + 1;
-pub const TOK_F64_LIT    = TOK_F32_LIT    + 1;
-pub const TOK_INT_LIT    = TOK_F64_LIT    + 1;
-pub const TOK_STR_LIT    = TOK_INT_LIT    + 1;
+pub const TOK_NUM_LIT    = TOK_CHAR_LIT   + 1;
+pub const TOK_STR_LIT    = TOK_NUM_LIT    + 1;
 pub const TOK_SEMI       = TOK_STR_LIT    + 1;
 pub const TOK_COMMA      = TOK_SEMI       + 1;
 pub const TOK_DOT        = TOK_COMMA      + 1;
@@ -161,13 +148,13 @@ impl OptionToken {
 }
 
 pub struct Lexer {
-    buf_start: *u8;
-    buf_end: *u8;
-    cur: *u8;
+    file_id: u32;
+    src: std.String;
+    cur: u32;
 }
 
 impl Lexer {
-    pub static func new(mgr: basic.SourceMgr, id: usize): Lexer {
+    pub static func new(mgr: basic.SourceMgr, id: u32): Lexer {
         let raw_buf = mgr.get_buffer(id);
         if !raw_buf.has_val() {
             sys.write(2, "veo panic: ", 11uz);
@@ -177,11 +164,11 @@ impl Lexer {
             sys.write(2, "\naborting execution...\n", 23uz);
             sys.exit(1);
         }
-        let buf = raw_buf.unwrap().content();
+        let content = raw_buf.unwrap().content;
         return Lexer {
-            buf_start: buf.data(),
-            buf_end: buf.data() + buf.len(),
-            cur: buf.data()
+            file_id: id,
+            src: content,
+            cur: 0
         };
     }
 
@@ -191,18 +178,18 @@ impl Lexer {
                 Token.new(
                     TOK_EOF,
                     basic.Span.new(
-                        smloc.SMLoc.new(this.cur)
+                        basic.Pos.new(this.file_id, this.cur_offset())
                     )
                 )
             );
         }
         let c = this.peek().(char);
-        if std.is_ascii_letter(c) || c == '_' || c == '@' {
-            return this.tokenize_id();
-        }
         if std.is_ascii_whitespace(c) {
-            this.advance();
+            this.skip_whitespaces();
             return this.next_token();
+        }
+        if std.is_ascii_letter(c) || c == '_' {
+            return this.tokenize_id();
         }
         if c == '/' && (this.peek(1uz) == '/'.(u8) || this.peek(1uz) == '*'.(u8)) {
             this.skip_comments();
@@ -225,10 +212,10 @@ impl Lexer {
     func tokenize_id(): OptionToken {
         let start = this.cur;
         for std.is_ascii_letter_or_digit(this.peek().(char))
-            || this.peek() == '_'.(u8) || this.peek() == '@'.(u8) {
+            || this.peek() == '_'.(u8) {
             this.advance();
         }
-        let val = std.StringView.from(start, this.cur.(usize) - start.(usize));
+        let val = std.StringView.from(this.start_ptr(start), this.cur.(usize) - start.(usize));
         let keyword = keywords.get(val);
         if keyword.has_val() {
             return OptionToken.some(
@@ -236,8 +223,8 @@ impl Lexer {
                     keyword.unwrap(),
                     val,
                     basic.Span.new(
-                        smloc.SMLoc.new(start),
-                        smloc.SMLoc.new(this.cur)
+                        basic.Pos.new(this.file_id, start),
+                        basic.Pos.new(this.file_id, this.cur_offset())
                     )
                 )
             );
@@ -247,8 +234,8 @@ impl Lexer {
                 TOK_ID,
                 val,
                 basic.Span.new(
-                    smloc.SMLoc.new(start),
-                    smloc.SMLoc.new(this.cur)
+                    basic.Pos.new(this.file_id, start),
+                    basic.Pos.new(this.file_id, this.cur_offset())
                 )
             )
         );
@@ -258,6 +245,9 @@ impl Lexer {
         let start = this.cur;
         let has_dot = false;
         let base = 10u32;
+        if this.peek() == '-'.(u8) {
+            this.advance();
+        }
         if this.peek() == '0'.(u8) {
             let next = this.peek(1uz).(char);
             if next == 'x' || next == 'X' {
@@ -275,7 +265,6 @@ impl Lexer {
         for !this.at_end()
             && (is_digit(this.peek().(char), base)
                 || this.peek() == '.'.(u8)
-                || this.peek() == '-'.(u8)
                 || this.peek() == '_'.(u8)) {
             if this.peek() == '.'.(u8) {
                 if base != 10u32 {
@@ -292,199 +281,22 @@ impl Lexer {
             }
             this.advance();
         }
-        let c = this.peek().(char);
-        if c == 'i' {
+
+        // tokenization suffix
+        for std.is_ascii_letter_or_digit(this.peek().(char)) {
             this.advance();
-            let c = this.peek().(char);
-            if c == '8' {
-                this.advance();
-                return OptionToken.some(
-                    Token.new(
-                        TOK_I8_LIT,
-                        std.StringView.from(start, this.cur.(usize) - start.(usize) - 2uz),
-                        basic.Span.new(
-                            smloc.SMLoc.new(start),
-                            smloc.SMLoc.new(this.cur)
-                        )
-                    )
-                );
-            } else if c == '1' && this.peek(1uz) == '6'.(u8) {
-                this.advance();
-                this.advance();
-                return OptionToken.some(
-                    Token.new(
-                        TOK_I16_LIT,
-                        std.StringView.from(start, this.cur.(usize) - start.(usize) - 3uz),
-                        basic.Span.new(
-                            smloc.SMLoc.new(start),
-                            smloc.SMLoc.new(this.cur)
-                        )
-                    )
-                );
-            } else if c == '3' && this.peek(1uz) == '2'.(u8) {
-                this.advance();
-                this.advance();
-                return OptionToken.some(
-                    Token.new(
-                        TOK_I32_LIT,
-                        std.StringView.from(start, this.cur.(usize) - start.(usize) - 3uz),
-                        basic.Span.new(
-                            smloc.SMLoc.new(start),
-                            smloc.SMLoc.new(this.cur)
-                        )
-                    )
-                );
-            } else if c == '6' && this.peek(1uz) == '4'.(u8) {
-                this.advance();
-                this.advance();
-                return OptionToken.some(
-                    Token.new(
-                        TOK_I64_LIT,
-                        std.StringView.from(start, this.cur.(usize) - start.(usize) - 3uz),
-                        basic.Span.new(
-                            smloc.SMLoc.new(start),
-                            smloc.SMLoc.new(this.cur)
-                        )
-                    )
-                );
-            } else if c == 'z' {
-                this.advance();
-                return OptionToken.some(
-                    Token.new(
-                        TOK_ISIZE_LIT,
-                        std.StringView.from(start, this.cur.(usize) - start.(usize) - 2uz),
-                        basic.Span.new(
-                            smloc.SMLoc.new(start),
-                            smloc.SMLoc.new(this.cur)
-                        )
-                    )
-                );
-            }
-            this.cur = this.cur - 1uz;
-        } else if c == 'u' {
-            this.advance();
-            let c = this.peek().(char);
-            if c == '8' {
-                this.advance();
-                return OptionToken.some(
-                    Token.new(
-                        TOK_U8_LIT,
-                        std.StringView.from(start, this.cur.(usize) - start.(usize) - 2uz),
-                        basic.Span.new(
-                            smloc.SMLoc.new(start),
-                            smloc.SMLoc.new(this.cur)
-                        )
-                    )
-                );
-            } else if c == '1' && this.peek(1uz) == '6'.(u8) {
-                this.advance();
-                this.advance();
-                return OptionToken.some(
-                    Token.new(
-                        TOK_U16_LIT,
-                        std.StringView.from(start, this.cur.(usize) - start.(usize) - 3uz),
-                        basic.Span.new(
-                            smloc.SMLoc.new(start),
-                            smloc.SMLoc.new(this.cur)
-                        )
-                    )
-                );
-            } else if c == '3' && this.peek(1uz) == '2'.(u8) {
-                this.advance();
-                this.advance();
-                return OptionToken.some(
-                    Token.new(
-                        TOK_U32_LIT,
-                        std.StringView.from(start, this.cur.(usize) - start.(usize) - 3uz),
-                        basic.Span.new(
-                            smloc.SMLoc.new(start),
-                            smloc.SMLoc.new(this.cur)
-                        )
-                    )
-                );
-            } else if c == '6' && this.peek(1uz) == '4'.(u8) {
-                this.advance();
-                this.advance();
-                return OptionToken.some(
-                    Token.new(
-                        TOK_U64_LIT,
-                        std.StringView.from(start, this.cur.(usize) - start.(usize) - 3uz),
-                        basic.Span.new(
-                            smloc.SMLoc.new(start),
-                            smloc.SMLoc.new(this.cur)
-                        )
-                    )
-                );
-            } else if c == 'z' {
-                this.advance();
-                return OptionToken.some(
-                    Token.new(
-                        TOK_USIZE_LIT,
-                        std.StringView.from(start, this.cur.(usize) - start.(usize) - 2uz),
-                        basic.Span.new(
-                            smloc.SMLoc.new(start),
-                            smloc.SMLoc.new(this.cur)
-                        )
-                    )
-                );
-            }
-            this.cur = this.cur - 1uz;
-        } else if c == 'f' {
-            this.advance();
-            let c = this.peek().(char);
-            if c == '3' && this.peek(1uz) == '2'.(u8) {
-                this.advance();
-                this.advance();
-                return OptionToken.some(
-                    Token.new(
-                        TOK_F32_LIT,
-                        std.StringView.from(start, this.cur.(usize) - start.(usize) - 3uz),
-                        basic.Span.new(
-                            smloc.SMLoc.new(start),
-                            smloc.SMLoc.new(this.cur)
-                        )
-                    )
-                );
-            } else if c == '6' && this.peek(1uz) == '4'.(u8) {
-                this.advance();
-                this.advance();
-                return OptionToken.some(
-                    Token.new(
-                        TOK_F64_LIT,
-                        std.StringView.from(start, this.cur.(usize) - start.(usize) - 3uz),
-                        basic.Span.new(
-                            smloc.SMLoc.new(start),
-                            smloc.SMLoc.new(this.cur)
-                        )
-                    )
-                );
-            }
-            this.cur = this.cur - 1uz;
         }
 
-        if has_dot {
-            return OptionToken.some(
-                Token.new(
-                    TOK_F64_LIT,
-                    std.StringView.from(start, this.cur.(usize) - start.(usize)),
-                    basic.Span.new(
-                        smloc.SMLoc.new(start),
-                        smloc.SMLoc.new(this.cur)
-                    )
+        return OptionToken.some(
+            Token.new(
+                TOK_NUM_LIT,
+                std.StringView.from(this.start_ptr(start), this.cur.(usize) - start.(usize)),
+                basic.Span.new(
+                    basic.Pos.new(this.file_id, start),
+                    basic.Pos.new(this.file_id, this.cur_offset())
                 )
-            );
-        } else {
-            return OptionToken.some(
-                Token.new(
-                    TOK_INT_LIT,
-                    std.StringView.from(start, this.cur.(usize) - start.(usize)),
-                    basic.Span.new(
-                        smloc.SMLoc.new(start),
-                        smloc.SMLoc.new(this.cur)
-                    )
-                )
-            );
-        }
+            )
+        );
     }
 
     func tokenize_str_lit(): OptionToken {
@@ -500,10 +312,10 @@ impl Lexer {
         return OptionToken.some(
             Token.new(
                 TOK_STR_LIT,
-                std.StringView.from(start, this.cur.(usize) - start.(usize)),
+                std.StringView.from(this.start_ptr(start), this.cur.(usize) - start.(usize)),
                 basic.Span.new(
-                    smloc.SMLoc.new(start),
-                    smloc.SMLoc.new(this.cur)
+                    basic.Pos.new(this.file_id, start),
+                    basic.Pos.new(this.file_id, this.cur_offset())
                 )
             )
         );
@@ -522,10 +334,10 @@ impl Lexer {
         return OptionToken.some(
             Token.new(
                 TOK_CHAR_LIT,
-                std.StringView.from(start, this.cur.(usize) - start.(usize)),
+                std.StringView.from(this.start_ptr(start), this.cur.(usize) - start.(usize)),
                 basic.Span.new(
-                    smloc.SMLoc.new(start),
-                    smloc.SMLoc.new(this.cur)
+                    basic.Pos.new(this.file_id, start),
+                    basic.Pos.new(this.file_id, this.cur_offset())
                 )
             )
         );
@@ -534,7 +346,7 @@ impl Lexer {
     func tokenize_op(): OptionToken {
         let start = this.cur;
         let c = this.peek().(char);
-        let kind = -1;
+        let kind = TOK_UNKNOWN;
 
         if c == ';' {
             kind = TOK_SEMI;
@@ -676,21 +488,23 @@ impl Lexer {
             }
         }
 
-        if kind == -1 {
-            kind = TOK_UNKNOWN;
-        }
-
-        let val = std.StringView.from(start, this.cur.(usize) - start.(usize));
+        let val = std.StringView.from(this.start_ptr(start), this.cur.(usize) - start.(usize));
         return OptionToken.some(
             Token.new(
                 kind,
                 val,
                 basic.Span.new(
-                    smloc.SMLoc.new(start),
-                    smloc.SMLoc.new(this.cur)
+                    basic.Pos.new(this.file_id, start),
+                    basic.Pos.new(this.file_id, this.cur_offset())
                 )
             )
         );
+    }
+
+    func skip_whitespaces() {
+        for std.is_ascii_whitespace(this.peek().(char)) {
+            this.advance();
+        }
     }
 
     func skip_comments() {
@@ -712,7 +526,7 @@ impl Lexer {
     }
 
     func at_end(): bool {
-        return this.cur >= this.buf_end;
+        return this.cur.(usize) >= this.src.len();
     }
 
     func peek(): u8 {
@@ -720,14 +534,22 @@ impl Lexer {
     }
 
     func peek(rpos: usize): u8 {
-        if this.cur + rpos >= this.buf_end {
+        if this.cur.(usize) + rpos >= this.src.len() {
             return '\0'.(u8);
         }
-        return *(this.cur + rpos);
+        return this.src.get(this.cur.(usize) + rpos).unwrap();
     }
 
-    pub func advance() {
-        this.cur = this.cur + 1uz;
+    func cur_offset(): u32 {
+        return this.cur;
+    }
+
+    func start_ptr(start: u32): *u8 {
+        return this.src.data() + start;
+    }
+
+    func advance() {
+        this.cur += 1;
     }
 }
 

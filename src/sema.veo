@@ -3,7 +3,6 @@ import std.mem;
 import std.sys;
 import std;
 import types;
-import llvm.smloc;
 import basic;
 import hir;
 import std.io;

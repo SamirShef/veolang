@@ -1,21 +1,39 @@
-import llvm.smloc;
 import std.mem;
 import std.sys;
 import std.math;
 import std;
 import types;
 
+pub struct Pos {
+    pub file_id: u32;
+    pub offset: u32;
+}
+
+impl Pos {
+    pub static func new(file_id: u32, offset: u32): Pos {
+        return Pos {
+            file_id: file_id,
+            offset: offset
+        };
+    }
+}
+
+pub struct Loc {
+    pub line: u32; // 1-based
+    pub col: u32;  // 1-based
+}
+
 pub struct Span {
-    pub start: smloc.SMLoc;
-    pub end: smloc.SMLoc;
+    pub start: Pos;
+    pub end: Pos;
 }
 
 impl Span {
-    pub static func new(start: smloc.SMLoc, end: smloc.SMLoc): Span {
+    pub static func new(start: Pos, end: Pos): Span {
         return Span { start: start, end: end };
     }
 
-    pub static func new(start: smloc.SMLoc): Span {
+    pub static func new(start: Pos): Span {
         return Span { start: start, end: start };
     }
 }
@@ -250,9 +268,9 @@ impl ListU32 {
 }
 
 pub struct File {
-    name: std.StringView;
-    content: std.String;
-    line_starts: ListU32;
+    pub name: std.StringView;
+    pub content: std.String;
+    pub line_starts: ListU32;
 }
 
 impl File {
@@ -262,10 +280,6 @@ impl File {
             content: content,
             line_starts: line_starts
         };
-    }
-
-    pub func content(): std.String {
-        return this.content;
     }
 
     pub func destroy() {
@@ -374,15 +388,49 @@ impl SourceMgr {
         };
     }
 
-    pub func add_buffer(name: std.StringView, content: std.String): usize {
-        let id = this.buffers.len();
+    pub func add_buffer(name: std.StringView, content: std.String): u32 {
+        let id = this.buffers.len().(u32);
         let line_starts = ListU32.new();
+        line_starts.add(0u32);
+        for let i = 0uz, i < content.len(), i += 1 {
+            if content.get(i).unwrap() == '\n'.(u8) {
+                line_starts.add(i.(u32) + 1u32);
+            }
+        }
         this.buffers.add(File.new(name, content, line_starts));
         return id;
     }
 
-    pub func get_buffer(id: usize): OptionFile {
-        return this.buffers.get(id);
+    pub func get_buffer(id: u32): OptionFile {
+        return this.buffers.get(id.(usize));
+    }
+
+    pub func find_loc(pos: Pos): Loc {
+        let file = this.get_buffer(pos.file_id).unwrap();
+        let line = 1u32;
+        let line_start = 0u32;
+        for line <= file.line_starts.len().(u32), line += 1 {
+            let offset = file.line_starts.get(line.(usize) - 1uz).unwrap();
+            if offset >= pos.offset {
+                line_start = offset;
+                break;
+            }
+        }
+        let col = pos.offset - line_start + 1u32;
+        return Loc { line: line, col: col };
+    }
+
+    pub func get_line_content(file_id: u32, line: u32): std.StringView {
+        let file = this.get_buffer(file_id).unwrap();
+        if line == 0u32 || line > file.line_starts.len().(u32) {
+            return std.StringView.from("");
+        }
+
+        let start = file.line_starts.get(line.(usize) - 1uz).unwrap();
+        let end   = line < file.line_starts.len().(u32)
+            ? file.line_starts.get(line.(usize)).unwrap() - 1u32
+            : file.content.len().(u32);
+        return std.StringView.from(file.content.data() + start.(usize), (end - start).(usize));
     }
 
     pub func destroy() {

@@ -2,7 +2,6 @@ import std.math;
 import std.mem;
 import std.sys;
 import std;
-import llvm.smloc;
 import types;
 import basic;
 import hir;
