@@ -409,10 +409,12 @@ impl SourceMgr {
         let file = this.get_buffer(pos.file_id).unwrap();
         let line = 1u32;
         let line_start = 0u32;
-        for line <= file.line_starts.len().(u32), line += 1 {
-            let offset = file.line_starts.get(line.(usize) - 1uz).unwrap();
-            if offset >= pos.offset {
+        for let i = 0u32, i < file.line_starts.len().(u32), i += 1 {
+            let offset = file.line_starts.get(i.(usize)).unwrap();
+            if offset <= pos.offset {
+                line = i + 1u32;
                 line_start = offset;
+            } else {
                 break;
             }
         }
