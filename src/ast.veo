@@ -857,6 +857,9 @@ impl Dumper {
         if stmt == nil {
             return;
         }
+        this.print("(");
+        this.print(stmt.id().(u64));
+        this.print(")");
         let kind = stmt.kind();
         if kind == NODE_VAR_DECL {
             this.dump_var_decl(VarDecl.cast(stmt.(*Node)));
@@ -891,6 +894,9 @@ impl Dumper {
         if expr == nil {
             return;
         }
+        this.print("(");
+        this.print(expr.id().(u64));
+        this.print(")");
         let kind = expr.kind();
         if kind == NODE_LIT_EXPR {
             this.dump_lit_expr(LitExpr.cast(expr.(*Node)));
@@ -973,5 +979,15 @@ impl Dumper {
     func print_with_indent(msg: std.StringView) {
         this.print_indent();
         this.print(msg);
+    }
+
+    func print_with_indent(n: i64) {
+        this.print_indent();
+        this.print(n);
+    }
+
+    func print_with_indent(n: u64) {
+        this.print_indent();
+        this.print(n);
     }
 }

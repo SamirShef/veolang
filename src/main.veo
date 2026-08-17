@@ -11,7 +11,6 @@ import llvm.source_mgr;
 import types;
 import ast;
 import hir;
-import symbols;
 import sema;
 import llvm.bindings;
 import codegen;
@@ -38,12 +37,14 @@ func main(): i32 {
     let dumper: ast.Dumper;
     dumper.dump(parse_res);
 
-    let sym_table   = symbols.SymbolTable.new();
     let hir_ctx     = hir.Context.new();
     let hir_builder = hir.Builder.new(&hir_ctx);
-    let semantic    = sema.Sema.new(&hir_builder, &ty_ctx, &sym_table);
-    semantic.analyze(parse_res);
+    let sema_ctx    = sema.Context.new();
+    let resolver    = sema.NameResolver.new(&sema_ctx);
+    resolver.resolve(parse_res);
+    sema_ctx.dump_resolutions();
 
+    /*
     bindings.init_llvm();
 
     let target: bindings.LLVMTargetRef;
@@ -98,6 +99,7 @@ func main(): i32 {
 
     bindings.LLVMDisposeTargetData(data_layout);
     bindings.LLVMDisposeTargetMachine(target_machine);
+    */
     mgr.destroy();
     return 0;
 }
