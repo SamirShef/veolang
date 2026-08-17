@@ -21,6 +21,11 @@ impl File {
         return File { handle: h };
     }
 
+    pub static func open(path: std.StringView, mode: *u8): File {
+        let h = sys.__veo_fs_open(path.data(), mode);
+        return File { handle: h };
+    }
+
     /**
      * @brief determines whether the file is open
      * @return is the file open

@@ -7,7 +7,6 @@ import llvm.smloc;
 import basic;
 import hir;
 import std.io;
-import llvm.source_mgr;
 import lexer;
 import ast;
 

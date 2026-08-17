@@ -4,7 +4,6 @@ import basic;
 import std.mem;
 import std;
 import std.sys;
-import llvm.source_mgr;
 
 pub const TOK_ID         =                  0;
 pub const TOK_BOOL       = TOK_ID         + 1;
@@ -168,7 +167,7 @@ pub struct Lexer {
 }
 
 impl Lexer {
-    pub static func new(mgr: source_mgr.SourceMgr, id: usize): Lexer {
+    pub static func new(mgr: basic.SourceMgr, id: usize): Lexer {
         let raw_buf = mgr.get_buffer(id);
         if !raw_buf.has_val() {
             sys.write(2, "veo panic: ", 11uz);
@@ -178,7 +177,7 @@ impl Lexer {
             sys.write(2, "\naborting execution...\n", 23uz);
             sys.exit(1);
         }
-        let buf = raw_buf.unwrap();
+        let buf = raw_buf.unwrap().content();
         return Lexer {
             buf_start: buf.data(),
             buf_end: buf.data() + buf.len(),

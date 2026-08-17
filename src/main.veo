@@ -7,7 +7,6 @@ import std.fs;
 import std.mem;
 import std.io;
 import std.sys;
-import llvm.source_mgr;
 import types;
 import ast;
 import hir;
@@ -19,13 +18,14 @@ let emit_ir  = true;
 let emit_asm = false;
 
 func main(): i32 {
-    let main_file = fs.File.open("src/tests/var_decl.veo", "r");
+    let main_file_name = std.StringView.from("src/tests/var_decl.veo");
+    let main_file = fs.File.open(main_file_name, "r");
     if !main_file.is_open() {
         std.panic("Cannot open file src/main.veo");
     }
     let content   = main_file.read_all();
-    let mgr       = source_mgr.SourceMgr.new();
-    let buffer_id = mgr.add_buffer(content); // [OWNERSHIP: ACQUIRE]
+    let mgr       = basic.SourceMgr.new();
+    let buffer_id = mgr.add_buffer(main_file_name, content); // [OWNERSHIP: ACQUIRE]
     let mod_id    = basic.hash64("main", 4uz);
 
     let lex       = lexer.Lexer.new(mgr, buffer_id);
