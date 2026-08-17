@@ -205,6 +205,9 @@ private:
 
     void
     generateCheckNil (llvm::Value *ptr, llvm::SMLoc start);
+
+    llvm::Constant *
+    createGlobalString (const std::string &val, const std::string &name = ".str");
 };
 
 }

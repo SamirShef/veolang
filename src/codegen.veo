@@ -2,12 +2,10 @@ import std.math;
 import std.mem;
 import std.sys;
 import std;
-import llvm.smloc;
 import types;
 import basic;
 import hir;
 import llvm.bindings;
-import llvm.source_mgr;
 import lexer;
 import ast;
 

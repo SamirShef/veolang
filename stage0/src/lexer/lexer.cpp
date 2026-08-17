@@ -142,6 +142,7 @@ Lexer::tokenizeStrLit (const char *tokStart) {
             case '\\': val += '\\'; break;
             case '"': val += '"'; break;
             case '\'': val += '\''; break;
+            case 'e': val += '\e'; break;
             default:
                 val += '\\';
                 val += peek ();
@@ -184,6 +185,7 @@ Lexer::tokenizeCharLit (const char *tokStart) {
             case '\\': val += '\\'; break;
             case '"': val += '"'; break;
             case '\'': val += '\''; break;
+            case 'e': val += '\e'; break;
             default:
                 val += '\\';
                 val += peek ();

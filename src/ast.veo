@@ -3,8 +3,6 @@ import std.math;
 import std.mem;
 import std;
 import std.io;
-import llvm.source_mgr;
-import llvm.smloc;
 import basic;
 import types;
 import lexer;
@@ -54,7 +52,7 @@ impl Node {
         this.range = range;
     }
 
-    pub func set_range(start: smloc.SMLoc, end: smloc.SMLoc) {
+    pub func set_range(start: basic.Pos, end: basic.Pos) {
         this.set_range(basic.Span.new(start, end));
     }
 }
@@ -129,7 +127,7 @@ impl Expr {
         this.base.set_range(range);
     }
 
-    pub func set_range(start: smloc.SMLoc, end: smloc.SMLoc) {
+    pub func set_range(start: basic.Pos, end: basic.Pos) {
         this.set_range(basic.Span.new(start, end));
     }
 
@@ -677,12 +675,8 @@ impl Parser {
     func parse_primary_expr(allow_struct: bool): *Expr {
         let tok  = this.advance();
         let kind = tok.kind;
-        if kind == lexer.TOK_BOOL_LIT || kind == lexer.TOK_CHAR_LIT || kind == lexer.TOK_I8_LIT
-            || kind == lexer.TOK_I16_LIT || kind == lexer.TOK_I32_LIT || kind == lexer.TOK_I64_LIT
-            || kind == lexer.TOK_ISIZE_LIT || kind == lexer.TOK_U8_LIT || kind == lexer.TOK_U16_LIT
-            || kind == lexer.TOK_U32_LIT || kind == lexer.TOK_U64_LIT || kind == lexer.TOK_USIZE_LIT
-            || kind == lexer.TOK_F32_LIT || kind == lexer.TOK_F64_LIT
-            || kind == lexer.TOK_INT_LIT || kind == lexer.TOK_STR_LIT {
+        if kind == lexer.TOK_BOOL_LIT || kind == lexer.TOK_CHAR_LIT
+            || kind == lexer.TOK_NUM_LIT || kind == lexer.TOK_STR_LIT {
             return this.ast_ctx.alloc_lit_expr(tok.range, tok.val, kind).(*Node);
         }
         if kind == lexer.TOK_ID {
