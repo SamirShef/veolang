@@ -5,6 +5,7 @@ pub const TYPE_INT   = 0;
 pub const TYPE_FLOAT = 1;
 pub const TYPE_SIZE  = 2;
 pub const TYPE_BOOL  = 3;
+pub const TYPE_NOTH  = 4;
 
 pub struct Type {
     kind: i32;
@@ -35,6 +36,7 @@ pub struct Context {
     pub f32_t: *Type;
     pub f64_t: *Type;
     pub bool_t: *Type;
+    pub noth_t: *Type;
     // pub char_t: *Type; // later
 }
 
@@ -56,6 +58,7 @@ impl Context {
         ctx.f32_t   = ctx.alloc_float_ty(32u32);
         ctx.f64_t   = ctx.alloc_float_ty(64u32);
         ctx.bool_t  = ctx.alloc_bool_ty();
+        ctx.noth_t  = ctx.alloc_noth_ty();
         return ctx;
     }
 
@@ -107,6 +110,10 @@ impl Context {
         return this.bool_t;
     }
 
+    pub func get_noth_ty(): *Type {
+        return this.bool_t;
+    }
+
     pub func alloc_int_ty(width: u32, is_unsigned: bool): *Type {
         let raw        = this.alloc.alloc(@size_of(IntType));
         let ty         = raw.(*IntType);
@@ -138,6 +145,13 @@ impl Context {
         ty.base  = Type.new(TYPE_BOOL);
         return ty.(*Type);
     }
+
+    pub func alloc_noth_ty(): *Type {
+        let raw  = this.alloc.alloc(@size_of(NothType));
+        let ty   = raw.(*NothType);
+        ty.base  = Type.new(TYPE_NOTH);
+        return ty.(*Type);
+    }
 }
 
 impl std.ToString for Type {
@@ -159,6 +173,10 @@ impl std.ToString for Type {
             str.append(size.is_unsigned ? "u" : "i");
             str.append("size");
             return str;
+        } else if BoolType.isa(this) {
+            return std.String.from("bool");
+        } else if NothType.isa(this) {
+            return std.String.from("noth");
         }
         return std.String.from("");
     }
@@ -245,5 +263,25 @@ impl BoolType {
             std.panic("RTTI Error: Failed cast to *BoolType");
         }
         return ty.(*BoolType);
+    }
+}
+
+pub struct NothType {
+    pub base: Type;
+}
+
+impl NothType {
+    pub static func isa(ty: *Type): bool {
+        if ty == nil {
+            return false;
+        }
+        return ty.kind() == TYPE_NOTH;
+    }
+
+    pub static func cast(ty: *Type): *NothType {
+        if !NothType.isa(ty) {
+            std.panic("RTTI Error: Failed cast to *NothType");
+        }
+        return ty.(*NothType);
     }
 }

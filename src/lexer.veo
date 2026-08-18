@@ -158,14 +158,6 @@ pub struct Lexer {
 impl Lexer {
     pub static func new(engine: *diag.DiagEngine, mgr: basic.SourceMgr, id: u32): Lexer {
         let raw_buf = mgr.get_buffer(id);
-        if !raw_buf.has_val() {
-            sys.write(2, "veo panic: ", 11uz);
-            sys.write(2, "buffer with id ", 15uz);
-            sys.__veo_print_u64(2, id.(u64));
-            sys.write(2, "does not loaded\n", 16uz);
-            sys.write(2, "\naborting execution...\n", 23uz);
-            sys.exit(1);
-        }
         let content = raw_buf.unwrap().content;
         return Lexer {
             engine: engine,
@@ -209,7 +201,7 @@ impl Lexer {
         if c == '\'' {
             return this.tokenize_char_lit();
         }
-        return this.tokenize_op();
+        return this.tokenize_punct();
     }
 
     func tokenize_id(): OptionToken {
@@ -285,7 +277,6 @@ impl Lexer {
             this.advance();
         }
 
-        // tokenization suffix
         for std.is_ascii_letter_or_digit(this.peek().(char)) {
             this.advance();
         }
@@ -358,49 +349,36 @@ impl Lexer {
         );
     }
 
-    func tokenize_op(): OptionToken {
+    func tokenize_punct(): OptionToken {
         let start = this.cur;
-        let c = this.peek().(char);
+        let c = this.advance().(char);
         let kind = TOK_UNKNOWN;
 
         if c == ';' {
             kind = TOK_SEMI;
-            this.advance();
         } else if c == ',' {
             kind = TOK_COMMA;
-            this.advance();
         } else if c == '.' {
             kind = TOK_DOT;
-            this.advance();
         } else if c == '(' {
             kind = TOK_LPAREN;
-            this.advance();
         } else if c == ')' {
             kind = TOK_RPAREN;
-            this.advance();
         } else if c == '{' {
             kind = TOK_LBRACE;
-            this.advance();
         } else if c == '}' {
             kind = TOK_RBRACE;
-            this.advance();
         } else if c == '[' {
             kind = TOK_LBRACKET;
-            this.advance();
         } else if c == ']' {
             kind = TOK_RBRACKET;
-            this.advance();
         } else if c == '~' {
             kind = TOK_TILDE;
-            this.advance();
         } else if c == '?' {
             kind = TOK_QUESTION;
-            this.advance();
         } else if c == ':' {
             kind = TOK_COLON;
-            this.advance();
         } else if c == '=' {
-            this.advance();
             if this.peek() == '='.(u8) {
                 kind = TOK_EQ_EQ;
                 this.advance();
@@ -408,7 +386,6 @@ impl Lexer {
                 kind = TOK_EQ;
             }
         } else if c == '&' {
-            this.advance();
             if this.peek() == '&'.(u8) {
                 kind = TOK_AMPAMP;
                 this.advance();
@@ -419,7 +396,6 @@ impl Lexer {
                 kind = TOK_AMP;
             }
         } else if c == '|' {
-            this.advance();
             if this.peek() == '|'.(u8) {
                 kind = TOK_PIPEPIPE;
                 this.advance();
@@ -430,7 +406,6 @@ impl Lexer {
                 kind = TOK_PIPE;
             }
         } else if c == '+' {
-            this.advance();
             if this.peek() == '='.(u8) {
                 kind = TOK_PLUS_EQ;
                 this.advance();
@@ -438,7 +413,6 @@ impl Lexer {
                 kind = TOK_PLUS;
             }
         } else if c == '-' {
-            this.advance();
             if this.peek() == '='.(u8) {
                 kind = TOK_MINUS_EQ;
                 this.advance();
@@ -446,7 +420,6 @@ impl Lexer {
                 kind = TOK_MINUS;
             }
         } else if c == '*' {
-            this.advance();
             if this.peek() == '='.(u8) {
                 kind = TOK_STAR_EQ;
                 this.advance();
@@ -460,9 +433,7 @@ impl Lexer {
             } else {
                 kind = TOK_SLASH;
             }
-            this.advance();
         } else if c == '%' {
-            this.advance();
             if this.peek() == '='.(u8) {
                 kind = TOK_PERCENT_EQ;
                 this.advance();
@@ -470,7 +441,6 @@ impl Lexer {
                 kind = TOK_PERCENT;
             }
         } else if c == '^' {
-            this.advance();
             if this.peek() == '='.(u8) {
                 kind = TOK_CARET_EQ;
                 this.advance();
@@ -478,7 +448,6 @@ impl Lexer {
                 kind = TOK_CARET;
             }
         } else if c == '!' {
-            this.advance();
             if this.peek() == '='.(u8) {
                 kind = TOK_BANG_EQ;
                 this.advance();
@@ -486,7 +455,6 @@ impl Lexer {
                 kind = TOK_BANG;
             }
         } else if c == '>' {
-            this.advance();
             if this.peek() == '='.(u8) {
                 kind = TOK_GT_EQ;
                 this.advance();
@@ -494,7 +462,6 @@ impl Lexer {
                 kind = TOK_GT;
             }
         } else if c == '<' {
-            this.advance();
             if this.peek() == '='.(u8) {
                 kind = TOK_LT_EQ;
                 this.advance();
@@ -563,8 +530,10 @@ impl Lexer {
         return this.src.data() + start;
     }
 
-    func advance() {
+    func advance(): u8 {
+        let c = this.peek();
         this.cur += 1;
+        return c;
     }
 }
 

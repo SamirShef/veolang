@@ -32,7 +32,7 @@ func main(): i32 {
     let lex       = lexer.Lexer.new(&engine, mgr, buffer_id);
     let ty_ctx    = types.Context.new();
     let ast_ctx   = ast.Context.new();
-    let parser    = ast.Parser.new(&lex, &ty_ctx, &ast_ctx);
+    let parser    = ast.Parser.new(&lex, &engine, &ty_ctx, &ast_ctx);
     let parse_res = parser.parse();
 
     let dumper: ast.Dumper;
