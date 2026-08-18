@@ -818,8 +818,6 @@ impl Parser {
         let ret_ty: *types.Type;
         if this.match(lexer.TOK_COLON) {
             ret_ty = this.consume_type();
-        } else {
-            ret_ty = this.ty_ctx.alloc_noth_ty();
         }
         let body: *BlockStmt;
         if this.check(lexer.TOK_LBRACE) {
@@ -1093,9 +1091,7 @@ impl Dumper {
     }
 
     func dump_var_decl(var_decl: *VarDecl) {
-        this.print_with_indent("VarDecl");
-        this.print_id(var_decl.(*Stmt));
-        this.print(": ");
+        this.print_with_indent("VarDecl: ");
         if var_decl.is_const {
             this.print("const ");
         } else {
@@ -1118,9 +1114,7 @@ impl Dumper {
     }
 
     func dump_func_decl(func_decl: *FuncDecl) {
-        this.print_with_indent("FuncDecl");
-        this.print_id(func_decl.(*Stmt));
-        this.print(": ");
+        this.print_with_indent("FuncDecl: ");
         this.print(func_decl.name);
 
         this.print(" (");
@@ -1160,9 +1154,7 @@ impl Dumper {
     }
 
     func dump_ret_stmt(ret: *RetStmt) {
-        this.print_with_indent("RetStmt");
-        this.print_id(ret.(*Stmt));
-        this.print(":\n");
+        this.print_with_indent("RetStmt:\n");
         if ret.expr != nil {
             this.indent += 1;
             this.dump_expr(ret.expr);
@@ -1174,6 +1166,9 @@ impl Dumper {
         if expr == nil {
             return;
         }
+        this.print("(");
+        this.print(expr.id().(u64));
+        this.print(")");
         let kind = expr.kind();
         if kind == NODE_LIT_EXPR {
             this.dump_lit_expr(LitExpr.cast(expr.(*Node)));
@@ -1187,17 +1182,13 @@ impl Dumper {
     }
 
     func dump_lit_expr(lit: *LitExpr) {
-        this.print_with_indent("LitExpr");
-        this.print_id(lit.(*Expr));
-        this.print(": ");
+        this.print_with_indent("LitExpr: ");
         this.print(lit.val);
         this.print("\n");
     }
 
     func dump_bin_expr(bin: *BinExpr) {
-        this.print_with_indent("BinExpr");
-        this.print_id(bin.(*Expr));
-        this.print(": ");
+        this.print_with_indent("BinExpr: ");
         this.print(bin_op_to_str(bin.op));
         this.print("\n");
         if bin.left != nil {
@@ -1213,9 +1204,7 @@ impl Dumper {
     }
 
     func dump_un_expr(un: *UnExpr) {
-        this.print_with_indent("UnExpr");
-        this.print_id(un.(*Expr));
-        this.print(": ");
+        this.print_with_indent("UnExpr: ");
         this.print(un_op_to_str(un.op));
         this.print("\n");
         if un.right != nil {
@@ -1227,7 +1216,7 @@ impl Dumper {
 
     func dump_var_expr(var: *VarExpr) {
         this.print_with_indent("VarExpr");
-        this.print_id(var.(*Expr));
+        this.print_id(var);
         this.print(": ");
         this.print(var.name);
         this.print("\n");
