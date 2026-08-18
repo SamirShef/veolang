@@ -523,14 +523,14 @@ impl Context {
     }
 }
 
-pub struct NameResolver {
+pub struct NamesResolver {
     current_scope: *Scope;
     ctx: *Context;
 }
 
-impl NameResolver {
-    pub static func new(ctx: *Context): NameResolver {
-        return NameResolver {
+impl NamesResolver {
+    pub static func new(ctx: *Context): NamesResolver {
+        return NamesResolver {
             current_scope: nil,
             ctx: ctx
         };
