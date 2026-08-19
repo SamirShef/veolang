@@ -1,6 +1,10 @@
-let a = -128i8;
-let b = -2 + -1;
-let c = a;
+let a: u8  = -129;
+let b: i8  = -129;
+let c: u16 = 1238102938;
+let d      = 123812904812093810293890;
+let e = -129;
+let h = -2 + -1;
+let i = a;
 
 func main(argc: i32) {
     let a = 10;

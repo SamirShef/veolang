@@ -40,7 +40,7 @@ func main(): i32 {
 
     let hir_ctx     = hir.Context.new();
     let hir_builder = hir.Builder.new(&hir_ctx);
-    let sema_ctx    = sema.Context.new();
+    let sema_ctx    = sema.Context.new(&ty_ctx);
 
     let resolver = sema.NamesResolver.new(&engine, &sema_ctx);
     resolver.resolve(parse_res);

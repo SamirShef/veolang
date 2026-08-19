@@ -506,17 +506,19 @@ impl Scope {
 
 pub struct Context {
     pub resolutions: HashMapU32DefId;
-    def_types: HashMapDefIdType;
-    node_types: HashMapU32Type;
+    pub def_types: HashMapDefIdType;
+    pub node_types: HashMapU32Type;
+    pub ty_ctx: *types.Context;
     next_def_id: u32;
 }
 
 impl Context {
-    pub static func new(): Context {
+    pub static func new(ty_ctx: *types.Context): Context {
         return Context {
             resolutions: HashMapU32DefId.new(),
             def_types: HashMapDefIdType.new(),
             node_types: HashMapU32Type.new(),
+            ty_ctx: ty_ctx,
             next_def_id: 0
         };
     }
@@ -658,6 +660,12 @@ pub struct TypeChecker {
     ctx: *Context;
 }
 
+struct ParsedInt {
+    pub abs_val: u64;
+    pub is_neg: bool;
+    pub is_overflow: bool;
+}
+
 impl TypeChecker {
     pub static func new(engine: *diag.DiagEngine, ctx: *Context): TypeChecker {
         return TypeChecker {
@@ -691,34 +699,36 @@ impl TypeChecker {
 
     func check_var_decl(var_decl: *ast.VarDecl) {
         // TODO: implement logic
-        this.check_expr(var_decl.init);
+        let ty = var_decl.ty;
+        this.check_expr(var_decl.init, ty);
         // let def_id = this.ctx.next_def_id();
         // this.ctx.resolutions.insert(var_decl.(*ast.Stmt).id(), def_id);
         // this.current_scope.insert(var_decl.name, def_id);
     }
 
-    func check_expr(expr: *ast.Expr) {
+    func check_expr(expr: *ast.Expr, expected_ty: *types.Type): bool {
         if expr == nil {
-            return;
+            return false;
         }
 
         let kind = expr.kind();
         if kind == ast.NODE_VAR_EXPR {
             let var_expr = ast.VarExpr.cast(expr.(*ast.Node));
-            return this.check_var_expr(var_expr);
+            return this.check_var_expr(var_expr, expected_ty);
         } else if kind == ast.NODE_BIN_EXPR {
             let bin_expr = ast.BinExpr.cast(expr.(*ast.Node));
-            return this.check_bin_expr(bin_expr);
+            return this.check_bin_expr(bin_expr, expected_ty);
         } else if kind == ast.NODE_UN_EXPR {
             let un_expr = ast.UnExpr.cast(expr.(*ast.Node));
-            return this.check_un_expr(un_expr);
+            return this.check_un_expr(un_expr, expected_ty);
         } else if kind == ast.NODE_LIT_EXPR {
             let lit_expr = ast.LitExpr.cast(expr.(*ast.Node));
-            return this.check_lit_expr(lit_expr);
+            return this.check_lit_expr(lit_expr, expected_ty);
         }
+        return false;
     }
 
-    func check_var_expr(var_expr: *ast.VarExpr) {
+    func check_var_expr(var_expr: *ast.VarExpr, expected_ty: *types.Type): bool {
         // TODO: implement logic
 
         // let resolved = this.current_scope.lookup_recursive(var_expr.name);
@@ -731,18 +741,157 @@ impl TypeChecker {
         //     return;
         // }
         // this.ctx.resolutions.insert(var_expr.(*ast.Expr).id(), resolved.unwrap());
+        return false;
     }
 
-    func check_bin_expr(bin_expr: *ast.BinExpr) {
+    func check_bin_expr(bin_expr: *ast.BinExpr, expected_ty: *types.Type): bool {
         // TODO: implement logic
+        return false;
     }
 
-    func check_un_expr(un_expr: *ast.UnExpr) {
+    func check_un_expr(un_expr: *ast.UnExpr, expected_ty: *types.Type): bool {
         // TODO: implement logic
+        return false;
     }
 
-    func check_lit_expr(lit_expr: *ast.LitExpr) {
+    func check_lit_expr(lit_expr: *ast.LitExpr, expected_ty: *types.Type): bool {
         // TODO: implement logic
+
+        if lit_expr.tok_kind != lexer.TOK_NUM_LIT {
+            return false;
+        }
+        // only numbers:
+        return this.check_num_lit_expr(lit_expr, expected_ty);
+    }
+
+    func check_num_lit_expr(lit_expr: *ast.LitExpr, expected_ty: *types.Type): bool {
+        if is_floating(lit_expr.val) {
+            return this.check_float_lit_expr(lit_expr, expected_ty);
+        }
+        return this.check_int_lit_expr(lit_expr, expected_ty);
+    }
+
+    func check_int_lit_expr(lit_expr: *ast.LitExpr, expected_ty: *types.Type): bool {
+        let parsed_int = parse_str_to_int(lit_expr.val);
+        if parsed_int.is_overflow {
+            this.engine.report(diag.E_CANNOT_FIT, "cannot fit integer literal to any integer type",
+                diag.SEV_ERROR)
+                .span(lit_expr.(*ast.Node).range());
+            return false;
+        }
+        if expected_ty == nil {
+            expected_ty = this.ctx.ty_ctx.get_int_ty(32u32, false);
+        }
+        let int_ty = types.IntType.cast(expected_ty);
+        if !this.can_fit(parsed_int.abs_val, parsed_int.is_neg, int_ty) {
+            let msg = std.String.from("cannot fit integer literal to ");
+            msg.append(expected_ty.to_string());
+            msg.append(" type");
+
+            let label_msg = std.String.from("must be in range [");
+            if int_ty.is_unsigned {
+                label_msg.append("0, ");
+                let max_limit_tmp = std.usize_to_string(int_ty.max_unsigned_limit().(usize));
+                label_msg.append(max_limit_tmp);
+                max_limit_tmp.destroy();
+            } else {
+                label_msg.append("-");
+                let min_limit_tmp = std.usize_to_string(int_ty.max_signed_abs_limit().(usize));
+                label_msg.append(min_limit_tmp);
+                min_limit_tmp.destroy();
+
+                label_msg.append(", ");
+
+                let max_limit_tmp = std.usize_to_string(int_ty.max_signed_limit().(usize));
+                label_msg.append(max_limit_tmp);
+                max_limit_tmp.destroy();
+            }
+            label_msg.append("]");
+
+            this.engine.report(diag.E_CANNOT_FIT, msg, diag.SEV_ERROR)
+                .span(lit_expr.(*ast.Node).range(), label_msg);
+            return false;
+        }
+        return true;
+    }
+
+    func check_float_lit_expr(lit_expr: *ast.LitExpr, expected_ty: *types.Type): bool {
+        // TODO: implement logic
+        return false;
+    }
+
+    pub func infer_expr(expr: *ast.Expr): *types.Type {
+        if expr == nil {
+            return nil;
+        }
+
+        let kind = expr.kind();
+        let inferred_ty: *types.Type;
+
+        if kind == ast.NODE_VAR_EXPR {
+            inferred_ty = this.infer_var_expr(ast.VarExpr.cast(expr.(*ast.Node)));
+        } else if kind == ast.NODE_BIN_EXPR {
+            inferred_ty = this.infer_bin_expr(ast.BinExpr.cast(expr.(*ast.Node)));
+        } else if kind == ast.NODE_UN_EXPR {
+            inferred_ty = this.infer_un_expr(ast.UnExpr.cast(expr.(*ast.Node)));
+        } else if kind == ast.NODE_LIT_EXPR {
+            inferred_ty = this.infer_lit_expr(ast.LitExpr.cast(expr.(*ast.Node)));
+        }
+
+        if inferred_ty != nil {
+            this.ctx.node_types.insert(expr.id(), inferred_ty);
+        }
+
+        return inferred_ty;
+    }
+
+    func infer_var_expr(var_expr: *ast.VarExpr): *types.Type {
+        let node_id = var_expr.(*ast.Expr).id();
+        let def_id_opt = this.ctx.resolutions.get(node_id);
+
+        if !def_id_opt.has_val() {
+            return nil;
+        }
+
+        let ty = this.ctx.def_types.get(def_id_opt.unwrap());
+        if ty == nil {
+            return nil;
+        }
+        return ty;
+    }
+
+    func infer_bin_expr(bin_expr: *ast.BinExpr): *types.Type {
+        // TODO: implement logic
+        return nil;
+    }
+
+    func infer_un_expr(un_expr: *ast.UnExpr): *types.Type {
+        // TODO: implement logic
+        return nil;
+    }
+
+    func infer_lit_expr(lit_expr: *ast.LitExpr): *types.Type {
+        if lit_expr.tok_kind == lexer.TOK_NUM_LIT {
+            if is_floating(lit_expr.val) {
+                return this.ctx.ty_ctx.get_float_ty(64u32);
+            }
+            return this.ctx.ty_ctx.get_int_ty(32u32, false);
+        }
+        // TODO: implement logic
+        return nil;
+    }
+
+    func can_fit(val: u64, is_neg: bool, expected_ty: *types.IntType): bool {
+        if expected_ty.is_unsigned {
+            if is_neg {
+                return false;
+            }
+            return val <= expected_ty.max_unsigned_limit();
+        }
+        if is_neg {
+            return val <= expected_ty.max_signed_abs_limit();
+        }
+        return val <= expected_ty.max_signed_limit();
     }
 }
 
@@ -776,4 +925,32 @@ func signed_int_to_u64(accum: u64, is_neg: bool): u64 {
     } else {
         return accum;
     }
+}
+
+func is_floating(str: std.StringView): bool {
+    for let i = 0uz, i < str.len(), i += 1 {
+        if str.get(i).unwrap() == '.'.(u8) {
+            return true;
+        }
+    }
+    return false;
+}
+
+func parse_str_to_int(str: std.StringView): ParsedInt {
+    let is_neg = false;
+    let res: u64;
+    for let i = 0uz, i < str.len(), i += 1 {
+        let c = str.get(i).unwrap();
+        if c == '-'.(u8) {
+            is_neg = true;
+            continue;
+        }
+
+        let digit = c - '0'.(u8);
+        if res > ((18446744073709551615u64 - digit) / 10u64) {
+            return ParsedInt { abs_val: 0, is_neg: is_neg, is_overflow: true };
+        }
+        res = res * 10u64 + digit;
+    }
+    return ParsedInt { abs_val: res, is_neg: is_neg, is_overflow: false };
 }

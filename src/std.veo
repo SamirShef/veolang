@@ -265,6 +265,18 @@ impl StringView {
         }
         return 0;
     }
+
+    /**
+     * @brief gets character to index
+     * @param i: index
+     * @return optional value (some if index in bounds and none otherwise)
+     */
+    pub func get(i: usize): OptionU8 {
+        if i >= this.len {
+            return OptionU8.none();
+        }
+        return OptionU8.some(*(this.data + i));
+    }
 }
 
 /**

@@ -202,6 +202,51 @@ impl IntType {
         }
         return ty.(*IntType);
     }
+
+    pub func max_unsigned_limit(): u64 {
+        let is_unsigned = this.is_unsigned;
+        let width       = this.width;
+        if width == 8u32 {
+            return 0xFF;
+        } else if width == 16u32 {
+            return 0xFFFF;
+        } else if width == 32u32 {
+            return 0xFFFFFFFF;
+        } else if width == 64u32 {
+            return 0xFFFFFFFFFFFFFFFF;
+        }
+        return 0;
+    }
+
+    pub func max_signed_limit(): u64 {
+        let is_unsigned = this.is_unsigned;
+        let width       = this.width;
+        if width == 8u32 {
+            return 0x7F;
+        } else if width == 16u32 {
+            return 0x7FFF;
+        } else if width == 32u32 {
+            return 0x7FFFFFFF;
+        } else if width == 64u32 {
+            return 0x7FFFFFFFFFFFFFFF;
+        }
+        return 0;
+    }
+
+    pub func max_signed_abs_limit(): u64 {
+        let is_unsigned = this.is_unsigned;
+        let width       = this.width;
+        if width == 8u32 {
+            return 0x80;
+        } else if width == 16u32 {
+            return 0x8000;
+        } else if width == 32u32 {
+            return 0x80000000;
+        } else if width == 64u32 {
+            return 0x8000000000000000;
+        }
+        return 0;
+    }
 }
 
 pub struct FloatType {

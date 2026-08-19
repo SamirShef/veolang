@@ -23,8 +23,10 @@ pub const E_INVALID_NUM_SUFFIX                     =  6;
 pub const E_DIV_BY_ZERO                            =  7;
 pub const E_REDEFINITION                           =  8;
 pub const E_UNDEFINED                              =  9;
-pub const W_UNUSEDVAR                              = 10;
-pub const W_LOSSPRECISION                          = 11;
+pub const E_CANNOT_FIT                             = 10;
+pub const E_INT_LIT_OVERFLOW                       = 11;
+pub const W_UNUSEDVAR                              = 12;
+pub const W_LOSSPRECISION                          = 13;
 
 pub struct SpanLabel {
     pub span: basic.Span;
