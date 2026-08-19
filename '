@@ -589,8 +589,6 @@ impl NamesResolver {
         if kind == ast.NODE_VAR_DECL {
             this.resolve_var_decl(ast.VarDecl.cast(stmt.(*ast.Node)));
         }
-        // TODO: add resolve FuncDecl
-        // TODO: add check BlockStmt
     }
 
     func resolve_var_decl(var_decl: *ast.VarDecl) {
@@ -653,7 +651,7 @@ impl NamesResolver {
     }
 }
 
-pub struct TypeChecker {
+struct TypeChecker {
     engine: *diag.DiagEngine;
     ctx: *Context;
 }
@@ -684,12 +682,10 @@ impl TypeChecker {
         if kind == ast.NODE_VAR_DECL {
             this.check_var_decl(ast.VarDecl.cast(stmt.(*ast.Node)));
         }
-        // TODO: add check FuncDecl
-        // TODO: add check BlockStmt
-        // TODO: add check RetStmt
     }
 
     func check_var_decl(var_decl: *ast.VarDecl) {
+
         // TODO: implement logic
         this.check_expr(var_decl.init);
         // let def_id = this.ctx.next_def_id();
@@ -705,44 +701,38 @@ impl TypeChecker {
         let kind = expr.kind();
         if kind == ast.NODE_VAR_EXPR {
             let var_expr = ast.VarExpr.cast(expr.(*ast.Node));
-            return this.check_var_expr(var_expr);
+            return this.resolve_var_expr(var_expr);
         } else if kind == ast.NODE_BIN_EXPR {
             let bin_expr = ast.BinExpr.cast(expr.(*ast.Node));
-            return this.check_bin_expr(bin_expr);
+            return this.resolve_bin_expr(bin_expr);
         } else if kind == ast.NODE_UN_EXPR {
             let un_expr = ast.UnExpr.cast(expr.(*ast.Node));
-            return this.check_un_expr(un_expr);
+            return this.resolve_un_expr(un_expr);
         } else if kind == ast.NODE_LIT_EXPR {
-            let lit_expr = ast.LitExpr.cast(expr.(*ast.Node));
-            return this.check_lit_expr(lit_expr);
+            // not necessary
         }
     }
 
-    func check_var_expr(var_expr: *ast.VarExpr) {
-        // TODO: implement logic
-
-        // let resolved = this.current_scope.lookup_recursive(var_expr.name);
-        // if !resolved.has_val() {
-        //   let msg = std.String.from("undefined name '");
-        //     msg.append(var_expr.name);
-        //     msg.append("'");
-        //     this.engine.report(diag.E_UNDEFINED, msg, diag.SEV_ERROR)
-        //         .span(var_expr.(*ast.Node).range());
-        //     return;
-        // }
-        // this.ctx.resolutions.insert(var_expr.(*ast.Expr).id(), resolved.unwrap());
+    func resolve_var_expr(var_expr: *ast.VarExpr) {
+        let resolved = this.current_scope.lookup_recursive(var_expr.name);
+        if !resolved.has_val() {
+            let msg = std.String.from("undefined name '");
+            msg.append(var_expr.name);
+            msg.append("'");
+            this.engine.report(diag.E_UNDEFINED, msg, diag.SEV_ERROR)
+                .span(var_expr.(*ast.Node).range());
+            return;
+        }
+        this.ctx.resolutions.insert(var_expr.(*ast.Expr).id(), resolved.unwrap());
     }
 
-    func check_bin_expr(bin_expr: *ast.BinExpr) {
-        // TODO: implement logic
+    func resolve_bin_expr(bin_expr: *ast.BinExpr) {
+        this.resolve_expr(bin_expr.left);
+        this.resolve_expr(bin_expr.right);
     }
 
-    func check_un_expr(un_expr: *ast.UnExpr) {
-        // TODO: implement logic
-    }
-
-    func check_lit_expr(lit_expr: *ast.LitExpr) {
-        // TODO: implement logic
+    func resolve_un_expr(un_expr: *ast.UnExpr) {
+        this.resolve_expr(un_expr.right);
     }
 }
 

@@ -419,6 +419,10 @@ impl DiagEngine {
         }
     }
 
+    pub func has_errs(): bool {
+        return this.has_errs;
+    }
+
     func render_diag(diag: *DiagBuilder) {
         diag.sort_spans();
         this.print_diagnostic_header(diag);
