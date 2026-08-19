@@ -232,7 +232,7 @@ impl Context {
     }
 
     pub func alloc_block_stmt(range: basic.Span, stmts: **Stmt,
-                              stmts_count: usize, stmts_cap: usize): *BlockStmt {
+                              stmts_count: usize): *BlockStmt {
         let mem_ptr = this.alloc.alloc(@size_of(BlockStmt));
         let node    = mem_ptr.(*BlockStmt);
 
@@ -240,7 +240,6 @@ impl Context {
         this.cur_id      += 1;
         node.stmts       = stmts;
         node.stmts_count = stmts_count;
-        node.stmts_cap   = stmts_cap;
         this.register_node(node.(*Node));
 
         return node;
@@ -346,7 +345,6 @@ pub struct BlockStmt {
     pub base: Stmt;
     pub stmts: **Stmt;
     pub stmts_count: usize;
-    pub stmts_cap: usize;
 }
 
 impl BlockStmt {
@@ -810,7 +808,7 @@ impl Parser {
             let arg = Argument { name: name, ty: ty };
             if args_count >= args_cap {
                 args_cap = math.max(args_cap * 2uz, args_cap + 1uz);
-                args     = sys.realloc(args.(*u8), args_cap * @size_of(Argument)).(**Stmt);
+                args     = sys.realloc(args.(*u8), args_cap * @size_of(Argument)).(*Argument);
             }
             *(args + args_count) = arg;
             args_count += 1;
@@ -850,11 +848,14 @@ impl Parser {
             *(stmts + stmts_count) = stmt;
             stmts_count            += 1;
         }
+        let final_nodes = this.ast_ctx.alloc_node_array(stmts_count).(**Stmt);
+        sys.memcpy(final_nodes.(*u8), stmts.(*u8), stmts_count * @size_of(ptr));
         let range       = basic.Span.new(
             first_tok.range.start,
             this.cur_tok.range.end
         );
-        return this.ast_ctx.alloc_block_stmt(range, stmts, stmts_count, stmts_cap).(*Stmt);
+        sys.free(stmts.(*u8));
+        return this.ast_ctx.alloc_block_stmt(range, final_nodes, stmts_count).(*Stmt);
     }
 
     func parse_ret_stmt(): *Stmt {

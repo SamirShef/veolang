@@ -8,6 +8,7 @@ import hir;
 import std.io;
 import lexer;
 import ast;
+import diag;
 
 // HashMaps
 
@@ -42,6 +43,9 @@ impl HashMapU32DefId {
         let cap = 8uz;
         let buckets = sys.malloc(cap * @size_of(HashMapU32DefIdEntry))
             .(*HashMapU32DefIdEntry);
+        for let i = 0uz, i < cap, i += 1 {
+            (buckets + i).state = MAP_STATE_EMPTY;
+        }
         return HashMapU32DefId { buckets: buckets, len: 0uz, cap: cap, tompstones_count: 0uz };
     }
 
@@ -51,6 +55,9 @@ impl HashMapU32DefId {
 
         let buckets = sys.malloc(new_cap * @size_of(HashMapU32DefIdEntry))
             .(*HashMapU32DefIdEntry);
+        for let i = 0uz, i < new_cap, i += 1 {
+            (buckets + i).state = MAP_STATE_EMPTY;
+        }
         this.cap = new_cap;
         this.tompstones_count = 0;
 
@@ -176,6 +183,9 @@ impl HashMapU32Type {
         let cap = 8uz;
         let buckets = sys.malloc(cap * @size_of(HashMapU32TypeEntry))
             .(*HashMapU32TypeEntry);
+        for let i = 0uz, i < cap, i += 1 {
+            (buckets + i).state = MAP_STATE_EMPTY;
+        }
         return HashMapU32Type { buckets: buckets, len: 0uz, cap: cap, tompstones_count: 0uz };
     }
 
@@ -185,6 +195,9 @@ impl HashMapU32Type {
 
         let buckets = sys.malloc(new_cap * @size_of(HashMapU32TypeEntry))
             .(*HashMapU32TypeEntry);
+        for let i = 0uz, i < new_cap, i += 1 {
+            (buckets + i).state = MAP_STATE_EMPTY;
+        }
         this.cap = new_cap;
         this.tompstones_count = 0;
 
@@ -306,6 +319,9 @@ impl HashMapDefIdType {
         let cap = 8uz;
         let buckets = sys.malloc(cap * @size_of(HashMapDefIdTypeEntry))
             .(*HashMapDefIdTypeEntry);
+        for let i = 0uz, i < cap, i += 1 {
+            (buckets + i).state = MAP_STATE_EMPTY;
+        }
         return HashMapDefIdType { buckets: buckets, len: 0uz, cap: cap, tompstones_count: 0uz };
     }
 
@@ -315,6 +331,9 @@ impl HashMapDefIdType {
 
         let buckets = sys.malloc(new_cap * @size_of(HashMapDefIdTypeEntry))
             .(*HashMapDefIdTypeEntry);
+        for let i = 0uz, i < new_cap, i += 1 {
+            (buckets + i).state = MAP_STATE_EMPTY;
+        }
         this.cap = new_cap;
         this.tompstones_count = 0;
 
@@ -523,14 +542,16 @@ impl Context {
     }
 }
 
-pub struct NameResolver {
+pub struct NamesResolver {
+    engine: *diag.DiagEngine;
     current_scope: *Scope;
     ctx: *Context;
 }
 
-impl NameResolver {
-    pub static func new(ctx: *Context): NameResolver {
-        return NameResolver {
+impl NamesResolver {
+    pub static func new(engine: *diag.DiagEngine, ctx: *Context): NamesResolver {
+        return NamesResolver {
+            engine: engine,
             current_scope: nil,
             ctx: ctx
         };
@@ -567,15 +588,17 @@ impl NameResolver {
         let kind = stmt.kind();
         if kind == ast.NODE_VAR_DECL {
             this.resolve_var_decl(ast.VarDecl.cast(stmt.(*ast.Node)));
-        } else {
-            std.panic("Unsupported statement kind");
         }
     }
 
     func resolve_var_decl(var_decl: *ast.VarDecl) {
         let existing = this.current_scope.lookup_local(var_decl.name);
         if existing.has_val() {
-            std.panic("Redefinition of variable");
+            let msg = std.String.from("redefinition of symbol '");
+            msg.append(var_decl.name);
+            msg.append("'");
+            this.engine.report(diag.E_REDEFINITION, msg, diag.SEV_ERROR)
+                .span(var_decl.(*ast.Node).range());
             return;
         }
 
@@ -601,19 +624,19 @@ impl NameResolver {
             let un_expr = ast.UnExpr.cast(expr.(*ast.Node));
             return this.resolve_un_expr(un_expr);
         } else if kind == ast.NODE_LIT_EXPR {
-            let lit_expr = ast.LitExpr.cast(expr.(*ast.Node));
-            return this.resolve_lit_expr(lit_expr);
-        } else {
-            std.panic("Unsupported expression kind");
+            // not necessary
         }
     }
-
-    func resolve_lit_expr(lit: *ast.LitExpr) {}
 
     func resolve_var_expr(var_expr: *ast.VarExpr) {
         let resolved = this.current_scope.lookup_recursive(var_expr.name);
         if !resolved.has_val() {
-            std.panic("Use of undeclared variable");
+            let msg = std.String.from("undefined name '");
+            msg.append(var_expr.name);
+            msg.append("'");
+            this.engine.report(diag.E_UNDEFINED, msg, diag.SEV_ERROR)
+                .span(var_expr.(*ast.Node).range());
+            return;
         }
         this.ctx.resolutions.insert(var_expr.(*ast.Expr).id(), resolved.unwrap());
     }
