@@ -168,7 +168,7 @@ impl std.ToString for Type {
             str.append(std.i32_to_string(float.width.(i32)));
             return str;
         } else if SizeType.isa(this) {
-            let size = IntType.cast(this);
+            let size = SizeType.cast(this);
             let str: std.String;
             str.append(size.is_unsigned ? "u" : "i");
             str.append("size");

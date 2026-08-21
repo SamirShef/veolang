@@ -25,8 +25,9 @@ pub const E_REDEFINITION                           =  8;
 pub const E_UNDEFINED                              =  9;
 pub const E_CANNOT_FIT                             = 10;
 pub const E_INT_LIT_OVERFLOW                       = 11;
-pub const W_UNUSEDVAR                              = 12;
-pub const W_LOSSPRECISION                          = 13;
+pub const E_TYPE_MISMATCH                          = 12;
+pub const W_UNUSEDVAR                              = 13;
+pub const W_LOSSPRECISION                          = 14;
 
 pub struct SpanLabel {
     pub span: basic.Span;

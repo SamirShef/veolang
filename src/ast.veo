@@ -666,6 +666,11 @@ func tok_precedence(kind: i32): i32 {
         return PREC_BIT_OR;
     } else if kind == lexer.TOK_CARET {
         return PREC_BIT_XOR;
+    } else if kind == lexer.TOK_EQ_EQ || kind == lexer.TOK_BANG_EQ {
+        return PREC_EQUALITY;
+    } else if kind == lexer.TOK_LT || kind == lexer.TOK_LT_EQ
+        || kind == lexer.TOK_GT || kind == lexer.TOK_GT_EQ {
+        return PREC_COMPARISON;
     } else if kind == lexer.TOK_PLUS || kind == lexer.TOK_MINUS {
         return PREC_SUM;
     } else if kind == lexer.TOK_STAR || kind == lexer.TOK_SLASH || kind == lexer.TOK_PERCENT {
@@ -956,6 +961,8 @@ impl Parser {
             return this.ty_ctx.get_float_ty(32u32);
         } else if kind == lexer.TOK_F64 {
             return this.ty_ctx.get_float_ty(64u32);
+        } else if kind == lexer.TOK_BOOL {
+            return this.ty_ctx.get_bool_ty();
         }
         this.engine.report(diag.E_UNEXPECTED_TOKEN, "unexpected token", diag.SEV_ERROR)
             .span(this.cur_tok.range);

@@ -1,8 +1,8 @@
-let a: u8  = -129;
-let b: i8  = -129;
-let c: u16 = 1238102938;
-let d      = 123812904812093810293890;
-let e = -129;
+let a: u8  = 122;
+let b: i8  = -124;
+let c: u16 = 123;
+let d      = 1238i16;
+let e: bool = -129 < 0;
 let h = -2 + -1;
 let i = a;
 

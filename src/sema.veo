@@ -729,29 +729,119 @@ impl TypeChecker {
     }
 
     func check_var_expr(var_expr: *ast.VarExpr, expected_ty: *types.Type): bool {
-        // TODO: implement logic
+        let node_id    = var_expr.(*ast.Expr).id();
+        let def_id_opt = this.ctx.resolutions.get(node_id);
 
-        // let resolved = this.current_scope.lookup_recursive(var_expr.name);
-        // if !resolved.has_val() {
-        //   let msg = std.String.from("undefined name '");
-        //     msg.append(var_expr.name);
-        //     msg.append("'");
-        //     this.engine.report(diag.E_UNDEFINED, msg, diag.SEV_ERROR)
-        //         .span(var_expr.(*ast.Node).range());
-        //     return;
-        // }
-        // this.ctx.resolutions.insert(var_expr.(*ast.Expr).id(), resolved.unwrap());
-        return false;
+        let actual_ty = this.ctx.def_types.get(def_id_opt.unwrap());
+        if actual_ty == nil {
+            return false;
+        }
+
+        if expected_ty != nil && actual_ty != expected_ty {
+            let msg = std.String.from("mismatched types: expected '");
+            msg.append(expected_ty.to_string());
+            msg.append("', found '");
+            msg.append(actual_ty.to_string());
+            msg.append("'");
+            this.engine.report(diag.E_TYPE_MISMATCH, msg, diag.SEV_ERROR)
+                .span(var_expr.(*ast.Node).range());
+            return false;
+        }
+
+        this.ctx.node_types.insert(node_id, actual_ty);
+        return true;
     }
 
     func check_bin_expr(bin_expr: *ast.BinExpr, expected_ty: *types.Type): bool {
-        // TODO: implement logic
-        return false;
+        let node_id = bin_expr.(*ast.Expr).id();
+        let bool_ty = this.ctx.ty_ctx.get_bool_ty();
+
+        if bin_expr.op >= ast.BIN_OP_EQ && bin_expr.op <= ast.BIN_OP_LOG_OR {
+            if expected_ty != nil && expected_ty != bool_ty {
+                let msg = std.String.from("mismatched types: comparison evaluates to 'bool', expected '");
+                msg.append(expected_ty.to_string());
+                msg.append("'");
+                this.engine.report(diag.E_TYPE_MISMATCH, msg, diag.SEV_ERROR)
+                    .span(bin_expr.(*ast.Node).range());
+                return false;
+            }
+
+            if bin_expr.op == ast.BIN_OP_LOG_AND || bin_expr.op == ast.BIN_OP_LOG_OR {
+                let left_ok  = this.check_expr(bin_expr.left, bool_ty);
+                let right_ok = this.check_expr(bin_expr.right, bool_ty);
+                if !left_ok || !right_ok {
+                    return false;
+                }
+            } else {
+                let left_ty = this.infer_expr(bin_expr.left);
+                if left_ty == nil {
+                    return false;
+                }
+                if !this.check_expr(bin_expr.right, left_ty) {
+                    return false;
+                }
+            }
+
+            this.ctx.node_types.insert(node_id, bool_ty);
+            return true;
+        }
+
+        let target_ty = expected_ty;
+        if target_ty == nil {
+            target_ty = this.infer_expr(bin_expr.left);
+            if target_ty == nil {
+                return false;
+            }
+        } else {
+            if !this.check_expr(bin_expr.left, target_ty) {
+                return false;
+            }
+        }
+
+        if !this.check_expr(bin_expr.right, target_ty) {
+            return false;
+        }
+
+        this.ctx.node_types.insert(node_id, target_ty);
+        return true;
     }
 
     func check_un_expr(un_expr: *ast.UnExpr, expected_ty: *types.Type): bool {
-        // TODO: implement logic
-        return false;
+        let node_id = un_expr.(*ast.Expr).id();
+        let bool_ty = this.ctx.ty_ctx.get_bool_ty();
+
+        if un_expr.op == ast.UN_OP_NOT {
+            if expected_ty != nil && expected_ty != bool_ty {
+                let msg = std.String.from("mismatched types: boolean negation evaluates to 'bool', expected '");
+                msg.append(expected_ty.to_string());
+                msg.append("'");
+                this.engine.report(diag.E_TYPE_MISMATCH, msg, diag.SEV_ERROR)
+                    .span(un_expr.(*ast.Node).range());
+                return false;
+            }
+
+            if !this.check_expr(un_expr.right, bool_ty) {
+                return false;
+            }
+
+            this.ctx.node_types.insert(node_id, bool_ty);
+            return true;
+        }
+
+        let target_ty = expected_ty;
+        if target_ty == nil {
+            target_ty = this.infer_expr(un_expr.right);
+            if target_ty == nil {
+                return false;
+            }
+        }
+
+        if !this.check_expr(un_expr.right, target_ty) {
+            return false;
+        }
+
+        this.ctx.node_types.insert(node_id, target_ty);
+        return true;
     }
 
     func check_lit_expr(lit_expr: *ast.LitExpr, expected_ty: *types.Type): bool {
@@ -776,6 +866,14 @@ impl TypeChecker {
         if parsed_int.is_overflow {
             this.engine.report(diag.E_CANNOT_FIT, "cannot fit integer literal to any integer type",
                 diag.SEV_ERROR)
+                .span(lit_expr.(*ast.Node).range());
+            return false;
+        }
+        if expected_ty != nil && !types.IntType.isa(expected_ty) {
+            let msg = std.String.from("mismatched types: expected '");
+            msg.append(expected_ty.to_string());
+            msg.append("', found integer");
+            this.engine.report(diag.E_TYPE_MISMATCH, msg, diag.SEV_ERROR)
                 .span(lit_expr.(*ast.Node).range());
             return false;
         }
@@ -861,13 +959,25 @@ impl TypeChecker {
     }
 
     func infer_bin_expr(bin_expr: *ast.BinExpr): *types.Type {
-        // TODO: implement logic
-        return nil;
+        let left  = this.infer_expr(bin_expr.left);
+        if left == nil {
+            return nil;
+        }
+        let right = this.infer_expr(bin_expr.right);
+        if right == nil {
+            return nil;
+        }
+        if bin_expr.op >= ast.BIN_OP_EQ && bin_expr.op <= ast.BIN_OP_LOG_OR {
+            return this.ctx.ty_ctx.get_bool_ty();
+        }
+        return this.get_common_ty(left, right);
     }
 
     func infer_un_expr(un_expr: *ast.UnExpr): *types.Type {
-        // TODO: implement logic
-        return nil;
+        if un_expr.op == ast.UN_OP_NOT {
+            return this.ctx.ty_ctx.get_bool_ty();
+        }
+        return this.infer_expr(un_expr.right);
     }
 
     func infer_lit_expr(lit_expr: *ast.LitExpr): *types.Type {
@@ -892,6 +1002,16 @@ impl TypeChecker {
             return val <= expected_ty.max_signed_abs_limit();
         }
         return val <= expected_ty.max_signed_limit();
+    }
+
+    func get_common_ty(a: *types.Type, b: *types.Type): *types.Type {
+        if a == b {
+            return a;
+        }
+        if a == nil || b == nil {
+            return nil;
+        }
+        return nil;
     }
 }
 
