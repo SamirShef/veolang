@@ -277,6 +277,10 @@ impl StringView {
         }
         return OptionU8.some(*(this.data + i));
     }
+
+    pub func is_empty(): bool {
+        return this.len == 0uz;
+    }
 }
 
 /**

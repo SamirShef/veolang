@@ -1045,6 +1045,7 @@ impl TypeChecker {
     }
 
     func check_int_lit_expr(lit_expr: *ast.LitExpr, expected_ty: *types.Type): bool {
+        let node_id = lit_expr.(*ast.Expr).id();
         let parsed_int = parse_str_to_int(lit_expr.val);
         if parsed_int.is_overflow {
             this.engine.report(diag.E_CANNOT_FIT, "cannot fit integer literal to any integer type",
@@ -1052,6 +1053,32 @@ impl TypeChecker {
                 .span(lit_expr.(*ast.Node).range());
             return false;
         }
+
+        let suffix = num_suffix(lit_expr.val);
+        if !suffix.is_empty() {
+            let suff_ty = parse_type_from_suffix(suffix, this.ctx.ty_ctx);
+            if suff_ty == nil {
+                this.engine.report(diag.E_INVALID_NUM_SUFFIX, "invalid integer literal suffix", diag.SEV_ERROR)
+                    .span(lit_expr.(*ast.Node).range());
+                return false;
+            }
+            if expected_ty != nil && expected_ty != suff_ty {
+                let msg = std.String.from("mismatched types: suffix enforces '");
+                msg.append(suff_ty.to_string());
+                msg.append("', expected '");
+                msg.append(expected_ty.to_string());
+                msg.append("'");
+                this.engine.report(diag.E_TYPE_MISMATCH, msg, diag.SEV_ERROR)
+                    .span(lit_expr.(*ast.Node).range());
+                return false;
+            }
+            expected_ty = suff_ty;
+        }
+
+        if expected_ty != nil && types.FloatType.isa(expected_ty) {
+            return true;
+        }
+
         if expected_ty != nil && !types.IntType.isa(expected_ty) {
             let msg = std.String.from("mismatched types: expected '");
             msg.append(expected_ty.to_string());
@@ -1093,12 +1120,49 @@ impl TypeChecker {
                 .span(lit_expr.(*ast.Node).range(), label_msg);
             return false;
         }
+        this.ctx.node_types.insert(node_id, expected_ty);
         return true;
     }
 
     func check_float_lit_expr(lit_expr: *ast.LitExpr, expected_ty: *types.Type): bool {
-        // TODO: implement logic
-        return false;
+        let node_id = lit_expr.(*ast.Expr).id();
+        let suffix = num_suffix(lit_expr.val);
+
+        if !suffix.is_empty() {
+            let suff_ty = parse_type_from_suffix(suffix, this.ctx.ty_ctx);
+            if suff_ty == nil || !types.FloatType.isa(suff_ty) {
+                this.engine.report(diag.E_INVALID_NUM_SUFFIX, "invalid float literal suffix", diag.SEV_ERROR)
+                    .span(lit_expr.(*ast.Node).range());
+                return false;
+            }
+            if expected_ty != nil && expected_ty != suff_ty {
+                let msg = std.String.from("mismatched types: suffix enforces '");
+                msg.append(suff_ty.to_string());
+                msg.append("', expected '");
+                msg.append(expected_ty.to_string());
+                msg.append("'");
+                this.engine.report(diag.E_TYPE_MISMATCH, msg, diag.SEV_ERROR)
+                    .span(lit_expr.(*ast.Node).range());
+                return false;
+            }
+            expected_ty = suff_ty;
+        }
+
+        if expected_ty != nil && !types.FloatType.isa(expected_ty) {
+            let msg = std.String.from("mismatched types: expected '");
+            msg.append(expected_ty.to_string());
+            msg.append("', found float");
+            this.engine.report(diag.E_TYPE_MISMATCH, msg, diag.SEV_ERROR)
+                .span(lit_expr.(*ast.Node).range());
+            return false;
+        }
+
+        if expected_ty == nil {
+            expected_ty = this.ctx.ty_ctx.get_float_ty(64u32);
+        }
+
+        this.ctx.node_types.insert(node_id, expected_ty);
+        return true;
     }
 
     func check_call_expr(call_expr: *ast.CallExpr, expected_ty: *types.Type): bool {
@@ -1319,6 +1383,10 @@ func parse_str_to_int(str: std.StringView): ParsedInt {
             continue;
         }
 
+        if !std.is_ascii_digit(c.(char)) {
+            break;
+        }
+
         let digit = c - '0'.(u8);
         if res > ((18446744073709551615u64 - digit) / 10u64) {
             return ParsedInt { abs_val: 0, is_neg: is_neg, is_overflow: true };
@@ -1326,4 +1394,47 @@ func parse_str_to_int(str: std.StringView): ParsedInt {
         res = res * 10u64 + digit;
     }
     return ParsedInt { abs_val: res, is_neg: is_neg, is_overflow: false };
+}
+
+func num_suffix(val: std.StringView): std.StringView {
+    for let i = 0uz, i < val.len(), i += 1 {
+        if std.is_ascii_letter(val.get(i).unwrap().(char)) {
+            return std.StringView.from(val.data() + i, val.len() - i);
+        }
+    }
+    return std.StringView.from("");
+}
+
+func parse_type_from_suffix(suffix: std.StringView, ty_ctx: *types.Context): *types.Type {
+    if suffix.compare_to(std.StringView.from("u8")) == 0  {
+        return ty_ctx.get_int_ty(8u32, true);
+    }
+    if suffix.compare_to(std.StringView.from("u16")) == 0 {
+        return ty_ctx.get_int_ty(16u32, true);
+    }
+    if suffix.compare_to(std.StringView.from("u32")) == 0 {
+        return ty_ctx.get_int_ty(32u32, true);
+    }
+    if suffix.compare_to(std.StringView.from("u64")) == 0 {
+        return ty_ctx.get_int_ty(64u32, true);
+    }
+    if suffix.compare_to(std.StringView.from("i8")) == 0  {
+        return ty_ctx.get_int_ty(8u32, false);
+    }
+    if suffix.compare_to(std.StringView.from("i16")) == 0 {
+        return ty_ctx.get_int_ty(16u32, false);
+    }
+    if suffix.compare_to(std.StringView.from("i32")) == 0 {
+        return ty_ctx.get_int_ty(32u32, false);
+    }
+    if suffix.compare_to(std.StringView.from("i64")) == 0 {
+        return ty_ctx.get_int_ty(64u32, false);
+    }
+    if suffix.compare_to(std.StringView.from("f32")) == 0 {
+        return ty_ctx.get_float_ty(32u32);
+    }
+    if suffix.compare_to(std.StringView.from("f64")) == 0 {
+        return ty_ctx.get_float_ty(64u32);
+    }
+    return nil;
 }
