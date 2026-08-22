@@ -23,8 +23,12 @@ pub const E_INVALID_NUM_SUFFIX                     =  6;
 pub const E_DIV_BY_ZERO                            =  7;
 pub const E_REDEFINITION                           =  8;
 pub const E_UNDEFINED                              =  9;
-pub const W_UNUSEDVAR                              = 10;
-pub const W_LOSSPRECISION                          = 11;
+pub const E_CANNOT_FIT                             = 10;
+pub const E_INT_LIT_OVERFLOW                       = 11;
+pub const E_TYPE_MISMATCH                          = 12;
+pub const E_CANNOT_INFER_TYPE                      = 13;
+pub const W_UNUSEDVAR                              = 200;
+pub const W_LOSSPRECISION                          = 201;
 
 pub struct SpanLabel {
     pub span: basic.Span;
@@ -417,6 +421,10 @@ impl DiagEngine {
         for let i = 0uz, i < this.diags.len(), i += 1 {
             this.render_diag(this.diags.data() + i);
         }
+    }
+
+    pub func has_errs(): bool {
+        return this.has_errs;
     }
 
     func render_diag(diag: *DiagBuilder) {

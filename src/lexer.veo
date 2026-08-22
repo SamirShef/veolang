@@ -682,6 +682,8 @@ impl HashMapStringTokenKind {
 
 func init_keywords(): HashMapStringTokenKind {
     let map = HashMapStringTokenKind.new();
+    map.insert(std.StringView.from("true"), TOK_BOOL_LIT);
+    map.insert(std.StringView.from("false"), TOK_BOOL_LIT);
     map.insert(std.StringView.from("bool"), TOK_BOOL);
     map.insert(std.StringView.from("char"), TOK_CHAR);
     map.insert(std.StringView.from("i8"), TOK_I8);

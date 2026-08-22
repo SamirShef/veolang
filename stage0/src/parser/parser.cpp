@@ -694,7 +694,15 @@ Parser::parsePrimaryExpr (bool allowStruct) {
         if (!expectTok (TokenKind::LParen, "(")) {
             return nullptr;
         }
-        Expr *expr = parseExpr ();
+        Expr *expr = nullptr;
+        if (check (TokenKind::Star)) {
+            auto  start = _curTok.Start;
+            auto *type  = consumeType ();
+            auto  end   = _lastTok.End;
+            expr        = createNode<TypeExpr> (type, start, end);
+        } else {
+            expr = parseExpr ();
+        }
         if (expr == nullptr) {
             return nullptr;
         }

@@ -439,7 +439,12 @@ impl HashMapDefIdType {
 
 // HashMaps
 
+pub const SYM_VALUE = 0;
+pub const SYM_FUNC  = 1;
+pub const SYM_TYPE  = 2;
+
 pub struct ScopeEntry {
+    pub kind: i32;
     pub name: std.StringView;
     pub def_id: basic.DefId;
 }
@@ -461,29 +466,29 @@ impl Scope {
         return scope;
     }
 
-    pub func lookup_local(name: std.StringView): basic.OptionDefId {
+    pub func lookup_local(name: std.StringView, kind: i32): basic.OptionDefId {
         for let i = 0uz, i < this.count, i += 1 {
             let entry = this.entries + i;
-            if entry.name.compare_to(name) == 0 {
+            if entry.kind == kind && entry.name.compare_to(name) == 0 {
                 return basic.OptionDefId.some(entry.def_id);
             }
         }
         return basic.OptionDefId.none();
     }
 
-    pub func lookup_recursive(name: std.StringView): basic.OptionDefId {
-        let curr = this;
-        for curr != nil {
-            let res = curr.lookup_local(name);
+    pub func lookup_recursive(name: std.StringView, kind: i32): basic.OptionDefId {
+        let cur = this;
+        for cur != nil {
+            let res = cur.lookup_local(name, kind);
             if res.has_val() {
                 return res;
             }
-            curr = curr.parent;
+            cur = cur.parent;
         }
         return basic.OptionDefId.none();
     }
 
-    pub func insert(name: std.StringView, def_id: basic.DefId) {
+    pub func insert(name: std.StringView, def_id: basic.DefId, kind: i32) {
         if this.count >= this.cap {
             let old_cap = this.cap;
             this.cap = math.max(this.cap * 2uz, this.cap + 1uz);
@@ -493,6 +498,7 @@ impl Scope {
             ).(*ScopeEntry);
         }
         let entry = this.entries + this.count;
+        entry.kind = kind;
         entry.name = name;
         entry.def_id = def_id;
         this.count += 1;
@@ -506,17 +512,19 @@ impl Scope {
 
 pub struct Context {
     pub resolutions: HashMapU32DefId;
-    def_types: HashMapDefIdType;
-    node_types: HashMapU32Type;
+    pub def_types: HashMapDefIdType;
+    pub node_types: HashMapU32Type;
+    pub ty_ctx: *types.Context;
     next_def_id: u32;
 }
 
 impl Context {
-    pub static func new(): Context {
+    pub static func new(ty_ctx: *types.Context): Context {
         return Context {
             resolutions: HashMapU32DefId.new(),
             def_types: HashMapDefIdType.new(),
             node_types: HashMapU32Type.new(),
+            ty_ctx: ty_ctx,
             next_def_id: 0
         };
     }
@@ -588,11 +596,17 @@ impl NamesResolver {
         let kind = stmt.kind();
         if kind == ast.NODE_VAR_DECL {
             this.resolve_var_decl(ast.VarDecl.cast(stmt.(*ast.Node)));
+        } else if kind == ast.NODE_FUNC_DECL {
+            this.resolve_func_decl(ast.FuncDecl.cast(stmt.(*ast.Node)));
+        } else if kind == ast.NODE_BLOCK_STMT {
+            this.resolve_block_stmt(ast.BlockStmt.cast(stmt.(*ast.Node)));
+        } else if kind == ast.NODE_RET_STMT {
+            this.resolve_ret_stmt(ast.RetStmt.cast(stmt.(*ast.Node)));
         }
     }
 
     func resolve_var_decl(var_decl: *ast.VarDecl) {
-        let existing = this.current_scope.lookup_local(var_decl.name);
+        let existing = this.current_scope.lookup_local(var_decl.name, SYM_VALUE);
         if existing.has_val() {
             let msg = std.String.from("redefinition of symbol '");
             msg.append(var_decl.name);
@@ -602,10 +616,68 @@ impl NamesResolver {
             return;
         }
 
+        if var_decl.ty != nil {
+            this.resolve_ty(var_decl.ty);
+        }
         this.resolve_expr(var_decl.init);
         let def_id = this.ctx.next_def_id();
         this.ctx.resolutions.insert(var_decl.(*ast.Stmt).id(), def_id);
-        this.current_scope.insert(var_decl.name, def_id);
+        this.current_scope.insert(var_decl.name, def_id, SYM_VALUE);
+    }
+
+    func resolve_func_decl(func_decl: *ast.FuncDecl) {
+        let existing = this.current_scope.lookup_local(func_decl.name, SYM_FUNC);
+        if existing.has_val() {
+            let msg = std.String.from("redefinition of symbol '");
+            msg.append(func_decl.name);
+            msg.append("'");
+            this.engine.report(diag.E_REDEFINITION, msg, diag.SEV_ERROR)
+                .span(func_decl.(*ast.Node).range());
+            return;
+        }
+
+        let func_def_id = this.ctx.next_def_id();
+        this.ctx.resolutions.insert(func_decl.(*ast.Stmt).id(), func_def_id);
+        this.current_scope.insert(func_decl.name, func_def_id, SYM_FUNC);
+
+        this.enter_scope();
+
+        for let i = 0uz, i < func_decl.args_count, i += 1 {
+            let arg = func_decl.args + i;
+            if arg.ty != nil {
+                this.resolve_ty(arg.ty);
+            }
+
+            let arg_existing = this.current_scope.lookup_local(arg.name, SYM_VALUE);
+            if arg_existing.has_val() {
+                let msg = std.String.from("redefinition of argument '");
+                msg.append(arg.name);
+                msg.append("'");
+                this.engine.report(diag.E_REDEFINITION, msg, diag.SEV_ERROR)
+                    .span(func_decl.(*ast.Node).range());
+            } else {
+                let arg_def_id = this.ctx.next_def_id();
+                this.current_scope.insert(arg.name, arg_def_id, SYM_VALUE);
+            }
+        }
+
+        let block = func_decl.body;
+        for let i = 0uz, i < block.stmts_count, i += 1 {
+            this.resolve_stmt(*(block.stmts + i));
+        }
+        this.exit_scope();
+    }
+
+    func resolve_block_stmt(block: *ast.BlockStmt) {
+        this.enter_scope();
+        for let i = 0uz, i < block.stmts_count, i += 1 {
+            this.resolve_stmt(*(block.stmts + i));
+        }
+        this.exit_scope();
+    }
+
+    func resolve_ret_stmt(ret: *ast.RetStmt) {
+        this.resolve_expr(ret.expr);
     }
 
     func resolve_expr(expr: *ast.Expr) {
@@ -625,11 +697,14 @@ impl NamesResolver {
             return this.resolve_un_expr(un_expr);
         } else if kind == ast.NODE_LIT_EXPR {
             // not necessary
+        } else if kind == ast.NODE_CALL_EXPR {
+            let call_expr = ast.CallExpr.cast(expr.(*ast.Node));
+            return this.resolve_call_expr(call_expr);
         }
     }
 
     func resolve_var_expr(var_expr: *ast.VarExpr) {
-        let resolved = this.current_scope.lookup_recursive(var_expr.name);
+        let resolved = this.current_scope.lookup_recursive(var_expr.name, SYM_VALUE);
         if !resolved.has_val() {
             let msg = std.String.from("undefined name '");
             msg.append(var_expr.name);
@@ -648,6 +723,612 @@ impl NamesResolver {
 
     func resolve_un_expr(un_expr: *ast.UnExpr) {
         this.resolve_expr(un_expr.right);
+    }
+
+    func resolve_call_expr(call_expr: *ast.CallExpr) {
+        if call_expr.callee != nil {
+            if call_expr.callee.kind() == ast.NODE_VAR_EXPR {
+                let var_expr = ast.VarExpr.cast(call_expr.callee.(*ast.Node));
+
+                let resolved = this.current_scope.lookup_recursive(var_expr.name, SYM_FUNC);
+                if resolved.has_val() {
+                    this.ctx.resolutions.insert(var_expr.(*ast.Expr).id(), resolved.unwrap());
+                } else {
+                    let val_resolved = this.current_scope.lookup_recursive(var_expr.name, SYM_VALUE);
+                    if val_resolved.has_val() {
+                        this.ctx.resolutions.insert(var_expr.(*ast.Expr).id(), val_resolved.unwrap());
+                    } else {
+                        let msg = std.String.from("undefined function '");
+                        msg.append(var_expr.name);
+                        msg.append("'");
+                        this.engine.report(diag.E_UNDEFINED, msg, diag.SEV_ERROR)
+                            .span(var_expr.(*ast.Node).range());
+                    }
+                }
+            } else {
+                this.resolve_expr(call_expr.callee);
+            }
+        }
+
+        for let i = 0uz, i < call_expr.args_count, i += 1 {
+            this.resolve_expr(*(call_expr.args + i));
+        }
+    }
+
+    func resolve_ty(ty: *types.Type) {
+        if ty == nil {
+            return;
+        }
+        // TODO: implement after adding structure and trait types
+    }
+}
+
+pub struct TypeChecker {
+    engine: *diag.DiagEngine;
+    ctx: *Context;
+    cur_ret_ty: *types.Type;
+}
+
+struct ParsedInt {
+    pub abs_val: u64;
+    pub is_neg: bool;
+    pub is_overflow: bool;
+}
+
+impl TypeChecker {
+    pub static func new(engine: *diag.DiagEngine, ctx: *Context): TypeChecker {
+        return TypeChecker {
+            engine: engine,
+            ctx: ctx,
+            cur_ret_ty: nil
+        };
+    }
+
+    pub func check(res: ast.ParseResult) {
+        for let i = 0uz, i < res.count, i += 1 {
+            let node = *(res.nodes + i);
+            if ast.Stmt.isa(node) {
+                this.check_stmt(ast.Stmt.cast(node));
+            }
+        }
+    }
+
+    func check_stmt(stmt: *ast.Stmt) {
+        if stmt == nil {
+            return;
+        }
+
+        let kind = stmt.kind();
+        if kind == ast.NODE_VAR_DECL {
+            this.check_var_decl(ast.VarDecl.cast(stmt.(*ast.Node)));
+        } else if kind == ast.NODE_FUNC_DECL {
+            this.check_func_decl(ast.FuncDecl.cast(stmt.(*ast.Node)));
+        } else if kind == ast.NODE_BLOCK_STMT {
+            this.check_block_stmt(ast.BlockStmt.cast(stmt.(*ast.Node)));
+        } else if kind == ast.NODE_RET_STMT {
+            this.check_ret_stmt(ast.RetStmt.cast(stmt.(*ast.Node)));
+        }
+    }
+
+    func check_var_decl(var_decl: *ast.VarDecl) {
+        let node_id = var_decl.(*ast.Stmt).id();
+        let def_id = this.ctx.resolutions.get(node_id).unwrap();
+        let ty = var_decl.ty;
+        if !this.check_expr(var_decl.init, ty) {
+            return;
+        }
+        if ty == nil {
+            ty = this.infer_expr(var_decl.init);
+            if ty == nil {
+                this.engine.report(diag.E_CANNOT_INFER_TYPE, "cannot infer expression type", diag.SEV_ERROR)
+                    .span(var_decl.init.range());
+                return;
+            }
+        }
+        this.ctx.def_types.insert(def_id, ty);
+    }
+
+    func check_func_decl(func_decl: *ast.FuncDecl) {
+        let node_id = func_decl.(*ast.Stmt).id();
+        let def_id  = this.ctx.resolutions.get(node_id).unwrap();
+
+        let args = sys.malloc(func_decl.args_count * @size_of(*types.Type)).(**types.Type);
+        for let i = 0uz, i < func_decl.args_count, i += 1 {
+            let arg = func_decl.args + i;
+            *(args + i) = arg.ty;
+        }
+
+        let ret_ty = func_decl.ret_ty;
+        if ret_ty == nil {
+            ret_ty = this.ctx.ty_ctx.get_noth_ty();
+        }
+
+        let fn_ty = this.ctx.ty_ctx.get_func_ty(args, func_decl.args_count, ret_ty);
+        this.ctx.def_types.insert(def_id, fn_ty);
+
+        let old_ret_ty  = this.cur_ret_ty;
+        this.cur_ret_ty = func_decl.ret_ty;
+
+        if func_decl.body != nil {
+            this.check_block_stmt(func_decl.body);
+        }
+
+        this.cur_ret_ty = old_ret_ty;
+    }
+
+    func check_block_stmt(block: *ast.BlockStmt) {
+        for let i = 0uz, i < block.stmts_count, i += 1 {
+            this.check_stmt(*(block.stmts + i));
+        }
+    }
+
+    func check_ret_stmt(ret: *ast.RetStmt) {
+        let expected_ty = this.cur_ret_ty;
+
+        if ret.expr == nil {
+            if !types.NothType.isa(expected_ty) {
+                let msg = std.String.from("expected return expression of type '");
+                msg.append(expected_ty.to_string());
+                msg.append("'");
+                this.engine.report(diag.E_TYPE_MISMATCH, msg, diag.SEV_ERROR)
+                    .span(ret.(*ast.Node).range());
+            }
+            return;
+        }
+
+        if types.NothType.isa(expected_ty) {
+            let msg = std.String.from("unexpected return value in function returning noth");
+            this.engine.report(diag.E_TYPE_MISMATCH, msg, diag.SEV_ERROR)
+                .span(ret.(*ast.Node).range());
+            return;
+        }
+
+        this.check_expr(ret.expr, expected_ty);
+    }
+
+    func check_expr(expr: *ast.Expr, expected_ty: *types.Type): bool {
+        if expr == nil {
+            return false;
+        }
+
+        let kind = expr.kind();
+        if kind == ast.NODE_VAR_EXPR {
+            let var_expr = ast.VarExpr.cast(expr.(*ast.Node));
+            return this.check_var_expr(var_expr, expected_ty);
+        } else if kind == ast.NODE_BIN_EXPR {
+            let bin_expr = ast.BinExpr.cast(expr.(*ast.Node));
+            return this.check_bin_expr(bin_expr, expected_ty);
+        } else if kind == ast.NODE_UN_EXPR {
+            let un_expr = ast.UnExpr.cast(expr.(*ast.Node));
+            return this.check_un_expr(un_expr, expected_ty);
+        } else if kind == ast.NODE_LIT_EXPR {
+            let lit_expr = ast.LitExpr.cast(expr.(*ast.Node));
+            return this.check_lit_expr(lit_expr, expected_ty);
+        } else if kind == ast.NODE_CALL_EXPR {
+            let call_expr = ast.CallExpr.cast(expr.(*ast.Node));
+            return this.check_call_expr(call_expr, expected_ty);
+        }
+        return false;
+    }
+
+    func check_var_expr(var_expr: *ast.VarExpr, expected_ty: *types.Type): bool {
+        let node_id    = var_expr.(*ast.Expr).id();
+        let def_id_opt = this.ctx.resolutions.get(node_id);
+
+        let actual_ty = this.ctx.def_types.get(def_id_opt.unwrap());
+        if actual_ty == nil {
+            return false;
+        }
+
+        if expected_ty != nil && actual_ty != expected_ty {
+            let msg = std.String.from("mismatched types: expected '");
+            msg.append(expected_ty.to_string());
+            msg.append("', found '");
+            msg.append(actual_ty.to_string());
+            msg.append("'");
+            this.engine.report(diag.E_TYPE_MISMATCH, msg, diag.SEV_ERROR)
+                .span(var_expr.(*ast.Node).range());
+            return false;
+        }
+
+        this.ctx.node_types.insert(node_id, actual_ty);
+        return true;
+    }
+
+    func check_bin_expr(bin_expr: *ast.BinExpr, expected_ty: *types.Type): bool {
+        let node_id = bin_expr.(*ast.Expr).id();
+        let bool_ty = this.ctx.ty_ctx.get_bool_ty();
+
+        if bin_expr.op >= ast.BIN_OP_EQ && bin_expr.op <= ast.BIN_OP_LOG_OR {
+            if expected_ty != nil && expected_ty != bool_ty {
+                let msg = std.String.from("mismatched types: comparison evaluates to 'bool', expected '");
+                msg.append(expected_ty.to_string());
+                msg.append("'");
+                this.engine.report(diag.E_TYPE_MISMATCH, msg, diag.SEV_ERROR)
+                    .span(bin_expr.(*ast.Node).range());
+                return false;
+            }
+
+            if bin_expr.op == ast.BIN_OP_LOG_AND || bin_expr.op == ast.BIN_OP_LOG_OR {
+                let left_ok  = this.check_expr(bin_expr.left, bool_ty);
+                let right_ok = this.check_expr(bin_expr.right, bool_ty);
+                if !left_ok || !right_ok {
+                    return false;
+                }
+            } else {
+                let left_ty = this.infer_expr(bin_expr.left);
+                if left_ty == nil {
+                    return false;
+                }
+                if !this.check_expr(bin_expr.right, left_ty) {
+                    return false;
+                }
+            }
+
+            this.ctx.node_types.insert(node_id, bool_ty);
+            return true;
+        }
+
+        let target_ty = expected_ty;
+        if target_ty == nil {
+            target_ty = this.infer_expr(bin_expr.left);
+            if target_ty == nil {
+                return false;
+            }
+        } else {
+            if !this.check_expr(bin_expr.left, target_ty) {
+                return false;
+            }
+        }
+
+        if !this.check_expr(bin_expr.right, target_ty) {
+            return false;
+        }
+
+        this.ctx.node_types.insert(node_id, target_ty);
+        return true;
+    }
+
+    func check_un_expr(un_expr: *ast.UnExpr, expected_ty: *types.Type): bool {
+        let node_id = un_expr.(*ast.Expr).id();
+        let bool_ty = this.ctx.ty_ctx.get_bool_ty();
+
+        if un_expr.op == ast.UN_OP_NOT {
+            if expected_ty != nil && expected_ty != bool_ty {
+                let msg = std.String.from("mismatched types: boolean negation evaluates to 'bool', expected '");
+                msg.append(expected_ty.to_string());
+                msg.append("'");
+                this.engine.report(diag.E_TYPE_MISMATCH, msg, diag.SEV_ERROR)
+                    .span(un_expr.(*ast.Node).range());
+                return false;
+            }
+
+            if !this.check_expr(un_expr.right, bool_ty) {
+                return false;
+            }
+
+            this.ctx.node_types.insert(node_id, bool_ty);
+            return true;
+        }
+
+        let target_ty = expected_ty;
+        if target_ty == nil {
+            target_ty = this.infer_expr(un_expr.right);
+            if target_ty == nil {
+                return false;
+            }
+        }
+
+        if !this.check_expr(un_expr.right, target_ty) {
+            return false;
+        }
+
+        this.ctx.node_types.insert(node_id, target_ty);
+        return true;
+    }
+
+    func check_lit_expr(lit_expr: *ast.LitExpr, expected_ty: *types.Type): bool {
+        // TODO: implement logic
+
+        if lit_expr.tok_kind != lexer.TOK_NUM_LIT {
+            return false;
+        }
+        // only numbers:
+        return this.check_num_lit_expr(lit_expr, expected_ty);
+    }
+
+    func check_num_lit_expr(lit_expr: *ast.LitExpr, expected_ty: *types.Type): bool {
+        if is_floating(lit_expr.val) {
+            return this.check_float_lit_expr(lit_expr, expected_ty);
+        }
+        return this.check_int_lit_expr(lit_expr, expected_ty);
+    }
+
+    func check_int_lit_expr(lit_expr: *ast.LitExpr, expected_ty: *types.Type): bool {
+        let node_id = lit_expr.(*ast.Expr).id();
+        let parsed_int = parse_str_to_int(lit_expr.val);
+        if parsed_int.is_overflow {
+            this.engine.report(diag.E_CANNOT_FIT, "cannot fit integer literal to any integer type",
+                diag.SEV_ERROR)
+                .span(lit_expr.(*ast.Node).range());
+            return false;
+        }
+
+        let suffix = num_suffix(lit_expr.val);
+        if !suffix.is_empty() {
+            let suff_ty = parse_type_from_suffix(suffix, this.ctx.ty_ctx);
+            if suff_ty == nil {
+                this.engine.report(diag.E_INVALID_NUM_SUFFIX, "invalid integer literal suffix", diag.SEV_ERROR)
+                    .span(lit_expr.(*ast.Node).range());
+                return false;
+            }
+            if expected_ty != nil && expected_ty != suff_ty {
+                let msg = std.String.from("mismatched types: suffix enforces '");
+                msg.append(suff_ty.to_string());
+                msg.append("', expected '");
+                msg.append(expected_ty.to_string());
+                msg.append("'");
+                this.engine.report(diag.E_TYPE_MISMATCH, msg, diag.SEV_ERROR)
+                    .span(lit_expr.(*ast.Node).range());
+                return false;
+            }
+            expected_ty = suff_ty;
+        }
+
+        if expected_ty != nil && types.FloatType.isa(expected_ty) {
+            return true;
+        }
+
+        if expected_ty != nil && !types.IntType.isa(expected_ty) {
+            let msg = std.String.from("mismatched types: expected '");
+            msg.append(expected_ty.to_string());
+            msg.append("', found integer");
+            this.engine.report(diag.E_TYPE_MISMATCH, msg, diag.SEV_ERROR)
+                .span(lit_expr.(*ast.Node).range());
+            return false;
+        }
+        if expected_ty == nil {
+            expected_ty = this.ctx.ty_ctx.get_int_ty(32u32, false);
+        }
+        let int_ty = types.IntType.cast(expected_ty);
+        if !this.can_fit(parsed_int.abs_val, parsed_int.is_neg, int_ty) {
+            let msg = std.String.from("cannot fit integer literal to ");
+            msg.append(expected_ty.to_string());
+            msg.append(" type");
+
+            let label_msg = std.String.from("must be in range [");
+            if int_ty.is_unsigned {
+                label_msg.append("0, ");
+                let max_limit_tmp = std.usize_to_string(int_ty.max_unsigned_limit().(usize));
+                label_msg.append(max_limit_tmp);
+                max_limit_tmp.destroy();
+            } else {
+                label_msg.append("-");
+                let min_limit_tmp = std.usize_to_string(int_ty.max_signed_abs_limit().(usize));
+                label_msg.append(min_limit_tmp);
+                min_limit_tmp.destroy();
+
+                label_msg.append(", ");
+
+                let max_limit_tmp = std.usize_to_string(int_ty.max_signed_limit().(usize));
+                label_msg.append(max_limit_tmp);
+                max_limit_tmp.destroy();
+            }
+            label_msg.append("]");
+
+            this.engine.report(diag.E_CANNOT_FIT, msg, diag.SEV_ERROR)
+                .span(lit_expr.(*ast.Node).range(), label_msg);
+            return false;
+        }
+        this.ctx.node_types.insert(node_id, expected_ty);
+        return true;
+    }
+
+    func check_float_lit_expr(lit_expr: *ast.LitExpr, expected_ty: *types.Type): bool {
+        let node_id = lit_expr.(*ast.Expr).id();
+        let suffix = num_suffix(lit_expr.val);
+
+        if !suffix.is_empty() {
+            let suff_ty = parse_type_from_suffix(suffix, this.ctx.ty_ctx);
+            if suff_ty == nil || !types.FloatType.isa(suff_ty) {
+                this.engine.report(diag.E_INVALID_NUM_SUFFIX, "invalid float literal suffix", diag.SEV_ERROR)
+                    .span(lit_expr.(*ast.Node).range());
+                return false;
+            }
+            if expected_ty != nil && expected_ty != suff_ty {
+                let msg = std.String.from("mismatched types: suffix enforces '");
+                msg.append(suff_ty.to_string());
+                msg.append("', expected '");
+                msg.append(expected_ty.to_string());
+                msg.append("'");
+                this.engine.report(diag.E_TYPE_MISMATCH, msg, diag.SEV_ERROR)
+                    .span(lit_expr.(*ast.Node).range());
+                return false;
+            }
+            expected_ty = suff_ty;
+        }
+
+        if expected_ty != nil && !types.FloatType.isa(expected_ty) {
+            let msg = std.String.from("mismatched types: expected '");
+            msg.append(expected_ty.to_string());
+            msg.append("', found float");
+            this.engine.report(diag.E_TYPE_MISMATCH, msg, diag.SEV_ERROR)
+                .span(lit_expr.(*ast.Node).range());
+            return false;
+        }
+
+        if expected_ty == nil {
+            expected_ty = this.ctx.ty_ctx.get_float_ty(64u32);
+        }
+
+        this.ctx.node_types.insert(node_id, expected_ty);
+        return true;
+    }
+
+    func check_call_expr(call_expr: *ast.CallExpr, expected_ty: *types.Type): bool {
+        let node_id   = call_expr.(*ast.Expr).id();
+        let callee_ty = this.infer_expr(call_expr.callee);
+        if callee_ty == nil {
+            return false;
+        }
+
+        if !types.FuncType.isa(callee_ty) {
+            let msg = std.String.from("type '");
+            msg.append(callee_ty.to_string());
+            msg.append("' is not callable");
+            this.engine.report(diag.E_TYPE_MISMATCH, msg, diag.SEV_ERROR)
+                .span(call_expr.callee.(*ast.Node).range());
+            return false;
+        }
+
+        let fn_ty = types.FuncType.cast(callee_ty);
+
+        if call_expr.args_count != fn_ty.args_count {
+            let msg = std.String.from("expected ");
+            msg.append(std.usize_to_string(fn_ty.args_count));
+            msg.append(" arguments, found ");
+            msg.append(std.usize_to_string(call_expr.args_count));
+
+            this.engine.report(diag.E_TYPE_MISMATCH, msg, diag.SEV_ERROR)
+                .span(call_expr.(*ast.Node).range());
+            return false;
+        }
+
+        let args_ok = true;
+        for let i = 0uz, i < call_expr.args_count, i += 1 {
+            let arg_expr = *(call_expr.args + i);
+            let expected_arg_ty = *(fn_ty.args + i);
+
+            if !this.check_expr(arg_expr, expected_arg_ty) {
+                args_ok = false;
+            }
+        }
+
+        if !args_ok {
+            return false;
+        }
+
+        let ret_ty = fn_ty.ret_ty;
+        if expected_ty != nil && ret_ty != expected_ty {
+            let msg = std.String.from("mismatched types: function returns '");
+            msg.append(ret_ty.to_string());
+            msg.append("', expected '");
+            msg.append(expected_ty.to_string());
+            msg.append("'");
+            this.engine.report(diag.E_TYPE_MISMATCH, msg, diag.SEV_ERROR)
+                .span(call_expr.(*ast.Node).range());
+            return false;
+        }
+
+        this.ctx.node_types.insert(node_id, ret_ty);
+        return true;
+    }
+
+    pub func infer_expr(expr: *ast.Expr): *types.Type {
+        if expr == nil {
+            return nil;
+        }
+
+        let kind = expr.kind();
+        let inferred_ty: *types.Type;
+
+        if kind == ast.NODE_VAR_EXPR {
+            inferred_ty = this.infer_var_expr(ast.VarExpr.cast(expr.(*ast.Node)));
+        } else if kind == ast.NODE_BIN_EXPR {
+            inferred_ty = this.infer_bin_expr(ast.BinExpr.cast(expr.(*ast.Node)));
+        } else if kind == ast.NODE_UN_EXPR {
+            inferred_ty = this.infer_un_expr(ast.UnExpr.cast(expr.(*ast.Node)));
+        } else if kind == ast.NODE_LIT_EXPR {
+            inferred_ty = this.infer_lit_expr(ast.LitExpr.cast(expr.(*ast.Node)));
+        } else if kind == ast.NODE_CALL_EXPR {
+            inferred_ty = this.infer_call_expr(ast.CallExpr.cast(expr.(*ast.Node)));
+        }
+
+        if inferred_ty != nil {
+            this.ctx.node_types.insert(expr.id(), inferred_ty);
+        }
+
+        return inferred_ty;
+    }
+
+    func infer_var_expr(var_expr: *ast.VarExpr): *types.Type {
+        let node_id = var_expr.(*ast.Expr).id();
+        let def_id_opt = this.ctx.resolutions.get(node_id);
+
+        if !def_id_opt.has_val() {
+            return nil;
+        }
+
+        let ty = this.ctx.def_types.get(def_id_opt.unwrap());
+        if ty == nil {
+            return nil;
+        }
+        return ty;
+    }
+
+    func infer_bin_expr(bin_expr: *ast.BinExpr): *types.Type {
+        let left  = this.infer_expr(bin_expr.left);
+        if left == nil {
+            return nil;
+        }
+        let right = this.infer_expr(bin_expr.right);
+        if right == nil {
+            return nil;
+        }
+        if bin_expr.op >= ast.BIN_OP_EQ && bin_expr.op <= ast.BIN_OP_LOG_OR {
+            return this.ctx.ty_ctx.get_bool_ty();
+        }
+        return this.get_common_ty(left, right);
+    }
+
+    func infer_un_expr(un_expr: *ast.UnExpr): *types.Type {
+        if un_expr.op == ast.UN_OP_NOT {
+            return this.ctx.ty_ctx.get_bool_ty();
+        }
+        return this.infer_expr(un_expr.right);
+    }
+
+    func infer_lit_expr(lit_expr: *ast.LitExpr): *types.Type {
+        if lit_expr.tok_kind == lexer.TOK_NUM_LIT {
+            if is_floating(lit_expr.val) {
+                return this.ctx.ty_ctx.get_float_ty(64u32);
+            }
+            return this.ctx.ty_ctx.get_int_ty(32u32, false);
+        }
+        // TODO: implement logic
+        return nil;
+    }
+
+    func infer_call_expr(call_expr: *ast.CallExpr): *types.Type {
+        let callee_ty = this.infer_expr(call_expr.callee);
+        if !types.FuncType.isa(callee_ty) {
+            return nil;
+        }
+        let fn_ty = types.FuncType.cast(callee_ty);
+        return fn_ty.ret_ty;
+    }
+
+    func can_fit(val: u64, is_neg: bool, expected_ty: *types.IntType): bool {
+        if expected_ty.is_unsigned {
+            if is_neg {
+                return false;
+            }
+            return val <= expected_ty.max_unsigned_limit();
+        }
+        if is_neg {
+            return val <= expected_ty.max_signed_abs_limit();
+        }
+        return val <= expected_ty.max_signed_limit();
+    }
+
+    func get_common_ty(a: *types.Type, b: *types.Type): *types.Type {
+        if a == b {
+            return a;
+        }
+        if a == nil || b == nil {
+            return nil;
+        }
+        return nil;
     }
 }
 
@@ -681,4 +1362,79 @@ func signed_int_to_u64(accum: u64, is_neg: bool): u64 {
     } else {
         return accum;
     }
+}
+
+func is_floating(str: std.StringView): bool {
+    for let i = 0uz, i < str.len(), i += 1 {
+        if str.get(i).unwrap() == '.'.(u8) {
+            return true;
+        }
+    }
+    return false;
+}
+
+func parse_str_to_int(str: std.StringView): ParsedInt {
+    let is_neg = false;
+    let res: u64;
+    for let i = 0uz, i < str.len(), i += 1 {
+        let c = str.get(i).unwrap();
+        if c == '-'.(u8) {
+            is_neg = true;
+            continue;
+        }
+
+        if !std.is_ascii_digit(c.(char)) {
+            break;
+        }
+
+        let digit = c - '0'.(u8);
+        if res > ((18446744073709551615u64 - digit) / 10u64) {
+            return ParsedInt { abs_val: 0, is_neg: is_neg, is_overflow: true };
+        }
+        res = res * 10u64 + digit;
+    }
+    return ParsedInt { abs_val: res, is_neg: is_neg, is_overflow: false };
+}
+
+func num_suffix(val: std.StringView): std.StringView {
+    for let i = 0uz, i < val.len(), i += 1 {
+        if std.is_ascii_letter(val.get(i).unwrap().(char)) {
+            return std.StringView.from(val.data() + i, val.len() - i);
+        }
+    }
+    return std.StringView.from("");
+}
+
+func parse_type_from_suffix(suffix: std.StringView, ty_ctx: *types.Context): *types.Type {
+    if suffix.compare_to(std.StringView.from("u8")) == 0  {
+        return ty_ctx.get_int_ty(8u32, true);
+    }
+    if suffix.compare_to(std.StringView.from("u16")) == 0 {
+        return ty_ctx.get_int_ty(16u32, true);
+    }
+    if suffix.compare_to(std.StringView.from("u32")) == 0 {
+        return ty_ctx.get_int_ty(32u32, true);
+    }
+    if suffix.compare_to(std.StringView.from("u64")) == 0 {
+        return ty_ctx.get_int_ty(64u32, true);
+    }
+    if suffix.compare_to(std.StringView.from("i8")) == 0  {
+        return ty_ctx.get_int_ty(8u32, false);
+    }
+    if suffix.compare_to(std.StringView.from("i16")) == 0 {
+        return ty_ctx.get_int_ty(16u32, false);
+    }
+    if suffix.compare_to(std.StringView.from("i32")) == 0 {
+        return ty_ctx.get_int_ty(32u32, false);
+    }
+    if suffix.compare_to(std.StringView.from("i64")) == 0 {
+        return ty_ctx.get_int_ty(64u32, false);
+    }
+    if suffix.compare_to(std.StringView.from("f32")) == 0 {
+        return ty_ctx.get_float_ty(32u32);
+    }
+    if suffix.compare_to(std.StringView.from("f64")) == 0 {
+        return ty_ctx.get_float_ty(64u32);
+    }
+    return nil;
 }

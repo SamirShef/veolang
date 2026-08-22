@@ -1,27 +1,21 @@
-var a
-// hello
- let foo = 10;
-/*
- *
- *
-*/"hello world\n"'\n'
+let a: u8  = 122;
+let b: i8  = -124;
+let c: u16 = 123;
+let d      = 1238i16;
+let e: bool = -129 < 0;
+let h = -2 + -1;
+let i = a;
 
-12
--12
-1231
-2.21
-123f32
-123f64
-1i8
-1i16
-1i32
-1i64
-1iz
-1u8
-1u16
-1u32
-1u64
-1uz
-.2
-0x123456789AbCdF
-0X123456789AbCdF
+func main(argc: i32): i32 {
+    let a = 10;
+    {
+        let a = 2;
+    }
+    return 0;
+}
+
+func sum(a: i32, b: i32): i32 {
+    return a + b;
+}
+let sum = sum(2, 3);
+let u = sum;

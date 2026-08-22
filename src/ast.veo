@@ -23,6 +23,7 @@ pub const NODE_LIT_EXPR   = 101;
 pub const NODE_BIN_EXPR   = 102;
 pub const NODE_UN_EXPR    = 103;
 pub const NODE_VAR_EXPR   = 104;
+pub const NODE_CALL_EXPR  = 105;
 pub const NODE_EXPR_END   = 200;
 
 pub struct Node {
@@ -151,7 +152,7 @@ impl Expr {
 }
 
 pub struct Context {
-    alloc: mem.ArenaAllocator;
+    pub alloc: mem.ArenaAllocator;
     cur_id: u32;
     nodes: **Node;
     nodes_count: usize;
@@ -193,8 +194,7 @@ impl Context {
         if count == 0uz {
             return nil;
         }
-        let ptr: *Node;
-        return this.alloc.alloc(count * @size_of(ptr)).(**Node);
+        return this.alloc.alloc(count * @size_of(*Node)).(**Node);
     }
 
     pub func alloc_var_decl(range: basic.Span, name: std.StringView, is_const: bool,
@@ -214,7 +214,7 @@ impl Context {
     }
 
     pub func alloc_func_decl(range: basic.Span, name: std.StringView, ret_ty: *types.Type,
-                             args: *Argument, args_count: usize, args_cap: usize, body: *BlockStmt): *FuncDecl {
+                             args: *Argument, args_count: usize, body: *BlockStmt): *FuncDecl {
         let mem_ptr = this.alloc.alloc(@size_of(FuncDecl));
         let node    = mem_ptr.(*FuncDecl);
 
@@ -224,7 +224,6 @@ impl Context {
         node.ret_ty     = ret_ty;
         node.args       = args;
         node.args_count = args_count;
-        node.args_cap   = args_cap;
         node.body       = body;
         this.register_node(node.(*Node));
 
@@ -309,6 +308,21 @@ impl Context {
         return node;
     }
 
+    pub func alloc_call_expr(range: basic.Span, callee: *Expr, args: **Expr,
+                             args_count: usize): *CallExpr {
+        let mem_ptr = this.alloc.alloc(@size_of(CallExpr));
+        let node    = mem_ptr.(*CallExpr);
+
+        node.base       = Expr.new(NODE_CALL_EXPR, this.cur_id, range);
+        this.cur_id     += 1;
+        node.callee     = callee;
+        node.args       = args;
+        node.args_count = args_count;
+        this.register_node(node.(*Node));
+
+        return node;
+    }
+
     pub func destroy() {
         this.alloc.reset();
         sys.free(this.nodes.(*u8));
@@ -374,7 +388,6 @@ pub struct FuncDecl {
     pub ret_ty: *types.Type;
     pub args: *Argument;
     pub args_count: usize;
-    pub args_cap: usize;
     pub body: *BlockStmt;
 }
 
@@ -622,6 +635,29 @@ impl VarExpr {
     }
 }
 
+pub struct CallExpr {
+    pub base: Expr;
+    pub callee: *Expr;
+    pub args: **Expr;
+    pub args_count: usize;
+}
+
+impl CallExpr {
+    pub static func isa(node: *Node): bool {
+        if node == nil {
+            return false;
+        }
+        return node.kind() == NODE_CALL_EXPR;
+    }
+
+    pub static func cast(node: *Node): *CallExpr {
+        if !CallExpr.isa(node) {
+            std.panic("RTTI Error: Failed cast to *CallExpr");
+        }
+        return node.(*CallExpr);
+    }
+}
+
 pub struct ParseResult {
     pub nodes: **Node;
     pub count: usize;
@@ -642,6 +678,7 @@ const PREC_SUM        = 10;
 const PREC_PRODUCT    = 11;
 const PREC_UNARY      = 12;
 const PREC_MEMBER     = 13;
+const PREC_CALL       = 14;
 
 func tok_is_assignment(kind: i32): bool {
     return kind == lexer.TOK_EQ || kind == lexer.TOK_PLUS_EQ || kind == lexer.TOK_MINUS_EQ
@@ -650,7 +687,9 @@ func tok_is_assignment(kind: i32): bool {
 }
 
 func tok_precedence(kind: i32): i32 {
-    if kind == lexer.TOK_DOT {
+    if kind == lexer.TOK_LPAREN {
+        return PREC_CALL;
+    } else if kind == lexer.TOK_DOT {
         return PREC_MEMBER;
     } else if tok_is_assignment(kind) {
         return PREC_ASSIGNMENT;
@@ -666,6 +705,11 @@ func tok_precedence(kind: i32): i32 {
         return PREC_BIT_OR;
     } else if kind == lexer.TOK_CARET {
         return PREC_BIT_XOR;
+    } else if kind == lexer.TOK_EQ_EQ || kind == lexer.TOK_BANG_EQ {
+        return PREC_EQUALITY;
+    } else if kind == lexer.TOK_LT || kind == lexer.TOK_LT_EQ
+        || kind == lexer.TOK_GT || kind == lexer.TOK_GT_EQ {
+        return PREC_COMPARISON;
     } else if kind == lexer.TOK_PLUS || kind == lexer.TOK_MINUS {
         return PREC_SUM;
     } else if kind == lexer.TOK_STAR || kind == lexer.TOK_SLASH || kind == lexer.TOK_PERCENT {
@@ -699,11 +743,10 @@ impl Parser {
     }
 
     pub func parse(): ParseResult {
-        let ptr: *Node;
         let cap      = 128uz;
         let count    = 0uz;
         let has_errs = false;
-        let nodes    = sys.malloc(cap * @size_of(ptr)).(**Node);
+        let nodes    = sys.malloc(cap * @size_of(*Node)).(**Node);
 
         for !this.is_at_end() {
             let node = this.parse_stmt();
@@ -714,14 +757,14 @@ impl Parser {
             }
             if count >= cap {
                 cap *= 2;
-                nodes = sys.realloc(nodes.(*u8), cap * @size_of(ptr)).(**Node);
+                nodes = sys.realloc(nodes.(*u8), cap * @size_of(*Node)).(**Node);
             }
             *(nodes + count) = node.(*Node);
             count += 1;
         }
         let final_nodes = this.ast_ctx.alloc_node_array(count);
         if count > 0uz {
-            sys.memcpy(final_nodes.(*u8), nodes.(*u8), count * @size_of(ptr));
+            sys.memcpy(final_nodes.(*u8), nodes.(*u8), count * @size_of(*Node));
         }
         sys.free(nodes.(*u8));
         return ParseResult {
@@ -785,12 +828,20 @@ impl Parser {
         if !this.expect_tok(lexer.TOK_LPAREN) {
             this.engine.report(diag.E_UNEXPECTED_TOKEN, "expected '('", diag.SEV_ERROR)
                 .span(this.cur_tok.range);
+            this.synchronize();
             return nil;
         }
         let args_count = 0uz;
         let args_cap   = 4uz;
         let args       = sys.malloc(args_cap * @size_of(Argument)).(*Argument);
         for !this.match(lexer.TOK_RPAREN) {
+            if args_count != 0uz {
+                if !this.expect_tok(lexer.TOK_COMMA) {
+                    this.engine.report(diag.E_UNEXPECTED_TOKEN, "expected ','", diag.SEV_ERROR)
+                        .span(this.cur_tok.range);
+                    this.synchronize();
+                }
+            }
             let name_tok = this.advance();
             if name_tok.kind != lexer.TOK_ID {
                 this.engine.report(diag.E_UNEXPECTED_TOKEN, "expected identifier", diag.SEV_ERROR)
@@ -800,7 +851,7 @@ impl Parser {
             }
             let name = name_tok.val;
             if !this.expect_tok(lexer.TOK_COLON) {
-                this.engine.report(diag.E_UNEXPECTED_TOKEN, "expected ':", diag.SEV_ERROR)
+                this.engine.report(diag.E_UNEXPECTED_TOKEN, "expected ':'", diag.SEV_ERROR)
                     .span(this.cur_tok.range);
                 this.synchronize();
             }
@@ -813,6 +864,9 @@ impl Parser {
             *(args + args_count) = arg;
             args_count += 1;
         }
+        let final_args = this.ast_ctx.alloc.alloc(args_count * @size_of(Argument)).(*Argument);
+        sys.memcpy(final_args.(*u8), args.(*u8), args_count * @size_of(Argument));
+        sys.free(args.(*u8));
         let ret_ty: *types.Type;
         if this.match(lexer.TOK_COLON) {
             ret_ty = this.consume_type();
@@ -828,28 +882,27 @@ impl Parser {
         }
         let range       = basic.Span.new(
             first_tok.range.start,
-            this.cur_tok.range.end
+            this.prev_tok.range.end
         );
-        return this.ast_ctx.alloc_func_decl(range, name, ret_ty, args, args_count, args_cap, body).(*Stmt);
+        return this.ast_ctx.alloc_func_decl(range, name, ret_ty, final_args, args_count, body).(*Stmt);
     }
 
     func parse_block_stmt(): *Stmt {
-        let ptr: *Stmt;
         let first_tok   = this.advance();
         let stmts_count = 0uz;
         let stmts_cap   = 4uz;
-        let stmts       = sys.malloc(stmts_cap * @size_of(ptr)).(**Stmt);
+        let stmts       = sys.malloc(stmts_cap * @size_of(*Stmt)).(**Stmt);
         for !this.match(lexer.TOK_RBRACE) {
             let stmt = this.parse_stmt();
             if stmts_count >= stmts_cap {
                 stmts_cap = math.max(stmts_cap * 2uz, stmts_cap + 1uz);
-                stmts     = sys.realloc(stmts.(*u8), stmts_cap * @size_of(ptr)).(**Stmt);
+                stmts     = sys.realloc(stmts.(*u8), stmts_cap * @size_of(*Stmt)).(**Stmt);
             }
             *(stmts + stmts_count) = stmt;
             stmts_count            += 1;
         }
         let final_nodes = this.ast_ctx.alloc_node_array(stmts_count).(**Stmt);
-        sys.memcpy(final_nodes.(*u8), stmts.(*u8), stmts_count * @size_of(ptr));
+        sys.memcpy(final_nodes.(*u8), stmts.(*u8), stmts_count * @size_of(*Stmt));
         let range       = basic.Span.new(
             first_tok.range.start,
             this.cur_tok.range.end
@@ -885,11 +938,15 @@ impl Parser {
         let left  = this.parse_primary_expr(allow_struct);
         let prec  = 0;
         for !this.is_at_end() && min_prec < (prec = tok_precedence(this.cur_tok.kind)) {
-            let op    = tok_to_bin_op(this.advance().kind);
-            let right = this.parse_expr(prec, allow_struct);
-            let end   = this.prev_tok.range.end;
-            let range = basic.Span.new(start, end);
-            left      = this.ast_ctx.alloc_bin_expr(range, op, left, right).(*Expr);
+            if this.check(lexer.TOK_LPAREN) {
+                left = this.parse_call_expr(left);
+            } else {
+                let op    = tok_to_bin_op(this.advance().kind);
+                let right = this.parse_expr(prec, allow_struct);
+                let end   = this.prev_tok.range.end;
+                let range = basic.Span.new(start, end);
+                left      = this.ast_ctx.alloc_bin_expr(range, op, left, right).(*Expr);
+            }
         }
         return left;
     }
@@ -903,17 +960,22 @@ impl Parser {
         let kind = tok.kind;
         if kind == lexer.TOK_BOOL_LIT || kind == lexer.TOK_CHAR_LIT
             || kind == lexer.TOK_NUM_LIT || kind == lexer.TOK_STR_LIT {
-            return this.ast_ctx.alloc_lit_expr(tok.range, tok.val, kind).(*Node);
+            return this.ast_ctx.alloc_lit_expr(tok.range, tok.val, kind).(*Expr);
         }
         if kind == lexer.TOK_ID {
-            return this.ast_ctx.alloc_var_expr(tok.range, tok.val).(*Node);
+            return this.ast_ctx.alloc_var_expr(tok.range, tok.val).(*Expr);
         }
         if kind == lexer.TOK_LPAREN {
             let expr = this.parse_expr();
             if expr != nil {
                 expr.set_range(tok.range.start, expr.range().end);
             }
-            if this.expect_tok(lexer.TOK_RPAREN) && expr != nil {
+            if !this.expect_tok(lexer.TOK_RPAREN) {
+                this.engine.report(diag.E_UNEXPECTED_TOKEN, "expected ')'", diag.SEV_ERROR)
+                    .span(this.cur_tok.range);
+                this.synchronize();
+            }
+            if expr != nil {
                 expr.set_range(expr.range().start, this.prev_tok.range.end);
             }
             return expr;
@@ -927,6 +989,45 @@ impl Parser {
             .span(tok.range);
         this.synchronize();
         return nil;
+    }
+
+    func parse_call_expr(callee: *Expr): *Expr {
+        let lparen_tok = this.advance();
+        let args_count = 0uz;
+        let args_cap   = 4uz;
+        let args       = sys.malloc(args_cap * @size_of(*Expr)).(**Expr);
+
+        for !this.check(lexer.TOK_RPAREN) && !this.is_at_end() {
+            if args_count != 0uz {
+                if !this.expect_tok(lexer.TOK_COMMA) {
+                    this.engine.report(diag.E_UNEXPECTED_TOKEN, "expected ','", diag.SEV_ERROR)
+                        .span(this.cur_tok.range);
+                    this.synchronize();
+                }
+            }
+            let arg = this.parse_expr();
+            if arg == nil {
+                break;
+            }
+            if args_count >= args_cap {
+                args_cap *= 2uz;
+                args     = sys.realloc(args.(*u8), args_cap * @size_of(*Expr)).(**Expr);
+            }
+            *(args + args_count) = arg;
+            args_count += 1;
+        }
+
+        if !this.expect_tok(lexer.TOK_RPAREN) {
+            this.engine.report(diag.E_UNEXPECTED_TOKEN, "expected ')'", diag.SEV_ERROR)
+                .span(this.cur_tok.range);
+        }
+
+        let final_args = this.ast_ctx.alloc.alloc(args_count * @size_of(*Expr)).(**Expr);
+        sys.memcpy(final_args.(*u8), args.(*u8), args_count * @size_of(*Expr));
+        sys.free(args.(*u8));
+
+        let range = basic.Span.new(callee.range().start, this.prev_tok.range.end);
+        return this.ast_ctx.alloc_call_expr(range, callee, final_args, args_count).(*Expr);
     }
 
     func consume_type(): *types.Type {
@@ -956,6 +1057,8 @@ impl Parser {
             return this.ty_ctx.get_float_ty(32u32);
         } else if kind == lexer.TOK_F64 {
             return this.ty_ctx.get_float_ty(64u32);
+        } else if kind == lexer.TOK_BOOL {
+            return this.ty_ctx.get_bool_ty();
         }
         this.engine.report(diag.E_UNEXPECTED_TOKEN, "unexpected token", diag.SEV_ERROR)
             .span(this.cur_tok.range);
@@ -1024,7 +1127,11 @@ impl Parser {
 
     func check_trailing_semi(stmt: *Stmt, expect: bool): *Stmt {
         if expect {
-            this.expect_semi();
+            if !this.expect_semi() {
+                this.engine.report(diag.E_UNEXPECTED_TOKEN, "expected ';'", diag.SEV_ERROR)
+                    .span(this.cur_tok.range);
+                this.synchronize();
+            }
         }
         return stmt;
     }
@@ -1043,7 +1150,6 @@ impl Parser {
 
     func expect_tok(kind: i32): bool {
         if !this.match(kind) {
-            this.synchronize();
             return false;
         }
         return true;
@@ -1184,6 +1290,8 @@ impl Dumper {
             this.dump_un_expr(UnExpr.cast(expr.(*Node)));
         } else if kind == NODE_VAR_EXPR {
             this.dump_var_expr(VarExpr.cast(expr.(*Node)));
+        } else if kind == NODE_CALL_EXPR {
+            this.dump_call_expr(CallExpr.cast(expr.(*Node)));
         }
     }
 
@@ -1232,6 +1340,25 @@ impl Dumper {
         this.print(": ");
         this.print(var.name);
         this.print("\n");
+    }
+
+    func dump_call_expr(call: *CallExpr) {
+        this.print_with_indent("CallExpr");
+        this.print_id(call.(*Expr));
+        this.print(":\n");
+
+        this.indent += 1;
+        this.print_with_indent("[callee]:\n");
+        this.indent += 1;
+        this.dump_expr(call.callee);
+        this.indent -= 1;
+
+        this.print_with_indent("[args]:\n");
+        this.indent += 1;
+        for let i = 0uz, i < call.args_count, i += 1 {
+            this.dump_expr(*(call.args + i));
+        }
+        this.indent -= 2;
     }
 
     func print_indent() {

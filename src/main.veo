@@ -18,7 +18,7 @@ let emit_ir  = true;
 let emit_asm = false;
 
 func main(): i32 {
-    let main_file_name = std.StringView.from("src/tests/var_decl.veo");
+    let main_file_name = std.StringView.from("src/tests/test.veo");
     let main_file = fs.File.open(main_file_name, "r");
     if !main_file.is_open() {
         std.panic("Cannot open file src/main.veo");
@@ -40,10 +40,23 @@ func main(): i32 {
 
     let hir_ctx     = hir.Context.new();
     let hir_builder = hir.Builder.new(&hir_ctx);
-    let sema_ctx    = sema.Context.new();
-    let resolver    = sema.NamesResolver.new(&engine, &sema_ctx);
+    let sema_ctx    = sema.Context.new(&ty_ctx);
+
+    let resolver = sema.NamesResolver.new(&engine, &sema_ctx);
     resolver.resolve(parse_res);
     sema_ctx.dump_resolutions();
+
+    if engine.has_errs() {
+        engine.render();
+        return 1;
+    }
+
+    let type_checker = sema.TypeChecker.new(&engine, &sema_ctx);
+    type_checker.check(parse_res);
+    if engine.has_errs() {
+        engine.render();
+        return 1;
+    }
 
     engine.render();
 
