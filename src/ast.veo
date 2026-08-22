@@ -884,7 +884,7 @@ impl Parser {
         }
         let range       = basic.Span.new(
             first_tok.range.start,
-            this.cur_tok.range.end
+            this.prev_tok.range.end
         );
         return this.ast_ctx.alloc_func_decl(range, name, ret_ty, final_args, args_count, body).(*Stmt);
     }
