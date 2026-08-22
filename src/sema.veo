@@ -766,6 +766,7 @@ impl NamesResolver {
 pub struct TypeChecker {
     engine: *diag.DiagEngine;
     ctx: *Context;
+    cur_ret_ty: *types.Type;
 }
 
 struct ParsedInt {
@@ -778,7 +779,8 @@ impl TypeChecker {
     pub static func new(engine: *diag.DiagEngine, ctx: *Context): TypeChecker {
         return TypeChecker {
             engine: engine,
-            ctx: ctx
+            ctx: ctx,
+            cur_ret_ty: nil
         };
     }
 
@@ -799,19 +801,89 @@ impl TypeChecker {
         let kind = stmt.kind();
         if kind == ast.NODE_VAR_DECL {
             this.check_var_decl(ast.VarDecl.cast(stmt.(*ast.Node)));
+        } else if kind == ast.NODE_FUNC_DECL {
+            this.check_func_decl(ast.FuncDecl.cast(stmt.(*ast.Node)));
+        } else if kind == ast.NODE_BLOCK_STMT {
+            this.check_block_stmt(ast.BlockStmt.cast(stmt.(*ast.Node)));
+        } else if kind == ast.NODE_RET_STMT {
+            this.check_ret_stmt(ast.RetStmt.cast(stmt.(*ast.Node)));
         }
-        // TODO: add check FuncDecl
-        // TODO: add check BlockStmt
-        // TODO: add check RetStmt
     }
 
     func check_var_decl(var_decl: *ast.VarDecl) {
-        // TODO: implement logic
+        let node_id = var_decl.(*ast.Stmt).id();
+        let def_id = this.ctx.resolutions.get(node_id).unwrap();
         let ty = var_decl.ty;
-        this.check_expr(var_decl.init, ty);
-        // let def_id = this.ctx.next_def_id();
-        // this.ctx.resolutions.insert(var_decl.(*ast.Stmt).id(), def_id);
-        // this.current_scope.insert(var_decl.name, def_id);
+        if !this.check_expr(var_decl.init, ty) {
+            return;
+        }
+        if ty == nil {
+            ty = this.infer_expr(var_decl.init);
+            if ty == nil {
+                this.engine.report(diag.E_CANNOT_INFER_TYPE, "cannot infer expression type", diag.SEV_ERROR)
+                    .span(var_decl.init.range());
+                return;
+            }
+        }
+        this.ctx.def_types.insert(def_id, ty);
+    }
+
+    func check_func_decl(func_decl: *ast.FuncDecl) {
+        let node_id = func_decl.(*ast.Stmt).id();
+        let def_id  = this.ctx.resolutions.get(node_id).unwrap();
+
+        let args = sys.malloc(func_decl.args_count * @size_of(*types.Type)).(**types.Type);
+        for let i = 0uz, i < func_decl.args_count, i += 1 {
+            let arg = func_decl.args + i;
+            *(args + i) = arg.ty;
+        }
+
+        let ret_ty = func_decl.ret_ty;
+        if ret_ty == nil {
+            ret_ty = this.ctx.ty_ctx.get_noth_ty();
+        }
+
+        let fn_ty = this.ctx.ty_ctx.get_func_ty(args, func_decl.args_count, ret_ty);
+        this.ctx.def_types.insert(def_id, fn_ty);
+
+        let old_ret_ty  = this.cur_ret_ty;
+        this.cur_ret_ty = func_decl.ret_ty;
+
+        if func_decl.body != nil {
+            this.check_block_stmt(func_decl.body);
+        }
+
+        this.cur_ret_ty = old_ret_ty;
+    }
+
+    func check_block_stmt(block: *ast.BlockStmt) {
+        for let i = 0uz, i < block.stmts_count, i += 1 {
+            this.check_stmt(*(block.stmts + i));
+        }
+    }
+
+    func check_ret_stmt(ret: *ast.RetStmt) {
+        let expected_ty = this.cur_ret_ty;
+
+        if ret.expr == nil {
+            if !types.NothType.isa(expected_ty) {
+                let msg = std.String.from("expected return expression of type '");
+                msg.append(expected_ty.to_string());
+                msg.append("'");
+                this.engine.report(diag.E_TYPE_MISMATCH, msg, diag.SEV_ERROR)
+                    .span(ret.(*ast.Node).range());
+            }
+            return;
+        }
+
+        if types.NothType.isa(expected_ty) {
+            let msg = std.String.from("unexpected return value in function returning noth");
+            this.engine.report(diag.E_TYPE_MISMATCH, msg, diag.SEV_ERROR)
+                .span(ret.(*ast.Node).range());
+            return;
+        }
+
+        this.check_expr(ret.expr, expected_ty);
     }
 
     func check_expr(expr: *ast.Expr, expected_ty: *types.Type): bool {
@@ -832,6 +904,9 @@ impl TypeChecker {
         } else if kind == ast.NODE_LIT_EXPR {
             let lit_expr = ast.LitExpr.cast(expr.(*ast.Node));
             return this.check_lit_expr(lit_expr, expected_ty);
+        } else if kind == ast.NODE_CALL_EXPR {
+            let call_expr = ast.CallExpr.cast(expr.(*ast.Node));
+            return this.check_call_expr(call_expr, expected_ty);
         }
         return false;
     }
@@ -1026,6 +1101,65 @@ impl TypeChecker {
         return false;
     }
 
+    func check_call_expr(call_expr: *ast.CallExpr, expected_ty: *types.Type): bool {
+        let node_id   = call_expr.(*ast.Expr).id();
+        let callee_ty = this.infer_expr(call_expr.callee);
+        if callee_ty == nil {
+            return false;
+        }
+
+        if !types.FuncType.isa(callee_ty) {
+            let msg = std.String.from("type '");
+            msg.append(callee_ty.to_string());
+            msg.append("' is not callable");
+            this.engine.report(diag.E_TYPE_MISMATCH, msg, diag.SEV_ERROR)
+                .span(call_expr.callee.(*ast.Node).range());
+            return false;
+        }
+
+        let fn_ty = types.FuncType.cast(callee_ty);
+
+        if call_expr.args_count != fn_ty.args_count {
+            let msg = std.String.from("expected ");
+            msg.append(std.usize_to_string(fn_ty.args_count));
+            msg.append(" arguments, found ");
+            msg.append(std.usize_to_string(call_expr.args_count));
+
+            this.engine.report(diag.E_TYPE_MISMATCH, msg, diag.SEV_ERROR)
+                .span(call_expr.(*ast.Node).range());
+            return false;
+        }
+
+        let args_ok = true;
+        for let i = 0uz, i < call_expr.args_count, i += 1 {
+            let arg_expr = *(call_expr.args + i);
+            let expected_arg_ty = *(fn_ty.args + i);
+
+            if !this.check_expr(arg_expr, expected_arg_ty) {
+                args_ok = false;
+            }
+        }
+
+        if !args_ok {
+            return false;
+        }
+
+        let ret_ty = fn_ty.ret_ty;
+        if expected_ty != nil && ret_ty != expected_ty {
+            let msg = std.String.from("mismatched types: function returns '");
+            msg.append(ret_ty.to_string());
+            msg.append("', expected '");
+            msg.append(expected_ty.to_string());
+            msg.append("'");
+            this.engine.report(diag.E_TYPE_MISMATCH, msg, diag.SEV_ERROR)
+                .span(call_expr.(*ast.Node).range());
+            return false;
+        }
+
+        this.ctx.node_types.insert(node_id, ret_ty);
+        return true;
+    }
+
     pub func infer_expr(expr: *ast.Expr): *types.Type {
         if expr == nil {
             return nil;
@@ -1042,6 +1176,8 @@ impl TypeChecker {
             inferred_ty = this.infer_un_expr(ast.UnExpr.cast(expr.(*ast.Node)));
         } else if kind == ast.NODE_LIT_EXPR {
             inferred_ty = this.infer_lit_expr(ast.LitExpr.cast(expr.(*ast.Node)));
+        } else if kind == ast.NODE_CALL_EXPR {
+            inferred_ty = this.infer_call_expr(ast.CallExpr.cast(expr.(*ast.Node)));
         }
 
         if inferred_ty != nil {
@@ -1097,6 +1233,15 @@ impl TypeChecker {
         }
         // TODO: implement logic
         return nil;
+    }
+
+    func infer_call_expr(call_expr: *ast.CallExpr): *types.Type {
+        let callee_ty = this.infer_expr(call_expr.callee);
+        if !types.FuncType.isa(callee_ty) {
+            return nil;
+        }
+        let fn_ty = types.FuncType.cast(callee_ty);
+        return fn_ty.ret_ty;
     }
 
     func can_fit(val: u64, is_neg: bool, expected_ty: *types.IntType): bool {

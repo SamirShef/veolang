@@ -194,8 +194,7 @@ impl Context {
         if count == 0uz {
             return nil;
         }
-        let ptr: *Node;
-        return this.alloc.alloc(count * @size_of(ptr)).(**Node);
+        return this.alloc.alloc(count * @size_of(*Node)).(**Node);
     }
 
     pub func alloc_var_decl(range: basic.Span, name: std.StringView, is_const: bool,
@@ -744,11 +743,10 @@ impl Parser {
     }
 
     pub func parse(): ParseResult {
-        let ptr: *Node;
         let cap      = 128uz;
         let count    = 0uz;
         let has_errs = false;
-        let nodes    = sys.malloc(cap * @size_of(ptr)).(**Node);
+        let nodes    = sys.malloc(cap * @size_of(*Node)).(**Node);
 
         for !this.is_at_end() {
             let node = this.parse_stmt();
@@ -759,14 +757,14 @@ impl Parser {
             }
             if count >= cap {
                 cap *= 2;
-                nodes = sys.realloc(nodes.(*u8), cap * @size_of(ptr)).(**Node);
+                nodes = sys.realloc(nodes.(*u8), cap * @size_of(*Node)).(**Node);
             }
             *(nodes + count) = node.(*Node);
             count += 1;
         }
         let final_nodes = this.ast_ctx.alloc_node_array(count);
         if count > 0uz {
-            sys.memcpy(final_nodes.(*u8), nodes.(*u8), count * @size_of(ptr));
+            sys.memcpy(final_nodes.(*u8), nodes.(*u8), count * @size_of(*Node));
         }
         sys.free(nodes.(*u8));
         return ParseResult {
@@ -890,22 +888,21 @@ impl Parser {
     }
 
     func parse_block_stmt(): *Stmt {
-        let ptr: *Stmt;
         let first_tok   = this.advance();
         let stmts_count = 0uz;
         let stmts_cap   = 4uz;
-        let stmts       = sys.malloc(stmts_cap * @size_of(ptr)).(**Stmt);
+        let stmts       = sys.malloc(stmts_cap * @size_of(*Stmt)).(**Stmt);
         for !this.match(lexer.TOK_RBRACE) {
             let stmt = this.parse_stmt();
             if stmts_count >= stmts_cap {
                 stmts_cap = math.max(stmts_cap * 2uz, stmts_cap + 1uz);
-                stmts     = sys.realloc(stmts.(*u8), stmts_cap * @size_of(ptr)).(**Stmt);
+                stmts     = sys.realloc(stmts.(*u8), stmts_cap * @size_of(*Stmt)).(**Stmt);
             }
             *(stmts + stmts_count) = stmt;
             stmts_count            += 1;
         }
         let final_nodes = this.ast_ctx.alloc_node_array(stmts_count).(**Stmt);
-        sys.memcpy(final_nodes.(*u8), stmts.(*u8), stmts_count * @size_of(ptr));
+        sys.memcpy(final_nodes.(*u8), stmts.(*u8), stmts_count * @size_of(*Stmt));
         let range       = basic.Span.new(
             first_tok.range.start,
             this.cur_tok.range.end
@@ -995,11 +992,10 @@ impl Parser {
     }
 
     func parse_call_expr(callee: *Expr): *Expr {
-        let ptr: *Expr;
         let lparen_tok = this.advance();
         let args_count = 0uz;
         let args_cap   = 4uz;
-        let args       = sys.malloc(args_cap * @size_of(ptr)).(**Expr);
+        let args       = sys.malloc(args_cap * @size_of(*Expr)).(**Expr);
 
         for !this.check(lexer.TOK_RPAREN) && !this.is_at_end() {
             if args_count != 0uz {
@@ -1015,7 +1011,7 @@ impl Parser {
             }
             if args_count >= args_cap {
                 args_cap *= 2uz;
-                args     = sys.realloc(args.(*u8), args_cap * @size_of(ptr)).(**Expr);
+                args     = sys.realloc(args.(*u8), args_cap * @size_of(*Expr)).(**Expr);
             }
             *(args + args_count) = arg;
             args_count += 1;
@@ -1026,8 +1022,8 @@ impl Parser {
                 .span(this.cur_tok.range);
         }
 
-        let final_args = this.ast_ctx.alloc.alloc(args_count * @size_of(ptr)).(**Expr);
-        sys.memcpy(final_args.(*u8), args.(*u8), args_count * @size_of(ptr));
+        let final_args = this.ast_ctx.alloc.alloc(args_count * @size_of(*Expr)).(**Expr);
+        sys.memcpy(final_args.(*u8), args.(*u8), args_count * @size_of(*Expr));
         sys.free(args.(*u8));
 
         let range = basic.Span.new(callee.range().start, this.prev_tok.range.end);
