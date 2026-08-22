@@ -790,12 +790,20 @@ impl Parser {
         if !this.expect_tok(lexer.TOK_LPAREN) {
             this.engine.report(diag.E_UNEXPECTED_TOKEN, "expected '('", diag.SEV_ERROR)
                 .span(this.cur_tok.range);
+            this.synchronize();
             return nil;
         }
         let args_count = 0uz;
         let args_cap   = 4uz;
         let args       = sys.malloc(args_cap * @size_of(Argument)).(*Argument);
         for !this.match(lexer.TOK_RPAREN) {
+            if args_count != 0uz {
+                if !this.expect_tok(lexer.TOK_COMMA) {
+                    this.engine.report(diag.E_UNEXPECTED_TOKEN, "expected ','", diag.SEV_ERROR)
+                        .span(this.cur_tok.range);
+                    this.synchronize();
+                }
+            }
             let name_tok = this.advance();
             if name_tok.kind != lexer.TOK_ID {
                 this.engine.report(diag.E_UNEXPECTED_TOKEN, "expected identifier", diag.SEV_ERROR)
@@ -805,7 +813,7 @@ impl Parser {
             }
             let name = name_tok.val;
             if !this.expect_tok(lexer.TOK_COLON) {
-                this.engine.report(diag.E_UNEXPECTED_TOKEN, "expected ':", diag.SEV_ERROR)
+                this.engine.report(diag.E_UNEXPECTED_TOKEN, "expected ':'", diag.SEV_ERROR)
                     .span(this.cur_tok.range);
                 this.synchronize();
             }
@@ -908,17 +916,22 @@ impl Parser {
         let kind = tok.kind;
         if kind == lexer.TOK_BOOL_LIT || kind == lexer.TOK_CHAR_LIT
             || kind == lexer.TOK_NUM_LIT || kind == lexer.TOK_STR_LIT {
-            return this.ast_ctx.alloc_lit_expr(tok.range, tok.val, kind).(*Node);
+            return this.ast_ctx.alloc_lit_expr(tok.range, tok.val, kind).(*Expr);
         }
         if kind == lexer.TOK_ID {
-            return this.ast_ctx.alloc_var_expr(tok.range, tok.val).(*Node);
+            return this.ast_ctx.alloc_var_expr(tok.range, tok.val).(*Expr);
         }
         if kind == lexer.TOK_LPAREN {
             let expr = this.parse_expr();
             if expr != nil {
                 expr.set_range(tok.range.start, expr.range().end);
             }
-            if this.expect_tok(lexer.TOK_RPAREN) && expr != nil {
+            if !this.expect_tok(lexer.TOK_RPAREN) {
+                this.engine.report(diag.E_UNEXPECTED_TOKEN, "expected ')'", diag.SEV_ERROR)
+                    .span(this.cur_tok.range);
+                this.synchronize();
+            }
+            if expr != nil {
                 expr.set_range(expr.range().start, this.prev_tok.range.end);
             }
             return expr;
@@ -1031,7 +1044,11 @@ impl Parser {
 
     func check_trailing_semi(stmt: *Stmt, expect: bool): *Stmt {
         if expect {
-            this.expect_semi();
+            if !this.expect_semi() {
+                this.engine.report(diag.E_UNEXPECTED_TOKEN, "expected ';'", diag.SEV_ERROR)
+                    .span(this.cur_tok.range);
+                this.synchronize();
+            }
         }
         return stmt;
     }
@@ -1050,7 +1067,6 @@ impl Parser {
 
     func expect_tok(kind: i32): bool {
         if !this.match(kind) {
-            this.synchronize();
             return false;
         }
         return true;
