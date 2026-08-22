@@ -439,7 +439,12 @@ impl HashMapDefIdType {
 
 // HashMaps
 
+pub const SYM_VALUE = 0;
+pub const SYM_FUNC  = 1;
+pub const SYM_TYPE  = 2;
+
 pub struct ScopeEntry {
+    pub kind: i32;
     pub name: std.StringView;
     pub def_id: basic.DefId;
 }
@@ -461,29 +466,29 @@ impl Scope {
         return scope;
     }
 
-    pub func lookup_local(name: std.StringView): basic.OptionDefId {
+    pub func lookup_local(name: std.StringView, kind: i32): basic.OptionDefId {
         for let i = 0uz, i < this.count, i += 1 {
             let entry = this.entries + i;
-            if entry.name.compare_to(name) == 0 {
+            if entry.kind == kind && entry.name.compare_to(name) == 0 {
                 return basic.OptionDefId.some(entry.def_id);
             }
         }
         return basic.OptionDefId.none();
     }
 
-    pub func lookup_recursive(name: std.StringView): basic.OptionDefId {
-        let curr = this;
-        for curr != nil {
-            let res = curr.lookup_local(name);
+    pub func lookup_recursive(name: std.StringView, kind: i32): basic.OptionDefId {
+        let cur = this;
+        for cur != nil {
+            let res = cur.lookup_local(name, kind);
             if res.has_val() {
                 return res;
             }
-            curr = curr.parent;
+            cur = cur.parent;
         }
         return basic.OptionDefId.none();
     }
 
-    pub func insert(name: std.StringView, def_id: basic.DefId) {
+    pub func insert(name: std.StringView, def_id: basic.DefId, kind: i32) {
         if this.count >= this.cap {
             let old_cap = this.cap;
             this.cap = math.max(this.cap * 2uz, this.cap + 1uz);
@@ -493,6 +498,7 @@ impl Scope {
             ).(*ScopeEntry);
         }
         let entry = this.entries + this.count;
+        entry.kind = kind;
         entry.name = name;
         entry.def_id = def_id;
         this.count += 1;
@@ -590,13 +596,17 @@ impl NamesResolver {
         let kind = stmt.kind();
         if kind == ast.NODE_VAR_DECL {
             this.resolve_var_decl(ast.VarDecl.cast(stmt.(*ast.Node)));
+        } else if kind == ast.NODE_FUNC_DECL {
+            this.resolve_func_decl(ast.FuncDecl.cast(stmt.(*ast.Node)));
+        } else if kind == ast.NODE_BLOCK_STMT {
+            this.resolve_block_stmt(ast.BlockStmt.cast(stmt.(*ast.Node)));
+        } else if kind == ast.NODE_RET_STMT {
+            this.resolve_ret_stmt(ast.RetStmt.cast(stmt.(*ast.Node)));
         }
-        // TODO: add resolve FuncDecl
-        // TODO: add check BlockStmt
     }
 
     func resolve_var_decl(var_decl: *ast.VarDecl) {
-        let existing = this.current_scope.lookup_local(var_decl.name);
+        let existing = this.current_scope.lookup_local(var_decl.name, SYM_VALUE);
         if existing.has_val() {
             let msg = std.String.from("redefinition of symbol '");
             msg.append(var_decl.name);
@@ -606,10 +616,68 @@ impl NamesResolver {
             return;
         }
 
+        if var_decl.ty != nil {
+            this.resolve_ty(var_decl.ty);
+        }
         this.resolve_expr(var_decl.init);
         let def_id = this.ctx.next_def_id();
         this.ctx.resolutions.insert(var_decl.(*ast.Stmt).id(), def_id);
-        this.current_scope.insert(var_decl.name, def_id);
+        this.current_scope.insert(var_decl.name, def_id, SYM_VALUE);
+    }
+
+    func resolve_func_decl(func_decl: *ast.FuncDecl) {
+        let existing = this.current_scope.lookup_local(func_decl.name, SYM_FUNC);
+        if existing.has_val() {
+            let msg = std.String.from("redefinition of symbol '");
+            msg.append(func_decl.name);
+            msg.append("'");
+            this.engine.report(diag.E_REDEFINITION, msg, diag.SEV_ERROR)
+                .span(func_decl.(*ast.Node).range());
+            return;
+        }
+
+        let func_def_id = this.ctx.next_def_id();
+        this.ctx.resolutions.insert(func_decl.(*ast.Stmt).id(), func_def_id);
+        this.current_scope.insert(func_decl.name, func_def_id, SYM_FUNC);
+
+        this.enter_scope();
+
+        for let i = 0uz, i < func_decl.args_count, i += 1 {
+            let arg = func_decl.args + i;
+            if arg.ty != nil {
+                this.resolve_ty(arg.ty);
+            }
+
+            let arg_existing = this.current_scope.lookup_local(arg.name, SYM_VALUE);
+            if arg_existing.has_val() {
+                let msg = std.String.from("redefinition of argument '");
+                msg.append(arg.name);
+                msg.append("'");
+                this.engine.report(diag.E_REDEFINITION, msg, diag.SEV_ERROR)
+                    .span(func_decl.(*ast.Node).range());
+            } else {
+                let arg_def_id = this.ctx.next_def_id();
+                this.current_scope.insert(arg.name, arg_def_id, SYM_VALUE);
+            }
+        }
+
+        let block = func_decl.body;
+        for let i = 0uz, i < block.stmts_count, i += 1 {
+            this.resolve_stmt(*(block.stmts + i));
+        }
+        this.exit_scope();
+    }
+
+    func resolve_block_stmt(block: *ast.BlockStmt) {
+        this.enter_scope();
+        for let i = 0uz, i < block.stmts_count, i += 1 {
+            this.resolve_stmt(*(block.stmts + i));
+        }
+        this.exit_scope();
+    }
+
+    func resolve_ret_stmt(ret: *ast.RetStmt) {
+        this.resolve_expr(ret.expr);
     }
 
     func resolve_expr(expr: *ast.Expr) {
@@ -629,11 +697,14 @@ impl NamesResolver {
             return this.resolve_un_expr(un_expr);
         } else if kind == ast.NODE_LIT_EXPR {
             // not necessary
+        } else if kind == ast.NODE_CALL_EXPR {
+            let call_expr = ast.CallExpr.cast(expr.(*ast.Node));
+            return this.resolve_call_expr(call_expr);
         }
     }
 
     func resolve_var_expr(var_expr: *ast.VarExpr) {
-        let resolved = this.current_scope.lookup_recursive(var_expr.name);
+        let resolved = this.current_scope.lookup_recursive(var_expr.name, SYM_VALUE);
         if !resolved.has_val() {
             let msg = std.String.from("undefined name '");
             msg.append(var_expr.name);
@@ -652,6 +723,43 @@ impl NamesResolver {
 
     func resolve_un_expr(un_expr: *ast.UnExpr) {
         this.resolve_expr(un_expr.right);
+    }
+
+    func resolve_call_expr(call_expr: *ast.CallExpr) {
+        if call_expr.callee != nil {
+            if call_expr.callee.kind() == ast.NODE_VAR_EXPR {
+                let var_expr = ast.VarExpr.cast(call_expr.callee.(*ast.Node));
+
+                let resolved = this.current_scope.lookup_recursive(var_expr.name, SYM_FUNC);
+                if resolved.has_val() {
+                    this.ctx.resolutions.insert(var_expr.(*ast.Expr).id(), resolved.unwrap());
+                } else {
+                    let val_resolved = this.current_scope.lookup_recursive(var_expr.name, SYM_VALUE);
+                    if val_resolved.has_val() {
+                        this.ctx.resolutions.insert(var_expr.(*ast.Expr).id(), val_resolved.unwrap());
+                    } else {
+                        let msg = std.String.from("undefined function '");
+                        msg.append(var_expr.name);
+                        msg.append("'");
+                        this.engine.report(diag.E_UNDEFINED, msg, diag.SEV_ERROR)
+                            .span(var_expr.(*ast.Node).range());
+                    }
+                }
+            } else {
+                this.resolve_expr(call_expr.callee);
+            }
+        }
+
+        for let i = 0uz, i < call_expr.args_count, i += 1 {
+            this.resolve_expr(*(call_expr.args + i));
+        }
+    }
+
+    func resolve_ty(ty: *types.Type) {
+        if ty == nil {
+            return;
+        }
+        // TODO: implement after adding structure and trait types
     }
 }
 

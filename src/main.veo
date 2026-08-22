@@ -18,7 +18,7 @@ let emit_ir  = true;
 let emit_asm = false;
 
 func main(): i32 {
-    let main_file_name = std.StringView.from("src/tests/var_decl.veo");
+    let main_file_name = std.StringView.from("src/tests/test.veo");
     let main_file = fs.File.open(main_file_name, "r");
     if !main_file.is_open() {
         std.panic("Cannot open file src/main.veo");
