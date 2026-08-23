@@ -5,6 +5,36 @@ import std;
 import types;
 import basic;
 
+pub const VAL_INT   = 0;
+pub const VAL_FLOAT = 1;
+pub const VAL_STR   = 2;
+pub const VAL_NIL   = 3;
+
+pub struct Value {
+    pub kind: i32;
+    pub as_int: u64;
+    pub as_float: f64;
+    pub as_str: std.StringView;
+}
+
+impl Value {
+    pub static func from_int(as_int: u64): Value {
+        return Value { kind: VAL_INT, as_int: v, as_float: 0.0, as_str: std.StringView.from("") };
+    }
+
+    pub static func from_float(as_float: f64): Value {
+        return Value { kind: VAL_FLOAT, as_int: 0, as_float: as_float, as_str: std.StringView.from("") };
+    }
+
+    pub static func from_string(as_str: std.StringView): Value {
+        return Value { kind: VAL_STR, as_int: 0, as_float: 0.0, as_str: as_str };
+    }
+
+    pub static func from_nil(): Value {
+        return Value { kind: VAL_NIL, as_int: 0, as_float: 0.0, as_str: std.StringView.from("") };
+    }
+}
+
 pub const NODE_VARIABLE = 0;
 pub const NODE_LITERAL  = 1;
 pub const NODE_BINARY   = 2;

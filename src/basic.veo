@@ -38,39 +38,6 @@ impl Span {
     }
 }
 
-pub const VAL_UNKNOWN = 0;
-pub const VAL_CONST   = 1;
-
-pub struct Value {
-    pub kind: i32;
-    pub ty: *types.Type;
-    pub as_int: u64;
-    pub as_float: f64;
-}
-
-impl Value {
-    pub static func new(kind: i32, as_int: u64, as_float: f64, ty: *types.Type): Value {
-        return Value {
-            kind: kind,
-            ty: ty,
-            as_int: as_int,
-            as_float: as_float
-        };
-    }
-
-    pub static func new(kind: i32, as_int: u64, ty: *types.Type): Value {
-        return Value.new(kind, as_int, 0.0, ty);
-    }
-
-    pub static func new(kind: i32, as_float: f64, ty: *types.Type): Value {
-        return Value.new(kind, 0u64, as_float, ty);
-    }
-
-    pub static func new(kind: i32, ty: *types.Type): Value {
-        return Value.new(kind, 0u64, 0.0, ty);
-    }
-}
-
 pub struct DefId {
     pub mod_id: u64;
     pub sym_id: u64;
