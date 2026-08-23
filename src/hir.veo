@@ -19,7 +19,7 @@ pub struct Value {
 
 impl Value {
     pub static func from_int(as_int: u64): Value {
-        return Value { kind: VAL_INT, as_int: v, as_float: 0.0, as_str: std.StringView.from("") };
+        return Value { kind: VAL_INT, as_int: as_int, as_float: 0.0, as_str: std.StringView.from("") };
     }
 
     pub static func from_float(as_float: f64): Value {
@@ -35,241 +35,504 @@ impl Value {
     }
 }
 
-pub const NODE_VARIABLE = 0;
-pub const NODE_LITERAL  = 1;
-pub const NODE_BINARY   = 2;
-pub const NODE_UNARY    = 3;
-pub const NODE_LOAD     = 4;
+pub const OPERAND_LOCAL = 0;
+pub const OPERAND_DEF   = 1;
+pub const OPERAND_CONST = 2;
 
-pub struct Node {
-    kind: i32;
+pub struct Operand {
+    pub kind: i32;
+    pub ty: *types.Type;
+    pub local_id: u32;
+    pub def_id: basic.DefId;
+    pub val: Value;
 }
 
-impl Node {
-    pub static func new(kind: i32): Node {
-        return Node { kind: kind };
+impl Operand {
+    pub static func from_local(id: u32, ty: *types.Type): Operand {
+        return Operand {
+            kind: OPERAND_LOCAL,
+            ty: ty,
+            local_id: id,
+            def_id: basic.DefId.invalid(),
+            val: Value.from_nil()
+        };
     }
 
-    pub func kind(): i32 {
-        return this.kind;
+    pub static func from_def(id: basic.DefId, ty: *types.Type): Operand {
+        return Operand {
+            kind: OPERAND_DEF,
+            ty: ty,
+            local_id: 0u32,
+            def_id: id,
+            val: Value.from_nil()
+        };
+    }
+
+    pub static func from_const(val: Value, ty: *types.Type): Operand {
+        return Operand {
+            kind: OPERAND_CONST,
+            ty: ty,
+            local_id: 0u32,
+            def_id: basic.DefId.invalid(),
+            val: val
+        };
+    }
+}
+
+pub const INST_LOAD   = 1; // dest = *op1
+pub const INST_STORE  = 2; // *op1 = op2
+pub const INST_BINARY = 3; // dest = op1 sub_op op2
+pub const INST_UNARY  = 4; // dest = sub_op op1
+
+pub struct Inst {
+    pub kind: i32;
+    pub prev: *Inst;
+    pub next: *Inst;
+    pub ty: *types.Type;
+    pub dest: u32;
+    pub op1: Operand;
+    pub op2: Operand;
+    pub sub_op: i32;
+}
+
+impl Inst {
+    pub static func new(kind: i32, dest: u32, ty: *types.Type, op1: Operand, op2: Operand): Inst {
+        return Inst {
+            prev: nil,
+            next: nil,
+            kind: kind,
+            dest: dest,
+            ty: ty,
+            op1: op1,
+            op2: op2,
+            sub_op: 0
+        };
+    }
+}
+
+pub const TERM_RET         = 0;
+pub const TERM_GOTO        = 1;
+pub const TERM_COND_BRANCH = 2;
+pub const TERM_UNREACHABLE  = 3;
+
+pub struct Terminator {
+    pub kind: i32;
+    pub ret_val: Operand;
+    pub cond: Operand;
+    pub then_block: *u8; // TODO: replace to *BasicBlock
+    pub else_block: *u8; // TODO: replace to *BasicBlock
+}
+
+impl Terminator {
+    pub static func make_ret(val: Operand): Terminator {
+        return Terminator {
+            kind: TERM_RET,
+            ret_val: val,
+            cond: Operand.from_local(0u32, nil.(*types.Type)),
+            then_block: nil,
+            else_block: nil
+        };
+    }
+
+    pub static func make_goto(target: *BasicBlock): Terminator {
+        return Terminator {
+            kind: TERM_GOTO,
+            ret_val: Operand.from_local(0u32, nil.(*types.Type)),
+            cond: Operand.from_local(0u32, nil.(*types.Type)),
+            then_block: target.(*u8),
+            else_block: nil
+        };
+    }
+
+    pub static func make_cond_br(cond: Operand, then_b: *BasicBlock, else_b: *BasicBlock): Terminator {
+        return Terminator {
+            kind: TERM_COND_BRANCH,
+            ret_val: Operand.from_local(0u32, nil.(*types.Type)),
+            cond: cond,
+            then_block: then_b.(*u8),
+            else_block: else_b.(*u8)
+        };
+    }
+
+    pub static func make_unreachable(): Terminator {
+        return Terminator {
+            kind: TERM_UNREACHABLE,
+            ret_val: Operand.from_local(0u32, nil.(*types.Type)),
+            cond: Operand.from_local(0u32, nil.(*types.Type)),
+            then_block: nil,
+            else_block: nil
+        };
+    }
+}
+
+pub struct BasicBlock {
+    pub prev: *BasicBlock;
+    pub next: *BasicBlock;
+    pub name: std.StringView;
+
+    pub inst_head: *Inst;
+    pub inst_tail: *Inst;
+    pub terminator: Terminator;
+}
+
+impl BasicBlock {
+    pub static func new(name: std.StringView): BasicBlock {
+        return BasicBlock {
+            prev: nil,
+            next: nil,
+            name: name,
+            inst_head: nil,
+            inst_tail: nil,
+            terminator: Terminator.make_unreachable()
+        };
+    }
+
+    pub func push_inst_back(inst: *Inst) {
+        inst.prev = this.inst_tail;
+        inst.next = nil;
+        if this.inst_tail != nil {
+            this.inst_tail.next = inst;
+        } else {
+            this.inst_head = inst;
+        }
+        this.inst_tail = inst;
+    }
+
+    pub func insert_inst_before(anchor: *Inst, inst: *Inst) {
+        if anchor == nil {
+            this.push_inst_back(inst);
+            return;
+        }
+        inst.next = anchor;
+        inst.prev = anchor.prev;
+        if anchor.prev != nil {
+            anchor.prev.next = inst;
+        } else {
+            this.inst_head = inst;
+        }
+        anchor.prev = inst;
+    }
+
+    pub func insert_inst_after(anchor: *Inst, inst: *Inst) {
+        if anchor == nil || anchor == this.inst_tail {
+            this.push_inst_back(inst);
+            return;
+        }
+        inst.prev = anchor;
+        inst.next = anchor.next;
+        if anchor.next != nil {
+            anchor.next.prev = inst;
+        } else {
+            this.inst_tail = inst;
+        }
+        anchor.next = inst;
+    }
+
+    pub func remove_inst(inst: *Inst) {
+        if inst.prev != nil {
+            inst.prev.next = inst.next;
+        } else {
+            this.inst_head = inst.next;
+        }
+        if inst.next != nil {
+            inst.next.prev = inst.prev;
+        } else {
+            this.inst_tail = inst.prev;
+        }
+        inst.prev = nil;
+        inst.next = nil;
+    }
+}
+
+pub struct LocalDecl {
+    pub id: u32;
+    pub ty: *types.Type;
+    pub name: std.StringView;
+}
+
+pub struct Function {
+    pub def_id: basic.DefId;
+    pub name: std.StringView;
+    pub ty: *types.Type;
+
+    pub params: **LocalDecl;
+    pub params_count: usize;
+    pub params_cap: usize;
+
+    pub locals: **LocalDecl;
+    pub locals_count: usize;
+    pub locals_cap: usize;
+
+    pub block_head: *BasicBlock;
+    pub block_tail: *BasicBlock;
+}
+
+impl Function {
+    pub static func new(def_id: basic.DefId, name: std.StringView, ty: *types.Type,
+                        alloc: *mem.ArenaAllocator): *Function {
+        let raw = alloc.alloc(@size_of(Function));
+        let fn_obj = raw.(*Function);
+
+        let cap = 8uz;
+        let locals_buf = alloc.alloc(cap * @size_of(*LocalDecl)).(**LocalDecl);
+
+        *fn_obj = Function {
+            def_id: def_id,
+            name: name,
+            ty: ty,
+            locals: locals_buf,
+            locals_count: 0uz,
+            locals_cap: cap,
+            block_head: nil,
+            block_tail: nil
+        };
+        return fn_obj;
+    }
+
+    pub func alloc_local(alloc: *mem.ArenaAllocator, ty: *types.Type, name: std.StringView): u32 {
+        let id = this.locals_count.(u32);
+        let raw = alloc.alloc(@size_of(LocalDecl));
+        let decl = raw.(*LocalDecl);
+        *decl = LocalDecl { id: id, ty: ty, name: name };
+
+        if this.locals_count >= this.locals_cap {
+            let new_cap = this.locals_cap * 2uz;
+            let new_buf = alloc.alloc(new_cap * @size_of(*LocalDecl)).(**LocalDecl);
+            for let i = 0uz, i < this.locals_count, i += 1 {
+                *(new_buf + i) = *(this.locals + i);
+            }
+            this.locals = new_buf;
+            this.locals_cap = new_cap;
+        }
+
+        *(this.locals + this.locals_count) = decl;
+        this.locals_count += 1;
+        return id;
+    }
+
+    pub func add_param(alloc: *mem.ArenaAllocator, name: std.StringView, ty: *types.Type): u32 {
+        let local_id = this.alloc_local(alloc, ty, name);
+        let param_decl = *(this.locals + local_id.(usize));
+
+        if this.params_count >= this.params_cap {
+            let new_cap = this.params_cap * 2uz;
+            let new_buf = alloc.alloc(new_cap * @size_of(*LocalDecl)).(**LocalDecl);
+            for let i = 0uz, i < this.params_count, i += 1 {
+                *(new_buf + i) = *(this.params + i);
+            }
+            this.params = new_buf;
+            this.params_cap = new_cap;
+        }
+
+        *(this.params + this.params_count) = param_decl;
+        this.params_count += 1;
+        return local_id;
+    }
+
+    pub func push_block_back(block: *BasicBlock) {
+        block.prev = this.block_tail;
+        block.next = nil;
+        if this.block_tail != nil {
+            this.block_tail.next = block;
+        } else {
+            this.block_head = block;
+        }
+        this.block_tail = block;
+    }
+
+    pub func insert_block_before(anchor: *BasicBlock, block: *BasicBlock) {
+        if anchor == nil {
+            this.push_block_back(block);
+            return;
+        }
+        block.next = anchor;
+        block.prev = anchor.prev;
+        if anchor.prev != nil {
+            anchor.prev.next = block;
+        } else {
+            this.block_head = block;
+        }
+        anchor.prev = block;
+    }
+
+    pub func insert_block_after(anchor: *BasicBlock, block: *BasicBlock) {
+        if anchor == nil || anchor == this.block_tail {
+            this.push_block_back(block);
+            return;
+        }
+        block.prev = anchor;
+        block.next = anchor.next;
+        if anchor.next != nil {
+            anchor.next.prev = block;
+        } else {
+            this.block_tail = block;
+        }
+        anchor.next = block;
     }
 }
 
 pub struct Variable {
-    pub base: Node;
-    pub id: basic.DefId;
-    pub name: std.String;
+    pub def_id: basic.DefId;
+    pub name: std.StringView;
     pub ty: *types.Type;
-    pub init: *Node;
-    pub next: *Variable;
+    pub init_val: Operand;
+    pub is_const: bool;
 }
 
 impl Variable {
-    pub static func isa(node: *Node): bool {
-        if node == nil {
-            return false;
-        }
-        return node.kind() == NODE_VARIABLE;
-    }
-
-    pub static func cast(node: *Node): *Variable {
-        if !Variable.isa(node) {
-            std.panic("RTTI Error: Failed cast to *Variable");
-        }
-        return node.(*Variable);
-    }
-}
-
-pub struct Literal {
-    pub base: Node;
-    pub val: basic.Value;
-}
-
-impl Literal {
-    pub static func isa(node: *Node): bool {
-        if node == nil {
-            return false;
-        }
-        return node.kind() == NODE_LITERAL;
-    }
-
-    pub static func cast(node: *Node): *Literal {
-        if !Literal.isa(node) {
-            std.panic("RTTI Error: Failed cast to *Literal");
-        }
-        return node.(*Literal);
-    }
-}
-
-pub struct Binary {
-    pub base: Node;
-    pub op: i32; // ast.BinOp
-    pub left: *Node;
-    pub right: *Node;
-    pub common_ty: *types.Type;
-}
-
-impl Binary {
-    pub static func isa(node: *Node): bool {
-        if node == nil {
-            return false;
-        }
-        return node.kind() == NODE_BINARY;
-    }
-
-    pub static func cast(node: *Node): *Binary {
-        if !Binary.isa(node) {
-            std.panic("RTTI Error: Failed cast to *Binary");
-        }
-        return node.(*Binary);
-    }
-}
-
-pub struct Unary {
-    pub base: Node;
-    pub op: i32; // ast.UnOp
-    pub right: *Node;
-    pub common_ty: *types.Type;
-}
-
-impl Unary {
-    pub static func isa(node: *Node): bool {
-        if node == nil {
-            return false;
-        }
-        return node.kind() == NODE_UNARY;
-    }
-
-    pub static func cast(node: *Node): *Unary {
-        if !Unary.isa(node) {
-            std.panic("RTTI Error: Failed cast to *Unary");
-        }
-        return node.(*Unary);
-    }
-}
-
-pub struct Load {
-    pub base: Node;
-    pub id: basic.DefId;
-    pub ty: *types.Type;
-}
-
-impl Load {
-    pub static func isa(node: *Node): bool {
-        if node == nil {
-            return false;
-        }
-        return node.kind() == NODE_LOAD;
-    }
-
-    pub static func cast(node: *Node): *Load {
-        if !Load.isa(node) {
-            std.panic("RTTI Error: Failed cast to *Load");
-        }
-        return node.(*Load);
+    pub static func new(def_id: basic.DefId, name: std.StringView, ty: *types.Type,
+                        init_val: Operand, is_const: bool): Variable {
+        return Variable {
+            def_id: def_id,
+            name: name,
+            ty: ty,
+            init_val: init_val,
+            is_const: is_const
+        };
     }
 }
 
 pub struct Context {
-    alloc: mem.ArenaAllocator;
-    global_vars_start: *Variable;
-    global_vars_end: *Variable;
+    pub alloc: mem.ArenaAllocator;
+    globals: **Variable;
+    globals_count: usize;
+    globals_cap: usize;
+    functions: **Function;
+    functions_count: usize;
+    functions_cap: usize;
 }
 
 impl Context {
     pub static func new(): Context {
+        let alloc = mem.ArenaAllocator.init(64uz * mem.KB);
+        let cap = 16uz;
         return Context {
-            alloc: mem.ArenaAllocator.init(64uz * mem.KB),
-            global_vars_start: nil,
-            global_vars_end: nil
+            alloc: alloc,
+            globals: alloc.alloc(cap * @size_of(*Variable)).(**Variable),
+            globals_count: 0uz,
+            globals_cap: cap,
+            functions: alloc.alloc(cap * @size_of(*Function)).(**Function),
+            functions_count: 0uz,
+            functions_cap: cap
         };
     }
 
-    pub func alloc_node(kind: i32): *Node {
-        let size = 0uz;
-        if kind == NODE_VARIABLE {
-            size = @size_of(Variable);
-        } else if kind == NODE_LITERAL {
-            size = @size_of(Literal);
-        } else if kind == NODE_BINARY {
-            size = @size_of(Binary);
-        } else if kind == NODE_UNARY {
-            size = @size_of(Unary);
-        } else if kind == NODE_LOAD {
-            size = @size_of(Load);
+    pub func add_global(def_id: basic.DefId, name: std.StringView, ty: *types.Type,
+                        init_val: Operand, is_const: bool): *Variable {
+        let raw = this.alloc.alloc(@size_of(Variable));
+        let var_ptr = raw.(*Variable);
+        *var_ptr = Variable.new(def_id, name, ty, init_val, is_const);
+
+        if this.globals_count >= this.globals_cap {
+            let new_cap = this.globals_cap * 2uz;
+            let new_buf = this.alloc.alloc(new_cap * @size_of(*Variable)).(**Variable);
+            for let i = 0uz, i < this.globals_count, i += 1 {
+                *(new_buf + i) = *(this.globals + i);
+            }
+            this.globals = new_buf;
+            this.globals_cap = new_cap;
         }
-        if size == 0uz {
-            std.panic("Cannot allocate hir.Node (unsupported node kind)");
-            return nil;
-        }
-        let mem = this.alloc.alloc(size);
-        let node = mem.(*Node);
-        *node = Node.new(kind);
-        return node;
+
+        *(this.globals + this.globals_count) = var_ptr;
+        this.globals_count += 1;
+        return var_ptr;
     }
 
-    pub func add_global_var(var: *Variable) {
-        if this.global_vars_start == nil {
-            this.global_vars_start = var;
-            this.global_vars_end   = var;
-        } else {
-            this.global_vars_end.next = var;
-            this.global_vars_end      = var;
+    pub func add_function(fn_obj: *Function) {
+        if this.functions_count >= this.functions_cap {
+            let new_cap = this.functions_cap * 2uz;
+            let new_buf = this.alloc.alloc(new_cap * @size_of(*Function)).(**Function);
+            for let i = 0uz, i < this.functions_count, i += 1 {
+                *(new_buf + i) = *(this.functions + i);
+            }
+            this.functions = new_buf;
+            this.functions_cap = new_cap;
         }
-    }
 
-    pub func global_vars_start(): *Variable {
-        return this.global_vars_start;
+        *(this.functions + this.functions_count) = fn_obj;
+        this.functions_count += 1;
     }
 }
 
 pub struct Builder {
     ctx: *Context;
+    current_fn: *Function;
+    current_block: *BasicBlock;
 }
 
 impl Builder {
     pub static func new(ctx: *Context): Builder {
-        return Builder { ctx: ctx };
+        return Builder {
+            ctx: ctx,
+            current_fn: nil,
+            current_block: nil
+        };
     }
 
-    pub func create_variable(id: basic.DefId, name: std.StringView,
-                             ty: *types.Type, init: *Node): *Variable {
-        let var  = this.ctx.alloc_node(NODE_VARIABLE).(*Variable);
-        var.id   = id;
-        var.name = std.String.from(name);
-        var.ty   = ty;
-        var.init = init;
-        this.ctx.add_global_var(var);
-        return var;
+    pub func create_global(def_id: basic.DefId, name: std.StringView, ty: *types.Type,
+                          init_val: Operand, is_const: bool): *Variable {
+        return this.ctx.add_global(def_id, name, ty, init_val, is_const);
     }
 
-    pub func create_literal(val: basic.Value): *Literal {
-        let lit = this.ctx.alloc_node(NODE_LITERAL).(*Literal);
-        lit.val = val;
-        return lit;
+    pub func create_func(def_id: basic.DefId, name: std.StringView, ty: *types.Type): *Function {
+        let fn_obj = Function.new(def_id, name, ty, &this.ctx.alloc);
+        this.ctx.add_function(fn_obj);
+        this.current_fn = fn_obj;
+        return fn_obj;
     }
 
-    pub func create_binary(op: i32, left: *Node, right: *Node, common_ty: *types.Type): *Binary {
-        let bin       = this.ctx.alloc_node(NODE_BINARY).(*Binary);
-        bin.op        = op;
-        bin.left      = left;
-        bin.right     = right;
-        bin.common_ty = common_ty;
-        return bin;
+    pub func add_param(name: std.StringView, ty: *types.Type): u32 {
+        if this.current_fn == nil {
+            std.panic("Builder error: current_fn is nil when adding parameter");
+        }
+        return this.current_fn.add_param(&this.ctx.alloc, name, ty);
     }
 
-    pub func create_unary(op: i32, right: *Node, common_ty: *types.Type): *Unary {
-        let un       = this.ctx.alloc_node(NODE_UNARY).(*Unary);
-        un.op        = op;
-        un.right     = right;
-        un.common_ty = common_ty;
-        return un;
+    pub func create_local(name: std.StringView, ty: *types.Type): u32 {
+        if this.current_fn == nil {
+            std.panic("Builder error: current_fn is nil when creating local variable");
+        }
+        return this.current_fn.alloc_local(&this.ctx.alloc, ty, name);
+    }
+    pub func create_block(name: std.StringView): *BasicBlock {
+        let raw = this.ctx.alloc.alloc(@size_of(BasicBlock));
+        let bb = raw.(*BasicBlock);
+        *bb = BasicBlock.new(name);
+        if this.current_fn != nil {
+            this.current_fn.push_block_back(bb);
+        }
+        return bb;
     }
 
-    pub func create_load(id: basic.DefId, ty: *types.Type): *Load {
-        let load = this.ctx.alloc_node(NODE_LOAD).(*Load);
-        load.id  = id;
-        load.ty  = ty;
-        return load;
+    pub func emit_load(dest_local: u32, src_ptr: Operand): *Inst {
+        let raw = this.ctx.alloc.alloc(@size_of(Inst));
+        let inst = raw.(*Inst);
+        *inst = Inst.new(INST_LOAD, dest_local, src_ptr.ty, src_ptr, Operand.from_local(0u32, nil.(*types.Type)));
+        this.current_block.push_inst_back(inst);
+        return inst;
+    }
+
+    pub func emit_store(dest_ptr: Operand, val: Operand): *Inst {
+        let raw = this.ctx.alloc.alloc(@size_of(Inst));
+        let inst = raw.(*Inst);
+        *inst = Inst.new(INST_STORE, 0u32, nil.(*types.Type), dest_ptr, val);
+        this.current_block.push_inst_back(inst);
+        return inst;
+    }
+
+    pub func emit_ret(val: Operand) {
+        this.current_block.terminator = Terminator.make_ret(val);
+    }
+
+    pub func emit_goto(target: *BasicBlock) {
+        this.current_block.terminator = Terminator.make_goto(target);
+    }
+
+    pub func emit_cond_br(cond: Operand, then_b: *BasicBlock, else_b: *BasicBlock) {
+        this.current_block.terminator = Terminator.make_cond_br(cond, then_b, else_b);
+    }
+
+    pub func emit_unreachable() {
+        this.current_block.terminator = Terminator.make_unreachable();
     }
 }

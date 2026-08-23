@@ -64,39 +64,6 @@ impl DefId {
     }
 }
 
-pub struct OptionValue {
-    has_val: bool;
-    val: Value;
-}
-
-impl OptionValue {
-    pub static func some(val: Value): OptionValue {
-        return OptionValue { has_val: true, val: val };
-    }
-
-    pub static func none(): OptionValue {
-        return OptionValue { has_val: false };
-    }
-
-    pub func has_val(): bool {
-        return this.has_val;
-    }
-
-    pub func unwrap(): Value {
-        if !this.has_val {
-            std.panic("Called unwrap() on a 'None' value (Option is empty)");
-        }
-        return this.val;
-    }
-
-    pub func unwrap_or(err_val: Value): Value {
-        if !this.has_val {
-            return err_val;
-        }
-        return this.val;
-    }
-}
-
 pub struct OptionDefId {
     has_val: bool;
     val: DefId;
